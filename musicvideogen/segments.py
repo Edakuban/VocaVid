@@ -11,6 +11,7 @@ MAX_GAP_SEC = 12.0
 SINGLE_GAP_TOLERANCE_SEC = 14.0
 GAP_THRESHOLD_SEC = 4.0
 MIN_RENDER_CONFIDENCE = 0.45
+MIN_LOW_CONFIDENCE_RENDER_SEC = 0.5
 
 
 def build_render_segments(
@@ -65,7 +66,7 @@ def _select_render_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [
         row
         for index, row in enumerate(rows)
-        if _is_trusted_timing(row) or first_trusted < index < last_trusted
+        if _is_trusted_timing(row) or (first_trusted < index < last_trusted and _is_long_enough_fallback(row))
     ]
 
 
@@ -129,6 +130,10 @@ def _is_instrumental(row: dict[str, Any]) -> bool:
 def _is_trusted_timing(row: Any) -> bool:
     confidence = row["confidence"]
     return confidence is None or float(confidence) >= MIN_RENDER_CONFIDENCE
+
+
+def _is_long_enough_fallback(row: Any) -> bool:
+    return float(row["end_sec"]) - float(row["start_sec"]) >= MIN_LOW_CONFIDENCE_RENDER_SEC
 
 
 def _gap_segments(start: float, end: float, label: str, section: str | None = None, start_index: int = 0) -> list[RenderSegment]:

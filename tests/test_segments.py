@@ -205,6 +205,24 @@ class SegmentTests(unittest.TestCase):
             ],
         )
 
+    def test_tiny_low_confidence_fallback_line_between_anchors_is_not_rendered(self):
+        lines = [
+            _line(13, "Pre-Chorus", False, "trag ich alles, weit und breit.", 95.08, 104.8, confidence=0.519),
+            _line(14, "Chorus", True, "Zerbrochene Traeume, was bleibt zurueck,", 104.8, 104.85, confidence=0.0),
+            _line(15, "Chorus", True, "In den Schatten, kein Glueck,", 104.8, 109.7, confidence=1.0),
+        ]
+
+        segments = build_render_segments(lines, total_duration_sec=110.0, lyric_group_size=2, chorus_group_size=1)
+
+        lyric_texts = [segment.clean_text for segment in segments if segment.kind == "lyrics"]
+        self.assertEqual(
+            lyric_texts,
+            [
+                "trag ich alles, weit und breit.",
+                "In den Schatten, kein Glueck,",
+            ],
+        )
+
 
 def _line(index, section, is_chorus, text, start, end, confidence=0.9):
     return {
