@@ -167,7 +167,7 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('<input type="checkbox" class="line-select" name="selected_lines" value="3">', html)
         self.assertIn("<th>Select</th>", html)
-        self.assertIn('onsubmit="return copySelectedLines(this)"', html)
+        self.assertIn('onsubmit="return projectActionSubmitted(this)"', html)
         self.assertIn('name="selected_lines"', html)
         self.assertIn('onclick="toggleRowSelection(event, this)"', html)
         self.assertIn("function toggleRowSelection", page)

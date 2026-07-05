@@ -529,6 +529,18 @@ def _page(title: str, body: str) -> str:
       }});
       return true;
     }}
+    function currentProjectId() {{
+      const match = window.location.pathname.match(/^\\/projects\\/(\\d+)/);
+      return match ? Number(match[1]) : 0;
+    }}
+    function projectActionSubmitted(form) {{
+      if (!copySelectedLines(form)) return false;
+      const projectId = currentProjectId();
+      if (projectId) {{
+        window.setTimeout(() => refreshProjectStatus(projectId), 150);
+      }}
+      return true;
+    }}
     function toggleRowSelection(event, row) {{
       const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
       if (event.target.closest(interactiveSelector)) return;
@@ -554,17 +566,23 @@ def _page(title: str, body: str) -> str:
       row.replaceWith(replacement);
       projectRowServerHtml.set(replacement.id, replacement.outerHTML);
     }}
-    async function pollProjectStatus(projectId) {{
+    function updateProjectStatus(data) {{
+      updateQueueEstimate(data.queue_estimate_seconds);
+      Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
+        const row = document.getElementById(rowId);
+        if (row) replaceProjectRow(row, html);
+      }});
+    }}
+    async function refreshProjectStatus(projectId) {{
       if (!projectId) return;
+      const response = await fetch('/projects/' + projectId + '/status');
+      if (!response.ok) return;
+      const data = await response.json();
+      updateProjectStatus(data);
+    }}
+    async function pollProjectStatus(projectId) {{
       try {{
-        const response = await fetch('/projects/' + projectId + '/status');
-        if (!response.ok) return;
-        const data = await response.json();
-        updateQueueEstimate(data.queue_estimate_seconds);
-        Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
-          const row = document.getElementById(rowId);
-          if (row) replaceProjectRow(row, html);
-        }});
+        await refreshProjectStatus(projectId);
       }} catch (error) {{
         return;
       }} finally {{
@@ -1056,7 +1074,7 @@ def _action_button(project_id: int, number: int, action: str, label: str, is_wip
         attrs += ' type="button" title="Alle Videos erst mit OK markieren" onclick="alert(\'Bitte erst alle Videos mit OK freigeben.\')"'
     elif title:
         attrs += f' title="{title}"'
-    return f"""<form action="/projects/{project_id}/{action}" method="post" onsubmit="return copySelectedLines(this)"><button{attrs}>{number}. {label}</button></form>"""
+    return f"""<form action="/projects/{project_id}/{action}" method="post" onsubmit="return projectActionSubmitted(this)"><button{attrs}>{number}. {label}</button></form>"""
 
 
 def _open_filter_html(rows) -> str:
@@ -1149,7 +1167,7 @@ def _redo_html(project_id: int, item_kind: str, item_index: int, last_action: st
         return ""
     action = _text(last_action)
     return f"""
-<form class="compact-form redo-cell" action="/projects/{project_id}/{item_kind}/{item_index}/redo" method="post">
+<form class="compact-form redo-cell" action="/projects/{project_id}/{item_kind}/{item_index}/redo" method="post" onsubmit="return projectActionSubmitted(this)">
   <button class="icon-button" type="submit" title="Redo again">&#8635;</button>
   <div class="redo-action">{action}</div>
 </form>
