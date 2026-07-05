@@ -4,6 +4,8 @@ Local orchestration app for turning a WAV file, SUNO-style lyrics, a genre/style
 
 VocaVid runs as a small local FastAPI web app. It keeps project state in a local SQLite database, sends generation jobs to a local ComfyUI server, stores generated assets under `.musicvideogen/`, and can assemble the final video from the rendered clips.
 
+This project has grown through a lot of Codex-assisted vibe coding: most of the app was shaped in close human/AI collaboration, with quick iteration, local tests, and a healthy amount of "what if we made this nicer?" energy.
+
 ## Features
 
 - Create reusable projects from a WAV file, lyrics file, genre, global style prompt, and one or more reference images.
