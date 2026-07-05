@@ -629,6 +629,7 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn("<th>Redo</th><th>OK</th><th>Status</th>", html)
         self.assertIn('action="/projects/7/lines/3/redo"', html)
+        self.assertNotIn('action="/projects/7/lines/3/redo" method="post" onsubmit="return projectActionSubmitted(this)"', html)
         self.assertIn('title="Redo again"', html)
         self.assertIn("&#8635;", html)
         self.assertIn('<div class="redo-action">images</div>', html)
@@ -840,8 +841,9 @@ class AppHtmlTests(unittest.TestCase):
     def test_project_page_has_sticky_header_and_no_audio_final_info_panel(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "final.mp4"}
 
-        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0))
+        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0), queue_count=4)
 
+        self.assertIn("<title>(4) Demo</title>", html)
         self.assertIn('class="project-topbar"', html)
         self.assertIn('class="project-title-row"', html)
         self.assertIn('id="queue-estimate"', html)
@@ -1054,10 +1056,15 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, lines, used_actions={"scene-plan"})
 
-        self.assertIn('action="/projects/7/lines/3/prompts/save"', html)
+        self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
+        self.assertIn('action="/projects/7/lines/3/prompts/image/ai-fill"', html)
+        self.assertIn('action="/projects/7/lines/3/prompts/video/save"', html)
+        self.assertIn('action="/projects/7/lines/3/prompts/video/ai-fill"', html)
         self.assertIn('name="prompt"', html)
         self.assertIn('name="video_prompt"', html)
         self.assertIn("<button>Save</button>", html)
+        self.assertIn('formaction="/projects/7/lines/3/prompts/image/ai-fill">AI fill</button>', html)
+        self.assertIn('formaction="/projects/7/lines/3/prompts/video/ai-fill">AI fill</button>', html)
         self.assertIn("<th>Status</th>", html)
         self.assertNotIn("<th>Error</th>", html)
         self.assertIn("failed", html)

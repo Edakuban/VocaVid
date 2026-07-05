@@ -539,7 +539,7 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual((root / segment["avatar_image_path"]).read_bytes(), b"avatar")
             self.assertEqual(segment["status"], "done")
 
-    def test_generate_images_randomizes_image_workflow_seed_inputs_and_invalidates_downstream_outputs(self):
+    def test_generate_images_skips_approved_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
             store = Store(root / "test.sqlite3")
@@ -569,6 +569,7 @@ class PipelineSegmentTests(unittest.TestCase):
             store.update_segment(
                 project_id,
                 0,
+                image_path="old-image.png",
                 avatar_image_path="old-avatar.png",
                 clip_path="old-clip.mp4",
                 video_approved=1,
@@ -598,16 +599,14 @@ class PipelineSegmentTests(unittest.TestCase):
                 pipeline_module.ComfyClient = original_client
                 pipeline_module._new_seed = original_new_seed
 
-            workflow = captured["workflow"]
+            self.assertEqual(captured, {})
             segment = store.list_segments(project_id)[0]
-            self.assertEqual(workflow["sampler"]["inputs"]["seed"], 987654321)
-            self.assertEqual(workflow["sampler"]["inputs"]["sampling_mode.seed"], 987654321)
-            self.assertIn("demo/images", segment["image_path"].replace("\\", "/"))
-            self.assertIsNone(segment["avatar_image_path"])
-            self.assertIsNone(segment["clip_path"])
-            self.assertEqual(segment["video_approved"], 0)
+            self.assertEqual(segment["image_path"], "old-image.png")
+            self.assertEqual(segment["avatar_image_path"], "old-avatar.png")
+            self.assertEqual(segment["clip_path"], "old-clip.mp4")
+            self.assertEqual(segment["video_approved"], 1)
 
-    def test_generate_avatar_images_randomizes_seed_inputs_and_invalidates_clip_approval(self):
+    def test_generate_avatar_images_skips_approved_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
             store = Store(root / "test.sqlite3")
@@ -668,12 +667,11 @@ class PipelineSegmentTests(unittest.TestCase):
                 pipeline_module.ComfyClient = original_client
                 pipeline_module._new_seed = original_new_seed
 
-            workflow = captured["workflow"]
+            self.assertEqual(captured, {})
             segment = store.list_segments(project_id)[0]
-            self.assertEqual(workflow["sampler"]["inputs"]["seed"], 555)
-            self.assertTrue(segment["avatar_image_path"].endswith("images\\avatar-segment-000.png") or segment["avatar_image_path"].endswith("images/avatar-segment-000.png"))
-            self.assertIsNone(segment["clip_path"])
-            self.assertEqual(segment["video_approved"], 0)
+            self.assertIsNone(segment["avatar_image_path"])
+            self.assertEqual(segment["clip_path"], "old-clip.mp4")
+            self.assertEqual(segment["video_approved"], 1)
 
     def test_clip_variables_prefer_avatar_image_when_available(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
@@ -918,7 +916,7 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(workflow["sampler"]["inputs"]["seed"], 123456789)
             self.assertEqual(workflow["sampler"]["inputs"]["sampling_mode.seed"], 123456789)
 
-    def test_generate_clips_resets_existing_video_approval(self):
+    def test_generate_clips_skips_approved_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
             store = Store(root / "test.sqlite3")
@@ -967,10 +965,10 @@ class PipelineSegmentTests(unittest.TestCase):
                 pipeline_module.ComfyClient = original_client
 
             segment = store.list_segments(project_id)[0]
-            self.assertIn("demo/clips", segment["clip_path"].replace("\\", "/"))
-            self.assertEqual(segment["video_approved"], 0)
+            self.assertEqual(segment["clip_path"], "old-clip.mp4")
+            self.assertEqual(segment["video_approved"], 1)
 
-    def test_generate_video_prompts_invalidates_existing_clip_and_approval(self):
+    def test_generate_video_prompts_skips_approved_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
             store = Store(root / "test.sqlite3")
@@ -996,9 +994,9 @@ class PipelineSegmentTests(unittest.TestCase):
             pipeline.generate_video_prompts(project_id, [0])
 
             segment = store.list_segments(project_id)[0]
-            self.assertTrue(segment["video_prompt"])
-            self.assertIsNone(segment["clip_path"])
-            self.assertEqual(segment["video_approved"], 0)
+            self.assertIsNone(segment["video_prompt"])
+            self.assertEqual(segment["clip_path"], "old-clip.mp4")
+            self.assertEqual(segment["video_approved"], 1)
 
     def test_generate_clips_adds_project_transition_handle_to_video_duration(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:

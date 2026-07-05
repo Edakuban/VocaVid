@@ -75,6 +75,14 @@ class JobQueue:
                 reverse=True,
             )
 
+    def active_jobs(self) -> list[Job]:
+        with self._lock:
+            return sorted(
+                [job for job in self._jobs.values() if job.status in {"queued", "running"}],
+                key=lambda job: job.id,
+                reverse=True,
+            )
+
     def delete_job(self, job_id: int) -> bool:
         with self._lock:
             job = self._jobs.get(job_id)

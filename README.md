@@ -109,6 +109,7 @@ Prompt instructions live in `prompts/` and can be edited without touching code:
 - `prompts/sceneplan_concept.txt`
 - `prompts/sceneplan.txt`
 - `prompts/promptgen.txt`
+- `prompts/scenefill.txt`
 - `prompts/videoprompt.txt`
 - `prompts/avatar_image.txt`
 

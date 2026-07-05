@@ -18,7 +18,7 @@ from .comfy import ComfyClient, load_workflow, with_output_prefix
 from .lyrics import is_instrumental_section, parse_suno_lyrics
 from .models import LineTiming, LyricLine
 from .paths import resolve_storage_path, slug_folder_name, storage_relative_path
-from .promptgen import inject_promptgen_context, inject_raw_text_prompt, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
+from .promptgen import inject_promptgen_context, inject_raw_text_prompt, inject_scenefill_context, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
 from .prompt_templates import load_named_prompt_template, render_prompt_template
 from .sceneplan import fallback_scene_plans, make_sceneplan_concept_prompt, make_sceneplan_prompt, parse_scene_plan_text
 from .segments import build_render_segments
@@ -310,8 +310,11 @@ class Pipeline:
 
     def generate_prompts(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         project = self.store.get_project(project_id)
-        segments = self._selected_segments(project_id, selected_line_indices)
-        if segments:
+        selected_segments = self._selected_segments(project_id, selected_line_indices)
+        if selected_segments:
+            segments = _editable_rows(selected_segments)
+            if not segments:
+                return
             workflow_path = self.workflows.optional_promptgen()
             if not workflow_path:
                 for row in segments:
@@ -324,38 +327,47 @@ class Pipeline:
             return
         workflow_path = self.workflows.optional_promptgen()
         if not workflow_path:
-            for row in self._selected_rows(project_id, selected_line_indices):
+            for row in self._editable_selected_rows(project_id, selected_line_indices):
                 prompt = f"{row['clean_text']}. {project['global_style_prompt']}".strip()
                 self.store.update_line(project_id, row["line_index"], prompt=prompt, status="prompted", error="", last_action="prompts")
             return
-        for row in self._selected_rows(project_id, selected_line_indices):
+        for row in self._editable_selected_rows(project_id, selected_line_indices):
             self._run_comfy_for_prompt(project_id, row, workflow_path)
 
     def generate_images(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
-        segments = self._selected_segments(project_id, selected_line_indices)
-        if segments:
+        selected_segments = self._selected_segments(project_id, selected_line_indices)
+        if selected_segments:
+            segments = _editable_rows(selected_segments)
+            if not segments:
+                return
             for row in segments:
                 workflow = self.workflows.image_for_reference(bool(row["use_reference"]))
                 self._run_comfy_for_segment(project_id, row, workflow, output_field="image_path", action="images")
             return
-        for row in self._selected_rows(project_id, selected_line_indices):
+        for row in self._editable_selected_rows(project_id, selected_line_indices):
             workflow = self.workflows.image_for_reference(bool(row["use_reference"]))
             self._run_comfy_for_line(project_id, row, workflow, output_field="image_path", action="images")
 
     def generate_avatar_images(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         workflow = self.workflows.require_avatar_image()
-        segments = self._selected_segments(project_id, selected_line_indices)
-        if segments:
+        selected_segments = self._selected_segments(project_id, selected_line_indices)
+        if selected_segments:
+            segments = _editable_rows(selected_segments)
+            if not segments:
+                return
             for row in segments:
                 self._run_comfy_for_avatar_segment(project_id, row, workflow)
             return
-        for row in self._selected_rows(project_id, selected_line_indices):
+        for row in self._editable_selected_rows(project_id, selected_line_indices):
             self._run_comfy_for_avatar_line(project_id, row, workflow)
 
     def generate_video_prompts(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         project = self.store.get_project(project_id)
-        segments = self._selected_segments(project_id, selected_line_indices)
-        if segments:
+        selected_segments = self._selected_segments(project_id, selected_line_indices)
+        if selected_segments:
+            segments = _editable_rows(selected_segments)
+            if not segments:
+                return
             workflow_path = self.workflows.optional_promptgen()
             if not workflow_path:
                 for row in segments:
@@ -386,7 +398,7 @@ class Pipeline:
 
         workflow_path = self.workflows.optional_promptgen()
         if not workflow_path:
-            for row in self._selected_rows(project_id, selected_line_indices):
+            for row in self._editable_selected_rows(project_id, selected_line_indices):
                 duration = 0.0
                 if row["start_sec"] is not None and row["end_sec"] is not None:
                     duration = float(row["end_sec"]) - float(row["start_sec"])
@@ -410,17 +422,20 @@ class Pipeline:
                     last_action="video-prompts",
                 )
             return
-        for row in self._selected_rows(project_id, selected_line_indices):
+        for row in self._editable_selected_rows(project_id, selected_line_indices):
             self._run_comfy_for_line_video_prompt(project_id, row, workflow_path)
 
     def generate_clips(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
-        segments = self._selected_segments(project_id, selected_line_indices)
-        if segments:
+        selected_segments = self._selected_segments(project_id, selected_line_indices)
+        if selected_segments:
+            segments = _editable_rows(selected_segments)
+            if not segments:
+                return
             for row in segments:
                 workflow = self.workflows.require_video()
                 self._run_comfy_for_segment(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
             return
-        for row in self._selected_rows(project_id, selected_line_indices):
+        for row in self._editable_selected_rows(project_id, selected_line_indices):
             workflow = self.workflows.require_video()
             self._run_comfy_for_line(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
 
@@ -479,6 +494,26 @@ class Pipeline:
 
     def save_segment_prompts(self, project_id: int, segment_index: int, prompt: str, video_prompt: str) -> None:
         self.store.update_segment(project_id, segment_index, prompt=prompt, video_prompt=video_prompt)
+
+    def save_line_prompt(self, project_id: int, line_index: int, prompt: str) -> None:
+        self.store.update_line(project_id, line_index, prompt=prompt)
+
+    def save_line_video_prompt(self, project_id: int, line_index: int, video_prompt: str) -> None:
+        self.store.update_line(project_id, line_index, video_prompt=video_prompt)
+
+    def save_segment_prompt(self, project_id: int, segment_index: int, prompt: str) -> None:
+        self.store.update_segment(project_id, segment_index, prompt=prompt)
+
+    def save_segment_video_prompt(self, project_id: int, segment_index: int, video_prompt: str) -> None:
+        self.store.update_segment(project_id, segment_index, video_prompt=video_prompt)
+
+    def ai_fill_line_prompt(self, project_id: int, line_index: int, target_field: str, draft_text: str) -> None:
+        row = next(item for item in self.store.list_lines(project_id) if item["line_index"] == line_index)
+        self._run_comfy_for_scene_fill(project_id, row, "lines", target_field, draft_text)
+
+    def ai_fill_segment_prompt(self, project_id: int, segment_index: int, target_field: str, draft_text: str) -> None:
+        row = next(item for item in self.store.list_segments(project_id) if item["segment_index"] == segment_index)
+        self._run_comfy_for_scene_fill(project_id, row, "segments", target_field, draft_text)
 
     def select_line_image_source(self, project_id: int, line_index: int, selected_image_source: str) -> None:
         self.store.update_line(project_id, line_index, selected_image_source=_normalize_image_source(selected_image_source))
@@ -666,6 +701,9 @@ class Pipeline:
         if not selected:
             return rows
         return [row for row in rows if row["segment_index"] in selected]
+
+    def _editable_selected_rows(self, project_id: int, selected_line_indices: list[int] | None):
+        return [row for row in self._selected_rows(project_id, selected_line_indices) if not bool(_row_value(row, "video_approved", 0))]
 
     def _filter_timings(self, timings: list[LineTiming], selected_line_indices: list[int] | None) -> list[LineTiming]:
         selected = set(selected_line_indices or [])
@@ -987,6 +1025,40 @@ class Pipeline:
         else:
             self.store.update_segment(project_id, row["segment_index"], status="failed", error=result.error or "No text output")
 
+    def _run_comfy_for_scene_fill(self, project_id: int, row, item_kind: str, target_field: str, draft_text: str) -> None:
+        workflow_path = self.workflows.optional_promptgen()
+        row_key = "segment_index" if item_kind == "segments" else "line_index"
+        update = self.store.update_segment if item_kind == "segments" else self.store.update_line
+        action_name = "ai-fill-video" if target_field == "video" else "ai-fill-image"
+        if not workflow_path:
+            update(project_id, row[row_key], status="failed", error="promptgen workflow is missing", last_action=action_name)
+            return
+
+        project = self.store.get_project(project_id)
+        workflow = load_workflow(workflow_path)
+        client = ComfyClient(project["comfy_base_url"])
+        variables = self._variables(project, row)
+        update(project_id, row[row_key], status="running", error="", last_action=action_name)
+        try:
+            prompt_workflow = inject_scenefill_context(workflow, variables, target_field, draft_text)
+        except ValueError as exc:
+            update(project_id, row[row_key], status="failed", error=str(exc), last_action=action_name)
+            return
+        result = client.run_workflow(prompt_workflow, {})
+        output_text = ""
+        if result.ok and result.text_outputs:
+            output_text = result.text_outputs[0].strip()
+        elif result.ok and result.output_files:
+            output_text = json.dumps(result.output_files)
+        if not output_text:
+            update(project_id, row[row_key], status="failed", error=result.error or "No text output")
+            return
+
+        if target_field == "video":
+            update(project_id, row[row_key], video_prompt=output_text, clip_path=None, video_approved=0, status="video prompted", error="")
+        else:
+            update(project_id, row[row_key], prompt=output_text, status="prompted", error="")
+
     def _localize_comfy_output(
         self,
         project,
@@ -1063,6 +1135,10 @@ def _row_value(row, key: str, default):
         return row[key]
     except (KeyError, IndexError, TypeError):
         return default
+
+
+def _editable_rows(rows):
+    return [row for row in rows if not bool(_row_value(row, "video_approved", 0))]
 
 
 def _format_scene_plan_text(plans: dict[int, str], fallback_reason: str) -> str:

@@ -85,7 +85,10 @@ def create_app() -> FastAPI:
         label, callback = actions[action]
         item_kind = _action_item_kind(action, bool(store.list_segments(project_id)))
         if action in _SPLIT_ACTIONS:
-            for index in _selected_action_indices(project_id, item_kind, selected, store):
+            indices = _selected_action_indices(project_id, item_kind, selected, store)
+            if not indices:
+                return False
+            for index in indices:
                 jobs.submit(
                     _job_name(label, project["name"], [index], item_kind=item_kind),
                     lambda selected_index=index: _run_project_action(pipeline, project_id, action, [selected_index]),
@@ -107,7 +110,7 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return _page("Projects", _projects_html(store.list_projects(), jobs.list_jobs(), store.average_job_durations()))
+        return _page("Projects", _projects_html(store.list_projects(), jobs.list_jobs(), store.average_job_durations()), queue_count=len(jobs.active_jobs()))
 
     @app.post("/jobs/{job_id}/delete")
     def delete_job(job_id: int):
@@ -176,6 +179,7 @@ def create_app() -> FastAPI:
         segments = store.list_segments(project_id)
         used_actions = store.list_used_project_actions(project_id)
         active_jobs = jobs.active_project_jobs(project_id)
+        queue_jobs = jobs.active_jobs()
         averages = store.average_job_durations()
         return _page(
             project["name"],
@@ -185,8 +189,9 @@ def create_app() -> FastAPI:
                 segments,
                 used_actions=used_actions,
                 active_jobs=active_jobs,
-                queue_estimate_seconds=_queue_estimate_seconds(active_jobs, averages),
+                queue_estimate_seconds=_queue_estimate_seconds(queue_jobs, averages),
             ),
+            queue_count=len(queue_jobs),
         )
 
     @app.get("/projects/{project_id}/status")
@@ -196,12 +201,13 @@ def create_app() -> FastAPI:
         segments = store.list_segments(project_id)
         used_actions = store.list_used_project_actions(project_id)
         active = jobs.active_project_jobs(project_id)
-        return _project_status_payload(project, lines, segments, active, store.average_job_durations(), used_actions=used_actions)
+        queue_jobs = jobs.active_jobs()
+        return _project_status_payload(project, lines, segments, active, store.average_job_durations(), used_actions=used_actions, queue_jobs=queue_jobs)
 
     @app.post("/projects/{project_id}/align")
     def align(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "align")
-        submit_project_action(project_id, "align", selected_lines)
+        if submit_project_action(project_id, "align", selected_lines):
+            mark_used(project_id, "align")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/global-style-prompt")
@@ -292,14 +298,14 @@ def create_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/segments")
     def segments(project_id: int):
-        mark_used(project_id, "segments")
-        submit_project_action(project_id, "segments")
+        if submit_project_action(project_id, "segments"):
+            mark_used(project_id, "segments")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/scene-plan")
     def scene_plan(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "scene-plan")
-        submit_project_action(project_id, "scene-plan", selected_lines)
+        if submit_project_action(project_id, "scene-plan", selected_lines):
+            mark_used(project_id, "scene-plan")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/scene-plan/save")
@@ -309,38 +315,38 @@ def create_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/prompts")
     def prompts(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "prompts")
-        submit_project_action(project_id, "prompts", selected_lines)
+        if submit_project_action(project_id, "prompts", selected_lines):
+            mark_used(project_id, "prompts")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/images")
     def images(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "images")
-        submit_project_action(project_id, "images", selected_lines)
+        if submit_project_action(project_id, "images", selected_lines):
+            mark_used(project_id, "images")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/avatar-image")
     def avatar_image(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "avatar-image")
-        submit_project_action(project_id, "avatar-image", selected_lines)
+        if submit_project_action(project_id, "avatar-image", selected_lines):
+            mark_used(project_id, "avatar-image")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/video-prompts")
     def video_prompts(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "video-prompts")
-        submit_project_action(project_id, "video-prompts", selected_lines)
+        if submit_project_action(project_id, "video-prompts", selected_lines):
+            mark_used(project_id, "video-prompts")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/clips")
     def clips(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "clips")
-        submit_project_action(project_id, "clips", selected_lines)
+        if submit_project_action(project_id, "clips", selected_lines):
+            mark_used(project_id, "clips")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/assemble")
     def assemble(project_id: int, selected_lines: list[int] = Form(default=[])):
-        mark_used(project_id, "assemble")
-        submit_project_action(project_id, "assemble", selected_lines)
+        if submit_project_action(project_id, "assemble", selected_lines):
+            mark_used(project_id, "assemble")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/clear")
@@ -379,9 +385,85 @@ def create_app() -> FastAPI:
         pipeline.save_line_prompts(project_id, line_index, prompt, video_prompt)
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
+    @app.post("/projects/{project_id}/lines/{line_index}/prompts/image/save")
+    def save_line_image_prompt(project_id: int, line_index: int, prompt: str = Form("")):
+        pipeline.save_line_prompt(project_id, line_index, prompt)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/lines/{line_index}/prompts/video/save")
+    def save_line_video_prompt(project_id: int, line_index: int, video_prompt: str = Form("")):
+        pipeline.save_line_video_prompt(project_id, line_index, video_prompt)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/lines/{line_index}/prompts/image/ai-fill")
+    def ai_fill_line_image_prompt(project_id: int, line_index: int, prompt: str = Form("")):
+        pipeline.save_line_prompt(project_id, line_index, prompt)
+        project = store.get_project(project_id)
+        jobs.submit(
+            _job_name("ai fill image prompt", project["name"], [line_index], item_kind="lines"),
+            lambda: pipeline.ai_fill_line_prompt(project_id, line_index, "image", prompt),
+            project_id=project_id,
+            action="ai-fill-image",
+            item_kind="lines",
+            selected_indices=[line_index],
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/lines/{line_index}/prompts/video/ai-fill")
+    def ai_fill_line_video_prompt(project_id: int, line_index: int, video_prompt: str = Form("")):
+        pipeline.save_line_video_prompt(project_id, line_index, video_prompt)
+        project = store.get_project(project_id)
+        jobs.submit(
+            _job_name("ai fill video prompt", project["name"], [line_index], item_kind="lines"),
+            lambda: pipeline.ai_fill_line_prompt(project_id, line_index, "video", video_prompt),
+            project_id=project_id,
+            action="ai-fill-video",
+            item_kind="lines",
+            selected_indices=[line_index],
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
     @app.post("/projects/{project_id}/segments/{segment_index}/prompts/save")
     def save_segment_prompts(project_id: int, segment_index: int, prompt: str = Form(""), video_prompt: str = Form("")):
         pipeline.save_segment_prompts(project_id, segment_index, prompt, video_prompt)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/segments/{segment_index}/prompts/image/save")
+    def save_segment_image_prompt(project_id: int, segment_index: int, prompt: str = Form("")):
+        pipeline.save_segment_prompt(project_id, segment_index, prompt)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/segments/{segment_index}/prompts/video/save")
+    def save_segment_video_prompt(project_id: int, segment_index: int, video_prompt: str = Form("")):
+        pipeline.save_segment_video_prompt(project_id, segment_index, video_prompt)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/segments/{segment_index}/prompts/image/ai-fill")
+    def ai_fill_segment_image_prompt(project_id: int, segment_index: int, prompt: str = Form("")):
+        pipeline.save_segment_prompt(project_id, segment_index, prompt)
+        project = store.get_project(project_id)
+        jobs.submit(
+            _job_name("ai fill image prompt", project["name"], [segment_index], item_kind="segments"),
+            lambda: pipeline.ai_fill_segment_prompt(project_id, segment_index, "image", prompt),
+            project_id=project_id,
+            action="ai-fill-image",
+            item_kind="segments",
+            selected_indices=[segment_index],
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/segments/{segment_index}/prompts/video/ai-fill")
+    def ai_fill_segment_video_prompt(project_id: int, segment_index: int, video_prompt: str = Form("")):
+        pipeline.save_segment_video_prompt(project_id, segment_index, video_prompt)
+        project = store.get_project(project_id)
+        jobs.submit(
+            _job_name("ai fill video prompt", project["name"], [segment_index], item_kind="segments"),
+            lambda: pipeline.ai_fill_segment_prompt(project_id, segment_index, "video", video_prompt),
+            project_id=project_id,
+            action="ai-fill-video",
+            item_kind="segments",
+            selected_indices=[segment_index],
+        )
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/lines/{line_index}/image-source")
@@ -423,13 +505,14 @@ def _storage_path(value: str | Path) -> str:
     return storage_relative_path(APP_ROOT, value)
 
 
-def _page(title: str, body: str) -> str:
+def _page(title: str, body: str, queue_count: int = 0) -> str:
+    browser_title = _browser_title(title, queue_count)
     return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{title}</title>
+  <title>{_text(browser_title)}</title>
   <style>
     body {{ margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f4ee; color: #1c2526; }}
     main {{ max-width: none; margin: 0; padding: 24px; }}
@@ -439,6 +522,7 @@ def _page(title: str, body: str) -> str:
     input, textarea, select {{ box-sizing: border-box; width: 100%; border: 1px solid #b9c0bd; border-radius: 6px; padding: 8px; font: inherit; }}
     textarea {{ min-height: 80px; }}
     .prompt-textarea {{ min-width: 260px; min-height: 72px; resize: vertical; }}
+    .prompt-actions {{ display: flex; gap: 8px; margin: 6px 0 10px; }}
     .hidden-action-form {{ display: none; }}
     .compact-form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
     .timing-column {{ width: 11rem; min-width: 11rem; }}
@@ -571,8 +655,15 @@ def _page(title: str, body: str) -> str:
       row.replaceWith(replacement);
       projectRowServerHtml.set(replacement.id, replacement.outerHTML);
     }}
+    const baseDocumentTitle = document.title.replace(/^\\(\\d+\\)\\s+/, '');
+    function updateBrowserTitle(queueCount) {{
+      if (queueCount === undefined || queueCount === null) return;
+      const count = Math.max(0, Number(queueCount) || 0);
+      document.title = count > 0 ? '(' + count + ') ' + baseDocumentTitle : baseDocumentTitle;
+    }}
     function updateProjectStatus(data) {{
       updateQueueEstimate(data.queue_estimate_seconds);
+      updateBrowserTitle(data.queue_count);
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
         const row = document.getElementById(rowId);
         if (row) replaceProjectRow(row, html);
@@ -619,7 +710,16 @@ def _page(title: str, body: str) -> str:
       }}, 1000);
     }}
     function scrollToTop() {{
-      window.scrollTo({{ top: 0, behavior: 'smooth' }});
+      const firstSegment = document.querySelector('tr[id^="segment-row-"]');
+      const target = firstSegment || document.querySelector('tr[id^="line-row-"]');
+      if (!target) {{
+        window.scrollTo({{ top: 0, behavior: 'smooth' }});
+        return;
+      }}
+      const topbar = document.querySelector('.project-topbar');
+      const offset = topbar ? topbar.getBoundingClientRect().height : 0;
+      const top = target.getBoundingClientRect().top + window.scrollY - offset;
+      window.scrollTo({{ top: Math.max(0, top), behavior: 'smooth' }});
     }}
     function scrollStorageKey() {{
       return 'musicvideogen-scroll:' + window.location.pathname;
@@ -685,6 +785,11 @@ def _page(title: str, body: str) -> str:
 </html>"""
 
 
+def _browser_title(title: str, queue_count: int = 0) -> str:
+    count = max(0, int(queue_count or 0))
+    return f"({count}) {title}" if count else title
+
+
 def _run_project_action(pipeline, project_id: int, action: str, selected_indices: list[int]) -> object:
     method_names = {
         "prompts": "generate_prompts",
@@ -698,8 +803,13 @@ def _run_project_action(pipeline, project_id: int, action: str, selected_indices
 
 def _selected_action_indices(project_id: int, item_kind: str, selected: list[int], store: Store) -> list[int]:
     if selected:
-        return [int(index) for index in selected]
+        selected_set = {int(index) for index in selected}
+    else:
+        selected_set = set()
     rows = store.list_segments(project_id) if item_kind == "segments" else store.list_lines(project_id)
+    if selected_set:
+        rows = [row for row in rows if _row_index(row, item_kind) in selected_set]
+    rows = [row for row in rows if not bool(_row_value(row, "video_approved", 0))]
     return [_row_index(row, item_kind) for row in rows]
 
 
@@ -896,9 +1006,11 @@ def _project_status_payload(
     active_jobs,
     average_durations: dict[str, float] | None = None,
     used_actions: set[str] | None = None,
+    queue_jobs=None,
 ) -> dict[str, object]:
     average_durations = average_durations or {}
     used_actions = used_actions or set()
+    counted_jobs = active_jobs if queue_jobs is None else queue_jobs
     item_kind = "segments" if segments else "lines"
     rows = segments or lines
     locked = _locked_indices(active_jobs, item_kind, rows)
@@ -908,7 +1020,8 @@ def _project_status_payload(
             "segments": sorted(locked) if item_kind == "segments" else [],
             "lines": sorted(locked) if item_kind == "lines" else [],
         },
-        "queue_estimate_seconds": _queue_estimate_seconds(active_jobs, average_durations),
+        "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
+        "queue_count": len(counted_jobs),
         "rows": _extract_row_snippets(html),
     }
 
@@ -939,7 +1052,7 @@ def _lyrics_html(project, lines, locked=None, show_generation_columns: bool = Fa
             approval_html = _approval_html(project["id"], "lines", line["line_index"], line)
             video_prompt = _row_value(line, "video_prompt", "")
             prompt_editor = _prompt_editor_html(
-                f"/projects/{project['id']}/lines/{line['line_index']}/prompts/save",
+                f"/projects/{project['id']}/lines/{line['line_index']}/prompts",
                 line["prompt"] or "",
                 video_prompt or "",
             )
@@ -1026,7 +1139,7 @@ def _segments_html(project, lines, segments, locked=None, show_generation_column
             approval_html = _approval_html(project["id"], "segments", segment["segment_index"], segment)
             video_prompt = _row_value(segment, "video_prompt", "")
             prompt_editor = _prompt_editor_html(
-                f"/projects/{project['id']}/segments/{segment['segment_index']}/prompts/save",
+                f"/projects/{project['id']}/segments/{segment['segment_index']}/prompts",
                 segment["prompt"] or "",
                 video_prompt or "",
             )
@@ -1173,7 +1286,7 @@ def _redo_html(project_id: int, item_kind: str, item_index: int, last_action: st
         return ""
     action = _text(last_action)
     return f"""
-<form class="compact-form redo-cell" action="/projects/{project_id}/{item_kind}/{item_index}/redo" method="post" onsubmit="return projectActionSubmitted(this)">
+<form class="compact-form redo-cell" action="/projects/{project_id}/{item_kind}/{item_index}/redo" method="post">
   <button class="icon-button" type="submit" title="Redo again">&#8635;</button>
   <div class="redo-action">{action}</div>
 </form>
@@ -1262,10 +1375,13 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row) -> str
 
 def _prompt_editor_html(action: str, prompt: str, video_prompt: str) -> str:
     return f"""
-<form class="compact-form" action="{action}" method="post">
+<form class="compact-form" action="{action}/image/save" method="post">
   <label>Image</label><textarea class="prompt-textarea" name="prompt">{_text(prompt)}</textarea>
+  <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/image/ai-fill">AI fill</button></p>
+</form>
+<form class="compact-form" action="{action}/video/save" method="post">
   <label>Video</label><textarea class="prompt-textarea" name="video_prompt">{_text(video_prompt)}</textarea>
-  <p><button>Save</button></p>
+  <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/video/ai-fill">AI fill</button></p>
 </form>
 """
 

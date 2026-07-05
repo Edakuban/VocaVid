@@ -76,6 +76,39 @@ Lyrics: {LYRICS}
 Return only the Global Style Prompt. Do not include labels, markdown, quotes, or explanations."""
 
 
+DEFAULT_SCENEFILL_TEMPLATE = """Transform the user's draft into one concise, production-ready scene prompt for this music video segment.
+
+Return only the rewritten prompt. Do not include labels, markdown, quotes, or explanations.
+
+Target field: {TARGET_FIELD}
+Mode: {MODE}
+Section: {SECTION}
+Duration seconds: {DURATION}
+Genre: {GENRE}
+Global visual style: {GLOBAL_STYLE}
+Scene plan: {SCENE_PLAN}
+Lyrics:
+{LYRICS}
+
+Current image prompt:
+{IMAGE_PROMPT}
+
+Current video prompt:
+{VIDEO_PROMPT}
+
+User draft:
+{DRAFT_TEXT}
+
+Rules:
+* Preserve the user's intent, subject, setting, mood, and any concrete visual details.
+* Convert vague wording into a specific cinematic scene with subject, setting, lighting, framing, atmosphere, and production design.
+* If target field is image, write a still-image scene prompt with strong visual composition and no motion instructions.
+* If target field is video, write an image-to-video motion prompt that preserves the existing image prompt and adds controlled subject, camera, and environment motion.
+* Do not quote the lyric as visible text.
+* Do not invent unrelated everyday props or actions.
+* Keep it concise and directly usable."""
+
+
 def make_promptgen_prompt(
     lyric_text: str,
     section: str = "",
@@ -132,6 +165,44 @@ def make_global_style_prompt(genre: str, lyrics: str) -> str:
     return render_prompt_template(
         load_named_prompt_template("global_style.txt", DEFAULT_GLOBAL_STYLE_TEMPLATE),
         _prompt_variables(lyric_text=lyrics, genre=genre),
+    )
+
+
+def make_scenefill_prompt(
+    draft_text: str,
+    target_field: str,
+    lyric_text: str,
+    image_prompt: str = "",
+    video_prompt: str = "",
+    section: str = "",
+    is_chorus: bool = False,
+    global_style: str = "",
+    duration: str = "",
+    genre: str = "",
+    scene_plan: str = "",
+) -> str:
+    mode = "performance shot featuring the singer" if is_chorus else "story or atmosphere shot"
+    return render_prompt_template(
+        load_named_prompt_template("scenefill.txt", DEFAULT_SCENEFILL_TEMPLATE),
+        {
+            **_prompt_variables(
+                lyric_text=lyric_text,
+                image_prompt=image_prompt,
+                section=section,
+                is_chorus=is_chorus,
+                mode=mode,
+                global_style=global_style,
+                duration=duration,
+                genre=genre,
+                scene_plan=scene_plan,
+            ),
+            "draft_text": draft_text,
+            "DRAFT_TEXT": draft_text,
+            "target_field": target_field,
+            "TARGET_FIELD": target_field,
+            "video_prompt": video_prompt,
+            "VIDEO_PROMPT": video_prompt,
+        },
     )
 
 
@@ -209,6 +280,28 @@ def inject_videoprompt_context(workflow_template: dict[str, Any], variables: dic
     node = _find_text_prompt_node(workflow)
     if node is None:
         raise ValueError("promptgen.json needs a TextGenerate node with inputs.prompt, or {{ lyric_text }} placeholders")
+    node["inputs"]["prompt"] = prompt
+    return workflow
+
+
+def inject_scenefill_context(workflow_template: dict[str, Any], variables: dict[str, Any], target_field: str, draft_text: str) -> dict[str, Any]:
+    workflow = deepcopy(workflow_template)
+    prompt = make_scenefill_prompt(
+        draft_text=draft_text,
+        target_field=target_field,
+        lyric_text=str(variables.get("lyric_text", "")),
+        image_prompt=str(variables.get("image_prompt", variables.get("prompt", ""))),
+        video_prompt=str(variables.get("video_prompt", "")),
+        section=str(variables.get("section", "")),
+        is_chorus=str(variables.get("is_chorus", "")).lower() == "true",
+        global_style=str(variables.get("global_style", "")),
+        duration=str(variables.get("duration", "")),
+        genre=str(variables.get("genre", "")),
+        scene_plan=str(variables.get("scene_plan", "")),
+    )
+    node = _find_text_prompt_node(workflow)
+    if node is None:
+        raise ValueError("promptgen.json needs a TextGenerate node with inputs.prompt")
     node["inputs"]["prompt"] = prompt
     return workflow
 

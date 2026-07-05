@@ -98,6 +98,19 @@ class WorkerTests(unittest.TestCase):
         gate.release()
         queue.executor.shutdown(wait=True)
 
+    def test_active_jobs_returns_all_queued_and_running_jobs(self):
+        gate = queue_gate()
+        queue = JobQueue(max_workers=1)
+        running_id = queue.submit("running", gate.wait, project_id=7, action="images")
+        queued_id = queue.submit("queued", lambda: "ok", project_id=8, action="clips")
+        gate.started.wait(timeout=2)
+
+        active = queue.active_jobs()
+
+        self.assertEqual([job.id for job in active], [queued_id, running_id])
+        gate.release()
+        queue.executor.shutdown(wait=True)
+
     def test_job_queue_records_runtime_and_notifies_on_finish(self):
         finished = []
         queue = JobQueue(max_workers=1, on_finish=finished.append)

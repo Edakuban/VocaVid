@@ -2,6 +2,7 @@ import tempfile
 import subprocess
 import time
 import unittest
+from threading import Event
 from pathlib import Path
 from unittest.mock import patch
 
@@ -16,6 +17,54 @@ from musicvideogen.store import Store
 
 
 class AppEndpointTests(unittest.TestCase):
+    def test_prompt_field_save_endpoints_update_only_one_field(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nHello\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": str(audio),
+                        "lyrics_path": str(lyrics),
+                        "global_style_prompt": "cinematic",
+                    },
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                store.update_line(project_id, 0, prompt="old image", video_prompt="old video")
+
+                client = TestClient(app_module.create_app())
+                image_response = client.post(
+                    f"/projects/{project_id}/lines/0/prompts/image/save",
+                    data={"prompt": "new image"},
+                    follow_redirects=False,
+                )
+                video_response = client.post(
+                    f"/projects/{project_id}/lines/0/prompts/video/save",
+                    data={"video_prompt": "new video"},
+                    follow_redirects=False,
+                )
+
+                self.assertEqual(image_response.status_code, 303)
+                self.assertEqual(video_response.status_code, 303)
+                line = Store(app_module.DB_PATH).list_lines(project_id)[0]
+                self.assertEqual(line["prompt"], "new image")
+                self.assertEqual(line["video_prompt"], "new video")
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
     def test_delete_finished_jobs_endpoint_redirects_to_start_page(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
@@ -84,6 +133,7 @@ class AppEndpointTests(unittest.TestCase):
         old_uploads = app_module.UPLOADS
         old_db_path = app_module.DB_PATH
         old_pipeline = app_module.Pipeline
+        release = Event()
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
@@ -125,6 +175,62 @@ class AppEndpointTests(unittest.TestCase):
             app_module.DB_PATH = old_db_path
             app_module.Pipeline = old_pipeline
 
+    def test_project_page_queue_estimate_includes_jobs_from_other_projects(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        release = Event()
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\n", encoding="utf-8")
+                _write_wav(audio)
+                project_1 = store.create_project(
+                    {"name": "One", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                project_2 = store.create_project(
+                    {"name": "Two", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                store.record_job_run("prompts", "lines", 1, 30.0, "done")
+                started = Event()
+
+                class BlockingPipeline:
+                    def __init__(self, store, workspace):
+                        self.store = store
+
+                    def generate_prompts(self, project_id, selected_line_indices=None):
+                        started.set()
+                        release.wait(timeout=2)
+
+                app_module.Pipeline = BlockingPipeline
+                client = TestClient(app_module.create_app())
+                client.post(f"/projects/{project_1}/prompts", follow_redirects=False)
+                self.assertTrue(started.wait(timeout=2))
+
+                page = client.get(f"/projects/{project_2}").text
+
+                self.assertIn("<title>(1) Two</title>", page)
+                self.assertIn('id="queue-estimate" class="queue-estimate" data-seconds=', page)
+                self.assertIn(">Queue ca.", page)
+                self.assertNotIn('id="queue-estimate" class="queue-estimate" data-seconds="0">Queue frei</span>', page)
+                release.set()
+                time.sleep(0.1)
+        finally:
+            release.set()
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
     def test_project_status_endpoint_returns_current_segment_row_html(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
@@ -157,6 +263,7 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertIn("segment-row-0", payload["rows"])
                 self.assertIn("Updated row", payload["rows"]["segment-row-0"])
                 self.assertEqual(payload["locked"], {"segments": [], "lines": []})
+                self.assertEqual(payload["queue_count"], 0)
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads
@@ -212,6 +319,110 @@ class AppEndpointTests(unittest.TestCase):
                 jobs_html = client.get("/").text
                 self.assertIn("generate images: Demo (segment 1)", jobs_html)
                 self.assertIn("generate images: Demo (segment 2)", jobs_html)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
+    def test_project_image_action_skips_approved_segments_even_when_processing_all(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\nTwo\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {"name": "Demo", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                store.replace_segments(
+                    project_id,
+                    [
+                        RenderSegment(0, "lyrics", "Verse", False, False, [0], "One", 1.0, 2.0),
+                        RenderSegment(1, "lyrics", "Verse", False, False, [1], "Two", 2.0, 3.0),
+                    ],
+                )
+                store.update_segment(project_id, 1, video_approved=1)
+                calls = []
+
+                class FakePipeline:
+                    def __init__(self, store, workspace):
+                        self.store = store
+
+                    def generate_images(self, project_id, selected_line_indices=None):
+                        calls.append(list(selected_line_indices or []))
+
+                app_module.Pipeline = FakePipeline
+                client = TestClient(app_module.create_app())
+
+                response = client.post(f"/projects/{project_id}/images", follow_redirects=False)
+                for _ in range(20):
+                    if calls:
+                        break
+                    time.sleep(0.01)
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(calls, [[0]])
+                jobs_html = client.get("/").text
+                self.assertIn("generate images: Demo (segment 1)", jobs_html)
+                self.assertNotIn("generate images: Demo (segment 2)", jobs_html)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
+    def test_project_image_action_with_only_approved_segments_queues_nothing_and_does_not_mark_used(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {"name": "Demo", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                store.replace_segments(project_id, [RenderSegment(0, "lyrics", "Verse", False, False, [0], "One", 1.0, 2.0)])
+                store.update_segment(project_id, 0, video_approved=1)
+                calls = []
+
+                class FakePipeline:
+                    def __init__(self, store, workspace):
+                        self.store = store
+
+                    def generate_images(self, project_id, selected_line_indices=None):
+                        calls.append(list(selected_line_indices or []))
+
+                app_module.Pipeline = FakePipeline
+                client = TestClient(app_module.create_app())
+
+                response = client.post(f"/projects/{project_id}/images", follow_redirects=False)
+                time.sleep(0.05)
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(calls, [])
+                self.assertEqual(Store(app_module.DB_PATH).list_used_project_actions(project_id), set())
+                self.assertNotIn("generate images: Demo", client.get("/").text)
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads
