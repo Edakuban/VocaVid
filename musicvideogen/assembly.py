@@ -261,7 +261,7 @@ def _add_transition(
     _set_property(transition, "b_track", str(max(from_position, to_position)))
     _set_property(transition, "mlt_service", "luma")
     _set_property(transition, "kdenlive_id", "wipe")
-    _set_property(transition, "reverse", "1" if from_position < to_position else "0")
+    _set_property(transition, "reverse", "1" if from_position > to_position else "0")
     _set_property(transition, "softness", "0")
     _set_property(transition, "progressive", "1")
     _set_property(transition, "always_active", "0")
