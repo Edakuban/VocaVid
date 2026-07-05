@@ -1,0 +1,69 @@
+Create a continuous music video scene plan for the whole song.
+
+Genre: {GENRE}
+Global visual style: {GLOBAL_STYLE}
+Total render segments: {TOTAL_SEGMENTS}
+Lyrics lines per normal clip: {LYRIC_GROUP_SIZE}
+Lyrics lines per chorus/refrain clip: {CHORUS_GROUP_SIZE}
+{VIDEO_BIBLE_CONTEXT}
+
+First decide the overall concept and visual progression across the whole song, then assign one concise visual beat to each fixed render segment.
+
+The scene plan must feel like a real edited music video, not a sequence of similar character shots.
+
+Chorus/refrain performance policy:
+
+* Prefer chorus/refrain segments as performance shots with the reference performer as the focus person, especially when the segment has uses_reference=True.
+* For rock, metal, punk, pop-rock, country, folk, soul, gospel, and similar band-friendly genres, performance shots may include a microphone, live band, stage, backlights, crowd energy, dramatic silhouettes, and concert-scale lighting.
+* For electronic, EDM, synth, techno, ambient, DJ, or club-oriented genres, do not force a classic live band. Use genre-appropriate performance language such as microphone, DJ/controller setup, light rig, club, LED wall, projection, solo performer, or electronic stage.
+* Not every scene must include the performer. Every scene that includes the performer must show visible singing or lip-sync to the lyrics.
+* Verse and bridge segments should mix story, atmosphere, symbols, inserts, locations, and occasional performance fragments.
+
+Shot variety requirements:
+
+* Maximum 1 out of 3 consecutive segments may primarily show the main character walking or standing.
+* At least 30% of all segments must focus on something other than the main character.
+* Include a balanced mix of:
+
+  * performance shots,
+  * worldbuilding/location shots,
+  * symbolic metaphor shots,
+  * close-up object shots,
+  * machinery or environmental shots,
+  * memory/inner-conflict shots,
+  * abstract rhythm montage shots,
+  * large-scale chorus shots.
+* Every segment must introduce a new visual idea, camera angle, subject, movement, symbol, or emotional beat.
+* Repeated motifs are allowed only if they evolve visually or emotionally.
+
+Continuity rules:
+
+* Keep locations, motifs, color language, props, characters, atmosphere, and visual symbolism consistent across the full timeline.
+* Build a clear emotional progression from the beginning to the end.
+* Chorus/refrain segments should feel connected through recurring performance, identity, scale, or symbolic shots, but should escalate with each repetition.
+* Segments with uses_reference=True should be shots that can feature the singer/person from the reference images.
+* Segments with uses_reference=False should preferably be used for worldbuilding, objects, machinery, symbolic imagery, crowds, landscapes, abstract rhythm shots, or environmental storytelling.
+
+Creative interpretation rules:
+
+* Do not simply visualize the lyrics word-for-word.
+* Translate the lyrics into cinematic images, metaphors, atmosphere, and emotional beats.
+* Avoid generic phrases like "epic shot", "dramatic scene", or "dark atmosphere" unless supported by specific visual details.
+* Use concrete visual language: camera framing, subject, movement, lighting, location, color, action, and mood.
+* For each segment, make a concrete director's decision: shot_type, subject, camera/framing, movement, motif, and how it differs from nearby segments.
+* No dialogue, no text on screen unless explicitly requested.
+
+Return:
+Overall concept: one sentence
+Visual progression: intro -> verse -> chorus -> bridge/finale style progression
+
+Return every render segment index exactly once in this exact format:
+0: scene description
+1: scene description
+
+You must return exactly {TOTAL_SEGMENTS} numbered segment lines, from {FIRST_INDEX} to {LAST_INDEX}.
+Do not skip, merge, rename, or add segments.
+Use only the numeric index at the start of each segment line. Do not write "segment_index".
+
+Fixed render segments:
+{SEGMENTS}

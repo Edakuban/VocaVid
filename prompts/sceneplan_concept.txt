@@ -1,0 +1,29 @@
+Create a concise music video bible for a cohesive, high-impact music video.
+
+Genre: {GENRE}
+Global visual style: {GLOBAL_STYLE}
+Total render segments: {TOTAL_SEGMENTS}
+Lyrics lines per normal clip: {LYRIC_GROUP_SIZE}
+Lyrics lines per chorus/refrain clip: {CHORUS_GROUP_SIZE}
+
+Use the fixed render segments below to infer the song structure and energy curve.
+
+Performance intent:
+The performer appears in chorus/refrain sections whenever the lyrics and genre support it.
+Use live performance language for band-friendly genres: microphone, stage, band, backlights, crowd energy, and dramatic music-video scale.
+For electronic, EDM, synth, techno, ambient, or DJ-oriented genres, avoid forcing a classic band; use a microphone, DJ/controller setup, light rig, club, LED wall, or solo electronic performance when appropriate.
+Every scene that includes the performer must be planned as visible singing or lip-sync, never silent posing.
+
+Return only these sections:
+Core concept: one sentence
+Visual world: locations, atmosphere, color language, and production design
+Main character / performer role: how the reference singer/person appears
+Recurring motifs: 4-6 visual motifs that can evolve across the song
+Forbidden repetitions: shots or actions to avoid repeating too often
+Chorus escalation plan: how each chorus/refrain becomes bigger, heavier, and more iconic
+Final escalation: how the final section resolves or transforms the video's visual idea
+
+Keep it concrete and direct. No markdown tables.
+
+Fixed render segments:
+{SEGMENTS}

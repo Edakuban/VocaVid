@@ -1,0 +1,31 @@
+Edit Image 1 by replacing only the primary focus person with the identity from Image 2.
+
+Image prompt context:
+{IMAGE_PROMPT}
+
+Scene plan context:
+{SCENE_PLAN}
+
+Genre: {GENRE}
+Global visual style: {GLOBAL_STYLE}
+
+Target selection:
+Replace the main focus person in Image 1: the person closest to camera, most centered, largest in frame, most brightly lit, or visually treated as the subject. If multiple people are visible, replace only that focus person. Do not change background people, crowds, silhouettes, companions, enemies, or secondary characters.
+
+Identity transfer:
+Use Image 2 as the identity reference for the focus person. Transfer the face, facial structure, skin tone, age impression, hair, hairline, hair color, hairstyle, hair length, beard, moustache, facial hair, glasses, and overall body shape from Image 2.
+
+Scale and anatomy:
+Match the head size, neck length, shoulder width, and body proportions of the original focus person in Image 1. Do not enlarge the head. Do not paste a portrait-sized head onto the body. The replaced identity must fit naturally into the existing body, camera perspective, lens distortion, and distance from camera.
+
+Lighting and color matching:
+Use Image 2 only for identity, not for lighting, exposure, color temperature, contrast, background, or photo style. Match the lighting direction, shadow depth, contrast, exposure, color grading, grain, and atmosphere of Image 1. The inserted face, hair, skin, glasses, and facial hair must receive the same light and shadows as the original scene.
+
+Hair and face priority:
+The focus person's complete visible hair mass must come from Image 2, including hairline, temples, sideburns, fringe or bangs, hair volume, hair length, hair color, hair texture, beard, moustache, and facial hair. Replace all visible character hair with the hair from Image 2. Remove or overwrite the original focus person's hair silhouette from Image 1. Do not keep the original character's hair, hairline, hair color, hairstyle, beard, facial hair, or hair silhouette from Image 1. Do not blend Image 1 hair with Image 2 hair.
+
+Preserve scene:
+Keep the background, mood, lighting, camera angle, composition, clothing, pose, posture, expression, gaze direction, and cinematic atmosphere from Image 1. Keep the outfit from Image 1 unless it conflicts with preserving the focus person's head and identity.
+
+Boundaries:
+Do not alter non-focus people. Do not add new people. Do not remove people. Do not change the scene, props, weapons, furniture, environment, framing, or style. Keep the result photorealistic and natural.

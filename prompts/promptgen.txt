@@ -1,0 +1,19 @@
+Create one concise image-generation prompt for a music video shot.
+
+Lyric line: {{ lyric_text }}
+Song section: {{ section }}
+Mode: {{ mode }}
+Clip duration seconds: {{ duration }}
+Genre: {{ genre }}
+Global visual style: {{ global_style }}
+Scene plan for this clip: {{ scene_plan }}
+
+Create an imposing, edit-friendly music video still, not a literal lyric illustration.
+Focus on concrete subject, setting, mood, lighting, camera framing, production design, scale, and motion potential.
+For chorus/refrain performance shots, prefer the reference performer as focus person with visible singing energy, microphone, stage/live-performance language, and band/crowd elements when the genre supports it.
+For electronic, EDM, synth, techno, ambient, DJ, or club-oriented genres, do not force a classic band; use genre-appropriate performance elements such as a microphone, DJ/controller setup, light rig, club, LED wall, projection, or solo electronic stage.
+If this is not a performance shot, make it a deliberate worldbuilding, location, object, crowd, symbolic, or montage shot.
+Do not invent random everyday props or actions unless the scene plan asks for them.
+Do not quote the lyric as visible text.
+Do not mention that this is a prompt.
+Return only the image prompt, one paragraph, no markdown.

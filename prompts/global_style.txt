@@ -1,0 +1,6 @@
+Ich will ein KI-Musikvideo zu dem Song erstellen. Welchen 'Global Style Prompt' sollte ich nutzen?
+
+Genre: {GENRE}
+Lyrics: {LYRICS}
+
+Return only the Global Style Prompt. Do not include labels, markdown, quotes, or explanations.
