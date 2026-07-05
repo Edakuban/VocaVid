@@ -222,8 +222,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/settings"', html)
         self.assertIn('action="/projects/7/segments"', html)
         self.assertIn("<h2>Render Segments</h2>", html)
-        self.assertIn('<th colspan="2">Prompts</th>', html)
-        self.assertIn("<th>Images</th>", html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', html)
+        self.assertNotIn("<th>Images</th>", html)
         self.assertNotIn("<th>Use</th>", html)
         self.assertNotIn("<th>Avatar Image</th>", html)
         self.assertIn('<input type="checkbox" class="segment-select" name="selected_lines" value="0">', html)
@@ -232,9 +232,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('data-audio-src="/assets/outputs/segment-000.wav"', html)
         self.assertNotIn("<td>outputs/segment-000.wav</td>", html)
         self.assertNotIn("Slow establishing shot", html)
-        self.assertIn('<button class="icon-button" type="button" title="Play clip"', html)
-        self.assertIn("openClipLightbox", html)
-        self.assertIn("clip-000.mp4", html)
+        self.assertNotIn('<button class="icon-button" type="button" title="Play clip"', html)
+        self.assertNotIn("openClipLightbox", html)
+        self.assertNotIn("clip-000.mp4", html)
         self.assertIn("<th>#</th>", html)
         self.assertNotIn("<th>Section</th>", html)
         self.assertNotIn("<th>Chorus</th>", html)
@@ -245,6 +245,104 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('name="start_sec"', html)
         self.assertIn('name="end_sec"', html)
         self.assertIn('<td class="timing-column">', html)
+
+    def test_segment_table_hides_generation_columns_before_scene_plan(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Segment row",
+                "start_sec": 0.0,
+                "end_sec": 8.0,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": "outputs/project-7/images/segment-000.png",
+                "clip_path": "outputs/project-7/clips/segment-000.mp4",
+                "audio_path": "outputs/project-7/audio-segments/segment-000.wav",
+                "scene_plan": "",
+                "video_approved": 1,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, [], segments, used_actions={"segments"})
+
+        self.assertIn("<th>Typ</th>", html)
+        self.assertIn('<th class="timing-column">Timing</th>', html)
+        self.assertIn("<th>Audio</th>", html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', html)
+        self.assertNotIn("<th>Images</th>", html)
+        self.assertNotIn("<th>Clip</th>", html)
+        self.assertNotIn("<th>Redo</th>", html)
+        self.assertNotIn("<th>OK</th>", html)
+        self.assertNotIn("image prompt", html)
+        self.assertNotIn("openClipLightbox", html)
+
+    def test_segment_table_hides_alignment_columns_after_scene_plan(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Segment row",
+                "start_sec": 0.0,
+                "end_sec": 8.0,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": "outputs/project-7/audio-segments/segment-000.wav",
+                "scene_plan": "",
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, [], segments, used_actions={"scene-plan"})
+
+        self.assertNotIn("<th>Typ</th>", html)
+        self.assertNotIn('<th class="timing-column">Timing</th>', html)
+        self.assertIn('<th colspan="2">Prompts</th>', html)
+        self.assertIn("<th>Images</th>", html)
+        self.assertNotIn('action="/projects/7/segments/0/timing"', html)
+        self.assertNotIn('name="section_type"', html)
+
+    def test_lyrics_table_hides_generation_columns_before_scene_plan(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Hallo Welt",
+                "start_sec": 0.5,
+                "end_sec": 1.2,
+                "confidence": 0.8,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": "outputs/project-7/images/line-000.png",
+                "clip_path": "outputs/project-7/clips/line-000.mp4",
+                "video_approved": 1,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines, used_actions={"align"})
+
+        self.assertIn("<th>Lyrics</th>", html)
+        self.assertIn('<th class="timing-column">Timing</th>', html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', html)
+        self.assertNotIn("<th>Images</th>", html)
+        self.assertNotIn("<th>Clip</th>", html)
+        self.assertNotIn("<th>Redo</th>", html)
+        self.assertNotIn("<th>OK</th>", html)
+        self.assertNotIn("image prompt", html)
 
     def test_segment_scene_plan_is_saved_but_hidden_from_segment_table(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -524,7 +622,7 @@ class AppHtmlTests(unittest.TestCase):
             }
         ]
 
-        html = _project_html(project, lines)
+        html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn("<th>Redo</th><th>OK</th><th>Status</th>", html)
         self.assertIn('action="/projects/7/lines/3/redo"', html)
@@ -641,7 +739,7 @@ class AppHtmlTests(unittest.TestCase):
             },
         ]
 
-        html = _project_html(project, lines)
+        html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn('class="section-verse"', html)
         self.assertIn('class="section-chorus"', html)
@@ -868,7 +966,7 @@ class AppHtmlTests(unittest.TestCase):
             }
         ]
 
-        html = _project_html(project, lines)
+        html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn('<img class="preview-image"', html)
         self.assertIn("openImageLightbox('http://127.0.0.1:8188/view?filename=line-0-1782236016441_00001_.png&amp;subfolder=musicvideogen%2Fproject-1&amp;type=output')", html)
@@ -906,14 +1004,16 @@ class AppHtmlTests(unittest.TestCase):
             }
         ]
 
-        html = _project_html(project, [], segments)
+        html = _project_html(project, [], segments, used_actions={"scene-plan"})
 
         self.assertIn('src="/assets/outputs/project-1/images/segment-000.png', html)
         self.assertIn('src="/assets/outputs/project-1/images/avatar-segment-000.png"', html)
         self.assertIn("openClipLightbox('/assets/outputs/project-1/clips/segment-000.mp4", html)
         self.assertIn('<td class="assets-column">', html)
+        self.assertIn('<div class="asset-previews">', html)
         self.assertIn('<form class="compact-form image-choice"', html)
         self.assertLess(html.index("segment-000.png"), html.index("avatar-segment-000.png"))
+        self.assertLess(html.index('class="asset-previews"'), html.index('class="compact-form image-choice"'))
         self.assertNotIn('<span class="asset-path">', html)
 
     def test_project_page_is_full_width_and_includes_image_lightbox(self):
@@ -922,7 +1022,8 @@ class AppHtmlTests(unittest.TestCase):
         html = _page("Demo", _project_html(project, []))
 
         self.assertIn("max-width: none", html)
-        self.assertIn(".preview-image { width: 192px; height: 108px;", html)
+        self.assertIn(".preview-image { width: 292px; height: 164px;", html)
+        self.assertIn(".asset-previews { display: flex;", html)
         self.assertIn('id="image-lightbox"', html)
         self.assertIn('id="image-lightbox-image"', html)
         self.assertIn("function openImageLightbox", html)
@@ -948,7 +1049,7 @@ class AppHtmlTests(unittest.TestCase):
             }
         ]
 
-        html = _project_html(project, lines)
+        html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn('action="/projects/7/lines/3/prompts/save"', html)
         self.assertIn('name="prompt"', html)
@@ -981,7 +1082,7 @@ class AppHtmlTests(unittest.TestCase):
             }
         ]
 
-        html = _project_html(project, lines)
+        html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn('action="/projects/7/lines/3/image-source"', html)
         self.assertIn(
@@ -1014,7 +1115,7 @@ class AppHtmlTests(unittest.TestCase):
             }
         ]
 
-        html = _project_html(project, lines)
+        html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn("<th>Redo</th><th>OK</th><th>Status</th>", html)
         self.assertIn('action="/projects/7/lines/3/approval"', html)

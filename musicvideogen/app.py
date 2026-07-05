@@ -189,8 +189,9 @@ def create_app() -> FastAPI:
         project = store.get_project(project_id)
         lines = store.list_lines(project_id)
         segments = store.list_segments(project_id)
+        used_actions = store.list_used_project_actions(project_id)
         active = jobs.active_project_jobs(project_id)
-        return _project_status_payload(project, lines, segments, active, store.average_job_durations())
+        return _project_status_payload(project, lines, segments, active, store.average_job_durations(), used_actions=used_actions)
 
     @app.post("/projects/{project_id}/align")
     def align(project_id: int, selected_lines: list[int] = Form(default=[])):
@@ -482,10 +483,11 @@ def _page(title: str, body: str) -> str:
     .legend-swatch.section-verse {{ background: lightyellow; }}
     .legend-swatch.section-bridge {{ background: #eeeeee; }}
     .legend-swatch.section-chorus {{ background: #e5f0ff; }}
-    .preview-image {{ width: 192px; height: 108px; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; display: block; }}
+    .preview-image {{ width: 292px; height: 164px; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; display: block; }}
     .preview-button {{ padding: 0; border: 0; background: transparent; color: inherit; }}
-    .assets-column {{ min-width: 216px; }}
+    .assets-column {{ min-width: 608px; }}
     .assets-stack {{ display: grid; gap: 8px; align-content: start; }}
+    .asset-previews {{ display: flex; gap: 8px; align-items: flex-start; }}
     .image-choice {{ display: grid; gap: 6px; min-width: 90px; }}
     .image-choice label {{ display: flex; gap: 6px; align-items: center; margin: 0; font-weight: 500; }}
     .image-choice input {{ width: auto; }}
@@ -793,7 +795,7 @@ def _project_html(project, lines, segments=None, used_actions=None, active_jobs=
 </div>
 {_segment_settings_html(project)}
 {_scene_plan_editor_html(project)}
-{_work_items_html(project, lines, segments, locked)}
+{_work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)}
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
 {_clear_project_html(project)}
@@ -856,19 +858,27 @@ def _scene_plan_editor_html(project) -> str:
 """
 
 
-def _work_items_html(project, lines, segments, locked=None) -> str:
+def _work_items_html(project, lines, segments, locked=None, show_generation_columns: bool = False) -> str:
     locked = locked or {}
     if segments:
-        return _segments_html(project, lines, segments, locked)
-    return _lyrics_html(project, lines, locked)
+        return _segments_html(project, lines, segments, locked, show_generation_columns=show_generation_columns)
+    return _lyrics_html(project, lines, locked, show_generation_columns=show_generation_columns)
 
 
-def _project_status_payload(project, lines, segments, active_jobs, average_durations: dict[str, float] | None = None) -> dict[str, object]:
+def _project_status_payload(
+    project,
+    lines,
+    segments,
+    active_jobs,
+    average_durations: dict[str, float] | None = None,
+    used_actions: set[str] | None = None,
+) -> dict[str, object]:
     average_durations = average_durations or {}
+    used_actions = used_actions or set()
     item_kind = "segments" if segments else "lines"
     rows = segments or lines
     locked = _locked_indices(active_jobs, item_kind, rows)
-    html = _work_items_html(project, lines, segments, locked)
+    html = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return {
         "locked": {
             "segments": sorted(locked) if item_kind == "segments" else [],
@@ -886,29 +896,37 @@ def _extract_row_snippets(html: str) -> dict[str, str]:
     }
 
 
-def _lyrics_html(project, lines, locked=None) -> str:
+def _lyrics_html(project, lines, locked=None, show_generation_columns: bool = False) -> str:
     locked = locked or {}
     rows = ""
     for line in lines:
         confidence = _display_confidence(line)
         confidence_value = "" if confidence is None else f"{round(float(confidence) * 100)}%"
         row_class = _row_class(line["section"], bool(line["is_chorus"]), confidence, bool(_row_value(line, "video_approved", 0)))
-        image_choice_html = _image_choice_html(project["id"], "lines", line["line_index"], line)
-        image_html = _assets_stack_html(
-            _image_preview_html(project, line["image_path"]),
-            _image_preview_html(project, _row_value(line, "avatar_image_path", "")),
-            image_choice_html,
-        )
-        clip_html = _clip_play_html(project, line["clip_path"])
-        approval_html = _approval_html(project["id"], "lines", line["line_index"], line)
-        video_prompt = _row_value(line, "video_prompt", "")
-        prompt_editor = _prompt_editor_html(
-            f"/projects/{project['id']}/lines/{line['line_index']}/prompts/save",
-            line["prompt"] or "",
-            video_prompt or "",
-        )
+        generation_cells = ""
+        if show_generation_columns:
+            image_choice_html = _image_choice_html(project["id"], "lines", line["line_index"], line)
+            image_html = _assets_stack_html(
+                _image_preview_html(project, line["image_path"]),
+                _image_preview_html(project, _row_value(line, "avatar_image_path", "")),
+                image_choice_html,
+            )
+            clip_html = _clip_play_html(project, line["clip_path"])
+            approval_html = _approval_html(project["id"], "lines", line["line_index"], line)
+            video_prompt = _row_value(line, "video_prompt", "")
+            prompt_editor = _prompt_editor_html(
+                f"/projects/{project['id']}/lines/{line['line_index']}/prompts/save",
+                line["prompt"] or "",
+                video_prompt or "",
+            )
+            redo_html = _redo_html(project["id"], "lines", line["line_index"], _row_value(line, "last_action", ""))
+            generation_cells = f"""
+  <td colspan="2">{prompt_editor}</td>
+  <td class="assets-column">{image_html}</td>
+  <td>{clip_html}</td>
+  <td>{redo_html}</td>
+  <td>{approval_html}</td>"""
         status_html = _status_html(line["status"], line["error"] or "")
-        redo_html = _redo_html(project["id"], "lines", line["line_index"], _row_value(line, "last_action", ""))
         insert_html = _insert_line_html(project["id"], line["line_index"], line["section"])
         delete_html = _delete_line_html(project["id"], line["line_index"])
         timing = _timing_text(line["start_sec"], line["end_sec"])
@@ -931,41 +949,31 @@ def _lyrics_html(project, lines, locked=None) -> str:
     <div>{timing}</div>
   </td>
   <td class="confidence">{confidence_value}</td>
-  <td colspan="2">{prompt_editor}</td>
-  <td class="assets-column">{image_html}</td>
-  <td>{clip_html}</td>
-  <td>{redo_html}</td>
-  <td>{approval_html}</td>
+{generation_cells}
   <td>{status_html}</td>
   <td><form action="/projects/{project['id']}/lines/{line['line_index']}/retry" method="post"><button>Retry</button></form></td>
   <td>{insert_html}</td>
   <td>{delete_html}</td>
   <td>{lock_overlay}</td>
 </tr>"""
+    generation_headers = '<th colspan="2">Prompts</th><th>Images</th><th>Clip</th><th>Redo</th><th>OK</th>' if show_generation_columns else ""
     return f"""
 <div class="panel"><h2>Lyrics / Timing</h2></div>
 <table>
-  <thead><tr><th>Select</th><th>Lyrics</th><th class="timing-column">Timing</th><th>Confidence</th><th colspan="2">Prompts</th><th>Images</th><th>Clip</th><th>Redo</th><th>OK</th><th>Status</th><th></th><th>Insert</th><th>Loeschen</th></tr></thead>
+  <thead><tr><th>Select</th><th>Lyrics</th><th class="timing-column">Timing</th><th>Confidence</th>{generation_headers}<th>Status</th><th></th><th>Insert</th><th>Loeschen</th></tr></thead>
   <tbody>{rows}</tbody>
 </table>
 {_section_legend_html()}
 """
 
 
-def _segments_html(project, lines, segments, locked=None) -> str:
+def _segments_html(project, lines, segments, locked=None, show_generation_columns: bool = False) -> str:
     locked = locked or {}
     confidence_by_line = _line_confidence_by_index(lines)
     rows = ""
     for segment in segments:
-        image_choice_html = _image_choice_html(project["id"], "segments", segment["segment_index"], segment)
-        image_html = _assets_stack_html(
-            _image_preview_html(project, segment["image_path"]),
-            _image_preview_html(project, _row_value(segment, "avatar_image_path", "")),
-            image_choice_html,
-        )
+        generation_cells = ""
         audio_html = _audio_play_html(segment["audio_path"])
-        clip_html = _clip_play_html(project, segment["clip_path"])
-        approval_html = _approval_html(project["id"], "segments", segment["segment_index"], segment)
         row_class = _row_class(
             segment["section"] if segment["kind"] != "gap" else segment["kind"],
             bool(segment["is_chorus"]),
@@ -974,17 +982,38 @@ def _segments_html(project, lines, segments, locked=None) -> str:
         )
         timing = _timing_text(segment["start_sec"], segment["end_sec"])
         confidence_html = _segment_confidence_html(segment, confidence_by_line)
-        timing_editor = _segment_timing_editor_html(project["id"], segment)
-        section_editor = _segment_section_editor_html(project["id"], segment)
+        alignment_cells = ""
+        if not show_generation_columns:
+            timing_editor = _segment_timing_editor_html(project["id"], segment)
+            section_editor = _segment_section_editor_html(project["id"], segment)
+            alignment_cells = f"""
+  <td>{section_editor}</td>
+  <td class="timing-column">{timing_editor}<div>{timing}</div>{confidence_html}</td>
+  <td>{audio_html}</td>"""
         text_html = _multiline_text_html(segment["clean_text"])
-        video_prompt = _row_value(segment, "video_prompt", "")
-        prompt_editor = _prompt_editor_html(
-            f"/projects/{project['id']}/segments/{segment['segment_index']}/prompts/save",
-            segment["prompt"] or "",
-            video_prompt or "",
-        )
+        if show_generation_columns:
+            image_choice_html = _image_choice_html(project["id"], "segments", segment["segment_index"], segment)
+            image_html = _assets_stack_html(
+                _image_preview_html(project, segment["image_path"]),
+                _image_preview_html(project, _row_value(segment, "avatar_image_path", "")),
+                image_choice_html,
+            )
+            clip_html = _clip_play_html(project, segment["clip_path"])
+            approval_html = _approval_html(project["id"], "segments", segment["segment_index"], segment)
+            video_prompt = _row_value(segment, "video_prompt", "")
+            prompt_editor = _prompt_editor_html(
+                f"/projects/{project['id']}/segments/{segment['segment_index']}/prompts/save",
+                segment["prompt"] or "",
+                video_prompt or "",
+            )
+            redo_html = _redo_html(project["id"], "segments", segment["segment_index"], _row_value(segment, "last_action", ""))
+            generation_cells = f"""
+  <td colspan="2">{prompt_editor}</td>
+  <td class="assets-column">{image_html}</td>
+  <td>{clip_html}</td>
+  <td>{redo_html}</td>
+  <td>{approval_html}</td>"""
         status_html = _status_html(segment["status"], segment["error"] or "")
-        redo_html = _redo_html(project["id"], "segments", segment["segment_index"], _row_value(segment, "last_action", ""))
         approved = "1" if bool(_row_value(segment, "video_approved", 0)) else "0"
         locked_status = locked.get(int(segment["segment_index"]))
         tr_class = _merge_row_class(row_class, "locked-row" if locked_status else "")
@@ -994,21 +1023,17 @@ def _segments_html(project, lines, segments, locked=None) -> str:
   <td class="select-cell"><input type="checkbox" class="segment-select" name="selected_lines" value="{segment['segment_index']}"></td>
   <td>{segment['segment_index']}</td>
   <td>{text_html}</td>
-  <td>{section_editor}</td>
-  <td class="timing-column">{timing_editor}<div>{timing}</div>{confidence_html}</td>
-  <td>{audio_html}</td>
-  <td colspan="2">{prompt_editor}</td>
-  <td class="assets-column">{image_html}</td>
-  <td>{clip_html}</td>
-  <td>{redo_html}</td>
-  <td>{approval_html}</td>
+{alignment_cells}
+{generation_cells}
   <td>{status_html}</td>
   <td>{lock_overlay}</td>
 </tr>"""
+    alignment_headers = '<th>Typ</th><th class="timing-column">Timing</th><th>Audio</th>' if not show_generation_columns else ""
+    generation_headers = '<th colspan="2">Prompts</th><th>Images</th><th>Clip</th><th>Redo</th><th>OK</th>' if show_generation_columns else ""
     return f"""
 <div class="panel"><h2>Render Segments</h2></div>
 <table>
-  <thead><tr><th>Select</th><th>#</th><th>Text</th><th>Typ</th><th class="timing-column">Timing</th><th>Audio</th><th colspan="2">Prompts</th><th>Images</th><th>Clip</th><th>Redo</th><th>OK</th><th>Status</th></tr></thead>
+  <thead><tr><th>Select</th><th>#</th><th>Text</th>{alignment_headers}{generation_headers}<th>Status</th></tr></thead>
   <tbody>{rows}</tbody>
 </table>
 {_section_legend_html()}
@@ -1179,7 +1204,10 @@ def _assets_stack_html(*items: str) -> str:
     visible_items = [item for item in items if item]
     if not visible_items:
         return ""
-    return '<div class="assets-stack">' + "".join(visible_items) + "</div>"
+    preview_items = [item for item in visible_items if 'class="preview-button"' in item]
+    other_items = [item for item in visible_items if 'class="preview-button"' not in item]
+    previews_html = '<div class="asset-previews">' + "".join(preview_items) + "</div>" if preview_items else ""
+    return '<div class="assets-stack">' + previews_html + "".join(other_items) + "</div>"
 
 
 def _image_choice_html(project_id: int, item_kind: str, item_index: int, row) -> str:
