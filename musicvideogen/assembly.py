@@ -62,7 +62,7 @@ def assemble_kdenlive_project(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     tree = ET.parse(template_path)
     root = tree.getroot()
-    root.set("root", str(output_path.parent).replace("\\", "/"))
+    root.set("root", ".")
 
     sequence = _find_sequence_tractor(root)
     main_playlist = _require_playlist(root, "playlist10")
@@ -78,7 +78,7 @@ def assemble_kdenlive_project(
     handle = max(0.0, float(transition_handle_seconds))
     total_duration = max(float(clip["end_sec"]) for clip in clips)
 
-    audio_producer = _producer("audio0", audio_path, total_duration, playlist_id="main_bin")
+    audio_producer = _producer("audio0", audio_path, total_duration, playlist_id="main_bin", base_path=output_path.parent)
     root.insert(_producer_insert_index(root), audio_producer)
     ET.SubElement(audio_playlist, "entry", {"producer": "audio0", "in": _timecode(0), "out": _timecode(total_duration)})
     _add_bin_entry(main_bin, "audio0", total_duration)
@@ -88,7 +88,7 @@ def assemble_kdenlive_project(
         entry_duration = visible_duration + handle if index < len(clips) - 1 else visible_duration
         producer_id = f"clip{index}"
         clip_path = Path(clip["path"])
-        root.insert(_producer_insert_index(root), _producer(producer_id, clip_path, entry_duration, playlist_id="main_bin"))
+        root.insert(_producer_insert_index(root), _producer(producer_id, clip_path, entry_duration, playlist_id="main_bin", base_path=output_path.parent))
         target_playlist = main_playlist if index % 2 == 0 else overlay_playlist
         _append_blank_until(target_playlist, float(clip["start_sec"]))
         ET.SubElement(target_playlist, "entry", {"producer": producer_id, "in": _timecode(0), "out": _timecode(entry_duration)})
@@ -200,14 +200,18 @@ def _remove_generated_project_items(root: ET.Element) -> None:
                 tractor.remove(child)
 
 
-def _producer(producer_id: str, resource: Path, duration: float, playlist_id: str) -> ET.Element:
+def _producer(producer_id: str, resource: Path, duration: float, playlist_id: str, base_path: Path) -> ET.Element:
     producer = ET.Element("producer", {"id": producer_id, "in": _timecode(0), "out": _timecode(duration)})
     _set_property(producer, "length", _timecode(duration))
     _set_property(producer, "eof", "pause")
-    _set_property(producer, "resource", str(resource))
+    _set_property(producer, "resource", _relative_resource(resource, base_path))
     _set_property(producer, "mlt_service", "avformat")
     _set_property(producer, "kdenlive:playlistid", playlist_id)
     return producer
+
+
+def _relative_resource(resource: Path, base_path: Path) -> str:
+    return os.path.relpath(str(resource), str(base_path)).replace("\\", "/")
 
 
 def _producer_insert_index(root: ET.Element) -> int:
@@ -250,12 +254,14 @@ def _add_transition(
     track_indices = {track.attrib.get("producer"): position for position, track in enumerate(sequence.findall("track"))}
     from_track = _sequence_track_producer_for_playlist(root, sequence, from_playlist)
     to_track = _sequence_track_producer_for_playlist(root, sequence, to_playlist)
+    from_position = track_indices.get(from_track, 0)
+    to_position = track_indices.get(to_track, 0)
     transition = ET.SubElement(sequence, "transition", {"id": f"auto_transition{index}", "in": _timecode(start), "out": _timecode(end)})
-    _set_property(transition, "a_track", str(track_indices.get(from_track, 0)))
-    _set_property(transition, "b_track", str(track_indices.get(to_track, 0)))
+    _set_property(transition, "a_track", str(min(from_position, to_position)))
+    _set_property(transition, "b_track", str(max(from_position, to_position)))
     _set_property(transition, "mlt_service", "luma")
     _set_property(transition, "kdenlive_id", "wipe")
-    _set_property(transition, "reverse", "1")
+    _set_property(transition, "reverse", "1" if from_position < to_position else "0")
     _set_property(transition, "softness", "0")
     _set_property(transition, "progressive", "1")
     _set_property(transition, "always_active", "0")

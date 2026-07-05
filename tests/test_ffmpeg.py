@@ -148,9 +148,9 @@ class AssemblyTests(unittest.TestCase):
                 for prop in producer.findall("property")
                 if prop.attrib.get("name") == "resource"
             ]
-            self.assertIn(str(clip_a), resources)
-            self.assertIn(str(clip_b), resources)
-            self.assertIn(str(audio), resources)
+            self.assertIn("a.mp4", resources)
+            self.assertIn("b.mp4", resources)
+            self.assertIn("song.wav", resources)
 
             main_entries = root.find(".//playlist[@id='playlist10']").findall("entry")
             overlay_entries = list(root.find(".//playlist[@id='playlist12']"))
@@ -237,6 +237,125 @@ class AssemblyTests(unittest.TestCase):
             }
             self.assertEqual(properties["a_track"], "2")
             self.assertEqual(properties["b_track"], "3")
+
+    def test_assemble_kdenlive_project_keeps_descending_transition_track_order_valid(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            clips_dir = tmp_path / "media" / "clips"
+            output_dir = tmp_path / "exports" / "demo"
+            clips_dir.mkdir(parents=True)
+            clip_a = clips_dir / "a.mp4"
+            clip_b = clips_dir / "b.mp4"
+            clip_c = clips_dir / "c.mp4"
+            audio = tmp_path / "media" / "song.wav"
+            template = tmp_path / "template.kdenlive"
+            output = output_dir / "final.kdenlive"
+            for path in (clip_a, clip_b, clip_c, audio):
+                path.write_text(path.name, encoding="utf-8")
+            template.write_text(
+                """<?xml version='1.0' encoding='utf-8'?>
+<mlt producer="main_bin">
+ <profile frame_rate_num="25" frame_rate_den="1" width="1920" height="1080"/>
+ <producer id="producer0"><property name="resource">black</property></producer>
+ <playlist id="playlist2"/>
+ <playlist id="playlist10"/>
+ <playlist id="playlist12"/>
+ <tractor id="tractor5"><track producer="playlist10"/></tractor>
+ <tractor id="tractor6"><track producer="playlist12"/></tractor>
+ <tractor id="{sequence}">
+  <track producer="producer0"/>
+  <track producer="playlist2"/>
+  <track producer="tractor5"/>
+  <track producer="tractor6"/>
+ </tractor>
+ <playlist id="main_bin"/>
+ <tractor id="tractor7"><track producer="{sequence}"/></tractor>
+</mlt>
+""",
+                encoding="utf-8",
+            )
+
+            assemble_kdenlive_project(
+                [
+                    {"path": clip_a, "start_sec": 0.0, "end_sec": 4.0},
+                    {"path": clip_b, "start_sec": 4.0, "end_sec": 7.0},
+                    {"path": clip_c, "start_sec": 7.0, "end_sec": 10.0},
+                ],
+                audio,
+                output,
+                template,
+                transition_handle_seconds=0.5,
+            )
+
+            sequence = ET.parse(output).getroot().find(".//tractor[@id='{sequence}']")
+            transitions = [
+                transition
+                for transition in sequence.findall("transition")
+                if any(prop.text == "luma" for prop in transition.findall("property") if prop.attrib.get("name") == "mlt_service")
+            ]
+
+            transition_properties = [
+                {prop.attrib.get("name"): prop.text for prop in transition.findall("property")}
+                for transition in transitions
+            ]
+            self.assertEqual(len(transition_properties), 2)
+            self.assertEqual(transition_properties[0]["a_track"], "2")
+            self.assertEqual(transition_properties[0]["b_track"], "3")
+            self.assertEqual(transition_properties[0]["reverse"], "1")
+            self.assertEqual(transition_properties[1]["a_track"], "2")
+            self.assertEqual(transition_properties[1]["b_track"], "3")
+            self.assertEqual(transition_properties[1]["reverse"], "0")
+
+    def test_assemble_kdenlive_project_writes_relative_resource_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            media_dir = tmp_path / "media"
+            output_dir = tmp_path / "outputs" / "demo"
+            media_dir.mkdir()
+            clip = media_dir / "a.mp4"
+            audio = media_dir / "song.wav"
+            template = tmp_path / "template.kdenlive"
+            output = output_dir / "final.kdenlive"
+            clip.write_text("a", encoding="utf-8")
+            audio.write_text("wav", encoding="utf-8")
+            template.write_text(
+                """<?xml version='1.0' encoding='utf-8'?>
+<mlt producer="main_bin" root="/absolute/template/path">
+ <profile frame_rate_num="25" frame_rate_den="1" width="1920" height="1080"/>
+ <producer id="producer0"><property name="resource">black</property></producer>
+ <playlist id="playlist2"/>
+ <playlist id="playlist10"/>
+ <playlist id="playlist12"/>
+ <tractor id="{sequence}">
+  <track producer="producer0"/>
+  <track producer="playlist2"/>
+  <track producer="playlist10"/>
+  <track producer="playlist12"/>
+ </tractor>
+ <playlist id="main_bin"/>
+ <tractor id="tractor7"><track producer="{sequence}"/></tractor>
+</mlt>
+""",
+                encoding="utf-8",
+            )
+
+            assemble_kdenlive_project(
+                [{"path": clip, "start_sec": 0.0, "end_sec": 4.0}],
+                audio,
+                output,
+                template,
+                transition_handle_seconds=0.5,
+            )
+
+            root = ET.parse(output).getroot()
+            resources = [
+                prop.text
+                for producer in root.findall("producer")
+                for prop in producer.findall("property")
+                if prop.attrib.get("name") == "resource" and prop.text != "black"
+            ]
+            self.assertEqual(root.attrib["root"], ".")
+            self.assertEqual(resources, ["../../media/song.wav", "../../media/a.mp4"])
 
 
 def _write_wav(path: Path, duration_sec: float) -> None:
