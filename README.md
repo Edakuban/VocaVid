@@ -6,6 +6,12 @@ VocaVid runs as a small local FastAPI web app. It keeps project state in a local
 
 This project has grown through a lot of Codex-assisted vibe coding: most of the app was shaped in close human/AI collaboration, with quick iteration, local tests, and a healthy amount of "what if we made this nicer?" energy.
 
+## Why This Exists
+
+VocaVid started after Sora, OpenAI's video generation option, was no longer available for the workflow I wanted. The existing alternatives were fairly expensive, and in the end they usually produced one finished video. That is awkward for music-video work: if one section turns out weak, I do not want to regenerate and pay for the whole thing again.
+
+The goal became simple: use local tools, avoid paying per attempt, and make the process resumable at the level of individual lyrics, prompts, images, and clips. After finding ComfyUI, the remaining problem was automation: connecting lyrics, scene planning, prompts, image generation, video generation, retries, approvals, and final assembly into one repeatable local workflow. That need turned into this project.
+
 ## Features
 
 - Create reusable projects from a WAV file, lyrics file, genre, global style prompt, and one or more reference images.
