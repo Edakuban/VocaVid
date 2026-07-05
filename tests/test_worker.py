@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime
 
 from musicvideogen.worker import JobQueue
 
@@ -80,6 +81,23 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(active[1].selected_indices, [0, 2])
         gate.release()
         queue.executor.shutdown(wait=True)
+
+    def test_job_queue_records_runtime_and_notifies_on_finish(self):
+        finished = []
+        queue = JobQueue(max_workers=1, on_finish=finished.append)
+
+        queue.submit("example", lambda: "ok", project_id=7, action="images", item_kind="segments", selected_indices=[2])
+        queue.executor.shutdown(wait=True)
+
+        jobs = queue.list_jobs()
+        self.assertEqual(len(finished), 1)
+        self.assertEqual(finished[0].id, jobs[0].id)
+        self.assertEqual(finished[0].duration_seconds, jobs[0].duration_seconds)
+        self.assertIsNotNone(jobs[0].started_at)
+        self.assertIsNotNone(jobs[0].finished_at)
+        self.assertGreaterEqual(jobs[0].duration_seconds, 0.0)
+        datetime.fromisoformat(jobs[0].started_at)
+        datetime.fromisoformat(jobs[0].finished_at)
 
 
 class queue_gate:

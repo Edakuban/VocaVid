@@ -1,5 +1,6 @@
 import tempfile
 import subprocess
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -139,6 +140,62 @@ class AppEndpointTests(unittest.TestCase):
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads
             app_module.DB_PATH = old_db_path
+
+    def test_project_image_action_queues_one_job_per_segment(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\nTwo\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {"name": "Demo", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                store.replace_segments(
+                    project_id,
+                    [
+                        RenderSegment(0, "lyrics", "Verse", False, False, [0], "One", 1.0, 2.0),
+                        RenderSegment(1, "lyrics", "Verse", False, False, [1], "Two", 2.0, 3.0),
+                    ],
+                )
+                calls = []
+
+                class FakePipeline:
+                    def __init__(self, store, workspace):
+                        self.store = store
+
+                    def generate_images(self, project_id, selected_line_indices=None):
+                        calls.append(list(selected_line_indices or []))
+
+                app_module.Pipeline = FakePipeline
+                client = TestClient(app_module.create_app())
+
+                response = client.post(f"/projects/{project_id}/images", follow_redirects=False)
+                for _ in range(20):
+                    if len(calls) == 2:
+                        break
+                    time.sleep(0.01)
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(calls, [[0], [1]])
+                jobs_html = client.get("/").text
+                self.assertIn("generate images: Demo (segment 1)", jobs_html)
+                self.assertIn("generate images: Demo (segment 2)", jobs_html)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
 
     def test_line_insert_and_delete_endpoints_update_project_lines(self):
         old_app_root = app_module.APP_ROOT

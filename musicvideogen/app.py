@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import shutil
+from datetime import datetime
 from html import escape
 from pathlib import Path
 from urllib.parse import quote
@@ -26,13 +27,26 @@ APP_ROOT = Path.cwd() / ".musicvideogen"
 UPLOADS = APP_ROOT / "uploads"
 DB_PATH = APP_ROOT / "musicvideogen.sqlite3"
 logger = logging.getLogger(__name__)
+_SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
 
 
 def create_app() -> FastAPI:
     UPLOADS.mkdir(parents=True, exist_ok=True)
     store = Store(DB_PATH)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
-    jobs = JobQueue(max_workers=1)
+
+    def record_finished_job(job) -> None:
+        if not job.action or job.duration_seconds is None:
+            return
+        store.record_job_run(
+            job.action,
+            job.item_kind,
+            max(1, len(job.selected_indices or [])),
+            job.duration_seconds,
+            job.status,
+        )
+
+    jobs = JobQueue(max_workers=1, on_finish=record_finished_job)
     app = FastAPI(title="VocaVid")
     app.mount("/assets", StaticFiles(directory=str(APP_ROOT)), name="assets")
 
@@ -69,19 +83,31 @@ def create_app() -> FastAPI:
         if action not in actions:
             return False
         label, callback = actions[action]
+        item_kind = _action_item_kind(action, bool(store.list_segments(project_id)))
+        if action in _SPLIT_ACTIONS:
+            for index in _selected_action_indices(project_id, item_kind, selected, store):
+                jobs.submit(
+                    _job_name(label, project["name"], [index], item_kind=item_kind),
+                    lambda selected_index=index: _run_project_action(pipeline, project_id, action, [selected_index]),
+                    project_id=project_id,
+                    action=action,
+                    item_kind=item_kind,
+                    selected_indices=[index],
+                )
+            return True
         jobs.submit(
-            _job_name(label, project["name"], selected),
+            _job_name(label, project["name"], selected, item_kind=item_kind if selected else None),
             callback,
             project_id=project_id,
             action=action,
-            item_kind=_action_item_kind(action, bool(store.list_segments(project_id))),
+            item_kind=item_kind,
             selected_indices=selected,
         )
         return True
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return _page("Projects", _projects_html(store.list_projects(), jobs.list_jobs()))
+        return _page("Projects", _projects_html(store.list_projects(), jobs.list_jobs(), store.average_job_durations()))
 
     @app.post("/jobs/{job_id}/delete")
     def delete_job(job_id: int):
@@ -144,7 +170,19 @@ def create_app() -> FastAPI:
         lines = store.list_lines(project_id)
         segments = store.list_segments(project_id)
         used_actions = store.list_used_project_actions(project_id)
-        return _page(project["name"], _project_html(project, lines, segments, used_actions=used_actions, active_jobs=jobs.active_project_jobs(project_id)))
+        active_jobs = jobs.active_project_jobs(project_id)
+        averages = store.average_job_durations()
+        return _page(
+            project["name"],
+            _project_html(
+                project,
+                lines,
+                segments,
+                used_actions=used_actions,
+                active_jobs=active_jobs,
+                queue_estimate_seconds=_queue_estimate_seconds(active_jobs, averages),
+            ),
+        )
 
     @app.get("/projects/{project_id}/status")
     def project_status(project_id: int):
@@ -152,7 +190,7 @@ def create_app() -> FastAPI:
         lines = store.list_lines(project_id)
         segments = store.list_segments(project_id)
         active = jobs.active_project_jobs(project_id)
-        return _project_status_payload(project, lines, segments, active)
+        return _project_status_payload(project, lines, segments, active, store.average_job_durations())
 
     @app.post("/projects/{project_id}/align")
     def align(project_id: int, selected_lines: list[int] = Form(default=[])):
@@ -417,7 +455,9 @@ def _page(title: str, body: str) -> str:
     .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
-    .project-title-row .button {{ margin-left: auto; }}
+    .project-title-row .button {{ margin-left: 0; }}
+    .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; font-weight: 750; white-space: nowrap; }}
+    .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8d3c8; }}
     th, td {{ padding: 8px; border-bottom: 1px solid #e7e1d6; text-align: left; vertical-align: top; font-size: 13px; }}
     th {{ background: #e9efe9; }}
@@ -518,6 +558,7 @@ def _page(title: str, body: str) -> str:
         const response = await fetch('/projects/' + projectId + '/status');
         if (!response.ok) return;
         const data = await response.json();
+        updateQueueEstimate(data.queue_estimate_seconds);
         Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
           const row = document.getElementById(rowId);
           if (row) replaceProjectRow(row, html);
@@ -527,6 +568,33 @@ def _page(title: str, body: str) -> str:
       }} finally {{
         window.setTimeout(() => pollProjectStatus(projectId), 2500);
       }}
+    }}
+    function formatDuration(seconds) {{
+      const total = Math.max(0, Math.round(Number(seconds) || 0));
+      const hours = Math.floor(total / 3600);
+      const minutes = Math.floor((total % 3600) / 60);
+      const remaining = total % 60;
+      if (hours) return hours + 'h ' + minutes + 'm';
+      if (minutes) return minutes + 'm ' + remaining + 's';
+      return remaining + 's';
+    }}
+    function updateQueueEstimate(seconds) {{
+      const element = document.getElementById('queue-estimate');
+      if (!element || seconds === undefined || seconds === null) return;
+      const value = Math.max(0, Number(seconds) || 0);
+      element.dataset.seconds = String(Math.round(value));
+      element.textContent = value > 0 ? 'Queue ca. ' + formatDuration(value) : 'Queue frei';
+    }}
+    function setupQueueEstimateCountdown() {{
+      window.setInterval(() => {{
+        const element = document.getElementById('queue-estimate');
+        if (!element) return;
+        const value = Math.max(0, Number(element.dataset.seconds || 0) - 1);
+        updateQueueEstimate(value);
+      }}, 1000);
+    }}
+    function scrollToTop() {{
+      window.scrollTo({{ top: 0, behavior: 'smooth' }});
     }}
     function scrollStorageKey() {{
       return 'musicvideogen-scroll:' + window.location.pathname;
@@ -592,10 +660,29 @@ def _page(title: str, body: str) -> str:
 </html>"""
 
 
-def _projects_html(projects, jobs) -> str:
+def _run_project_action(pipeline, project_id: int, action: str, selected_indices: list[int]) -> object:
+    method_names = {
+        "prompts": "generate_prompts",
+        "video-prompts": "generate_video_prompts",
+        "images": "generate_images",
+        "avatar-image": "generate_avatar_images",
+        "clips": "generate_clips",
+    }
+    return getattr(pipeline, method_names[action])(project_id, selected_indices)
+
+
+def _selected_action_indices(project_id: int, item_kind: str, selected: list[int], store: Store) -> list[int]:
+    if selected:
+        return [int(index) for index in selected]
+    rows = store.list_segments(project_id) if item_kind == "segments" else store.list_lines(project_id)
+    return [_row_index(row, item_kind) for row in rows]
+
+
+def _projects_html(projects, jobs, average_durations: dict[str, float] | None = None) -> str:
+    average_durations = average_durations or {}
     rows = "".join(f"<li><a href='/projects/{p['id']}'>{_text(p['name'])}</a></li>" for p in projects)
     job_rows = "".join(
-        f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_job_delete_html(job)}</td></tr>"
+        f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
         for job in jobs
     )
     return f"""
@@ -614,15 +701,18 @@ def _projects_html(projects, jobs) -> str:
 <div class="panel">
   <h2>Jobs</h2>
   <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
-  <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th></th></tr></thead><tbody>{job_rows}</tbody></table>
+  <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody>{job_rows}</tbody></table>
 </div>
 """
 
 
-def _job_name(label: str, project_name: str, selected_indices: list[int] | None = None) -> str:
+def _job_name(label: str, project_name: str, selected_indices: list[int] | None = None, item_kind: str | None = None) -> str:
     selected = sorted(int(index) + 1 for index in (selected_indices or []))
     if not selected:
         return f"{label}: {project_name}"
+    if item_kind and len(selected) == 1:
+        item_label = "segment" if item_kind == "segments" else "line"
+        return f"{label}: {project_name} ({item_label} {selected[0]})"
     indices = ", ".join(str(index) for index in selected)
     return f"{label}: {project_name} (segments {indices})"
 
@@ -659,7 +749,7 @@ def _merge_row_class(row_class: str, extra_class: str) -> str:
     return row_class[:-1] + f" {extra_class}\""
 
 
-def _project_html(project, lines, segments=None, used_actions=None, active_jobs=None) -> str:
+def _project_html(project, lines, segments=None, used_actions=None, active_jobs=None, queue_estimate_seconds: float | None = None) -> str:
     segments = segments or []
     used_actions = used_actions or set()
     active_jobs = active_jobs or []
@@ -691,10 +781,12 @@ def _project_html(project, lines, segments=None, used_actions=None, active_jobs=
         for number, (action, label, is_wip) in enumerate(action_specs, start=1)
     )
     open_filter = _open_filter_html(work_items)
+    queue_estimate = _queue_estimate_html(queue_estimate_seconds)
     return f"""
 <div class="project-topbar">
   <div class="project-title-row">
     <h1>{project['name']}</h1>
+    {queue_estimate}
     <a class="button" href="/">Back</a>
   </div>
   <div class="actions">{actions}{open_filter}</div>
@@ -705,7 +797,8 @@ def _project_html(project, lines, segments=None, used_actions=None, active_jobs=
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
 {_clear_project_html(project)}
-<script>rememberProjectRows(); pollProjectStatus({project["id"]});</script>
+{_scroll_top_button_html()}
+<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]});</script>
 """
 
 
@@ -770,7 +863,8 @@ def _work_items_html(project, lines, segments, locked=None) -> str:
     return _lyrics_html(project, lines, locked)
 
 
-def _project_status_payload(project, lines, segments, active_jobs) -> dict[str, object]:
+def _project_status_payload(project, lines, segments, active_jobs, average_durations: dict[str, float] | None = None) -> dict[str, object]:
+    average_durations = average_durations or {}
     item_kind = "segments" if segments else "lines"
     rows = segments or lines
     locked = _locked_indices(active_jobs, item_kind, rows)
@@ -780,6 +874,7 @@ def _project_status_payload(project, lines, segments, active_jobs) -> dict[str, 
             "segments": sorted(locked) if item_kind == "segments" else [],
             "lines": sorted(locked) if item_kind == "lines" else [],
         },
+        "queue_estimate_seconds": _queue_estimate_seconds(active_jobs, average_durations),
         "rows": _extract_row_snippets(html),
     }
 
@@ -943,6 +1038,75 @@ def _open_filter_html(rows) -> str:
     total = len(rows)
     open_count = sum(1 for row in rows if not bool(_row_value(row, "video_approved", 0)))
     return f"""<span class="open-count-label">{open_count}/{total} offen</span>"""
+
+
+def _queue_estimate_html(seconds: float | None) -> str:
+    value = max(0.0, float(seconds or 0.0))
+    label = "Queue frei" if value <= 0 else f"Queue ca. {_format_duration(value)}"
+    return f'<span id="queue-estimate" class="queue-estimate" data-seconds="{int(round(value))}">{_text(label)}</span>'
+
+
+def _scroll_top_button_html() -> str:
+    return '<button class="scroll-top-button" type="button" onclick="scrollToTop()" title="Nach oben">Top</button>'
+
+
+def _job_average_seconds(job, average_durations: dict[str, float]) -> float | None:
+    action = job.action or _action_from_job_name(job.name)
+    if not action:
+        return None
+    return average_durations.get(action)
+
+
+def _action_from_job_name(name: str) -> str:
+    label = str(name).split(":", 1)[0].strip()
+    return {
+        "generate prompts": "prompts",
+        "generate video prompts": "video-prompts",
+        "generate images": "images",
+        "generate avatar image": "avatar-image",
+        "generate clips": "clips",
+        "align": "align",
+        "build segments": "segments",
+        "generate scene plan": "scene-plan",
+        "assemble": "assemble",
+    }.get(label, "")
+
+
+def _duration_html(seconds: float | None) -> str:
+    if seconds is None:
+        return ""
+    return _text(_format_duration(seconds))
+
+
+def _format_duration(seconds: float | int | None) -> str:
+    if seconds is None:
+        return ""
+    total = max(0, int(round(float(seconds))))
+    minutes, remaining = divmod(total, 60)
+    hours, minutes = divmod(minutes, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {remaining}s"
+    return f"{remaining}s"
+
+
+def _queue_estimate_seconds(active_jobs, average_durations: dict[str, float]) -> float:
+    total = 0.0
+    now = datetime.now()
+    for job in active_jobs:
+        average = average_durations.get(job.action)
+        if average is None:
+            continue
+        remaining = float(average)
+        if job.status == "running" and job.started_at:
+            try:
+                elapsed = (now - datetime.fromisoformat(job.started_at)).total_seconds()
+            except ValueError:
+                elapsed = 0.0
+            remaining = max(0.0, remaining - elapsed)
+        total += remaining
+    return total
 
 
 def _job_delete_html(job) -> str:

@@ -59,11 +59,14 @@ class AppHtmlTests(unittest.TestCase):
             Job(id=1, name="old job", status="failed", created_at="2026-06-27T17:00:00", error="boom"),
         ]
 
-        html = _projects_html([], jobs)
+        html = _projects_html([], jobs, {"prompts": 12.4, "clips": 126.0})
 
         self.assertIn('action="/jobs/delete-queued"', html)
         self.assertIn("<button>Delete queued</button>", html)
         self.assertIn("generate prompts: Demo Song", html)
+        self.assertIn("<th>Avg</th>", html)
+        self.assertIn("<td>12s</td>", html)
+        self.assertIn("<td>2m 6s</td>", html)
         self.assertIn('action="/jobs/4/delete"', html)
         self.assertNotIn('action="/jobs/3/delete"', html)
         self.assertIn('action="/jobs/2/delete"', html)
@@ -73,6 +76,8 @@ class AppHtmlTests(unittest.TestCase):
     def test_job_name_includes_one_based_selected_segment_indices(self):
         self.assertEqual(_job_name("generate images", "Demo Song", [0, 2]), "generate images: Demo Song (segments 1, 3)")
         self.assertEqual(_job_name("generate images", "Demo Song", []), "generate images: Demo Song")
+        self.assertEqual(_job_name("generate images", "Demo Song", [2], item_kind="segments"), "generate images: Demo Song (segment 3)")
+        self.assertEqual(_job_name("generate prompts", "Demo Song", [1], item_kind="lines"), "generate prompts: Demo Song (line 2)")
 
     def test_unfinished_project_actions_are_pink_wip_buttons(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -734,10 +739,15 @@ class AppHtmlTests(unittest.TestCase):
     def test_project_page_has_sticky_header_and_no_audio_final_info_panel(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "final.mp4"}
 
-        html = _page("Demo", _project_html(project, []))
+        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0))
 
         self.assertIn('class="project-topbar"', html)
         self.assertIn('class="project-title-row"', html)
+        self.assertIn('id="queue-estimate"', html)
+        self.assertIn('data-seconds="70"', html)
+        self.assertIn("Queue ca. 1m 10s", html)
+        self.assertIn('class="scroll-top-button"', html)
+        self.assertIn("function scrollToTop", html)
         self.assertIn(".project-topbar", html)
         self.assertIn("position: sticky", html)
         self.assertNotIn("<strong>Audio:</strong>", html)

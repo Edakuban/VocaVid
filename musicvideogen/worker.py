@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from itertools import count
 from threading import Lock
+from time import perf_counter
 from typing import Callable
 
 
@@ -19,14 +20,19 @@ class Job:
     action: str = ""
     item_kind: str = ""
     selected_indices: list[int] | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    duration_seconds: float | None = None
 
 
 class JobQueue:
-    def __init__(self, max_workers: int = 1):
+    def __init__(self, max_workers: int = 1, on_finish: Callable[[Job], object] | None = None):
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         self._ids = count(1)
         self._lock = Lock()
         self._jobs: dict[int, Job] = {}
+        self._started_perf: dict[int, float] = {}
+        self._on_finish = on_finish
 
     def submit(
         self,
@@ -88,17 +94,41 @@ class JobQueue:
         with self._lock:
             if job_id not in self._jobs:
                 return None
-            self._jobs[job_id].status = "running"
+            job = self._jobs[job_id]
+            job.status = "running"
+            job.started_at = datetime.now().isoformat(timespec="seconds")
+            self._started_perf[job_id] = perf_counter()
         return func()
 
     def _finish(self, job_id: int, future: Future) -> None:
+        finished_job = None
         with self._lock:
             if job_id not in self._jobs:
                 return
             job = self._jobs[job_id]
+            job.finished_at = datetime.now().isoformat(timespec="seconds")
+            started_perf = self._started_perf.pop(job_id, None)
+            if started_perf is not None:
+                job.duration_seconds = max(0.0, perf_counter() - started_perf)
             if future.exception() is None:
                 job.status = "done"
                 job.error = ""
             else:
                 job.status = "failed"
                 job.error = str(future.exception())
+            finished_job = Job(
+                id=job.id,
+                name=job.name,
+                status=job.status,
+                created_at=job.created_at,
+                error=job.error,
+                project_id=job.project_id,
+                action=job.action,
+                item_kind=job.item_kind,
+                selected_indices=list(job.selected_indices or []),
+                started_at=job.started_at,
+                finished_at=job.finished_at,
+                duration_seconds=job.duration_seconds,
+            )
+        if self._on_finish is not None and finished_job is not None:
+            self._on_finish(finished_job)

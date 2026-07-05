@@ -85,6 +85,16 @@ CREATE TABLE IF NOT EXISTS project_actions (
     used_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(project_id, action)
 );
+
+CREATE TABLE IF NOT EXISTS job_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    item_kind TEXT NOT NULL,
+    item_count INTEGER NOT NULL DEFAULT 1,
+    duration_seconds REAL NOT NULL,
+    status TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -353,6 +363,31 @@ class Store:
             return {
                 str(row["action"])
                 for row in conn.execute("SELECT action FROM project_actions WHERE project_id = ?", (project_id,))
+            }
+
+    def record_job_run(self, action: str, item_kind: str, item_count: int, duration_seconds: float, status: str) -> None:
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO job_runs (action, item_kind, item_count, duration_seconds, status)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (action, item_kind, max(1, int(item_count)), max(0.0, float(duration_seconds)), status),
+            )
+
+    def average_job_durations(self) -> dict[str, float]:
+        with self._connect() as conn:
+            return {
+                str(row["action"]): float(row["average_duration"])
+                for row in conn.execute(
+                    """
+                    SELECT action, AVG(duration_seconds / item_count) AS average_duration
+                    FROM job_runs
+                    WHERE status = 'done' AND item_count > 0
+                    GROUP BY action
+                    ORDER BY action
+                    """
+                )
             }
 
     def delete_project(self, project_id: int) -> None:

@@ -58,6 +58,18 @@ class ProjectActionTests(unittest.TestCase):
             self.assertEqual(store.list_segments(project_id), [])
             self.assertEqual(store.list_used_project_actions(project_id), set())
 
+    def test_job_run_durations_are_averaged_by_action(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            root = Path(directory)
+            store = Store(root / "test.sqlite3")
+
+            store.record_job_run("images", "segments", 1, 10.0, "done")
+            store.record_job_run("images", "segments", 1, 20.0, "done")
+            store.record_job_run("images", "segments", 1, 99.0, "failed")
+            store.record_job_run("clips", "segments", 1, 120.0, "done")
+
+            self.assertEqual(store.average_job_durations(), {"clips": 120.0, "images": 15.0})
+
     def test_video_approval_is_persisted_for_lines(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
