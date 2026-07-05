@@ -90,6 +90,13 @@ class JobQueue:
                 del self._jobs[job_id]
             return len(job_ids)
 
+    def delete_finished_jobs(self) -> int:
+        with self._lock:
+            job_ids = [job.id for job in self._jobs.values() if job.status in {"done", "failed"}]
+            for job_id in job_ids:
+                del self._jobs[job_id]
+            return len(job_ids)
+
     def _run(self, job_id: int, func: Callable[[], object]) -> object:
         with self._lock:
             if job_id not in self._jobs:

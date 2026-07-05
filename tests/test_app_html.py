@@ -63,6 +63,8 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('action="/jobs/delete-queued"', html)
         self.assertIn("<button>Delete queued</button>", html)
+        self.assertIn('action="/jobs/delete-finished"', html)
+        self.assertIn("<button>Delete finished</button>", html)
         self.assertIn("generate prompts: Demo Song", html)
         self.assertIn("<th>Avg</th>", html)
         self.assertIn("<td>12s</td>", html)
@@ -72,6 +74,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/jobs/2/delete"', html)
         self.assertIn('action="/jobs/1/delete"', html)
         self.assertIn("<th></th>", html)
+        self.assertGreater(html.index('action="/jobs/delete-finished"'), html.index("</table>"))
 
     def test_job_name_includes_one_based_selected_segment_indices(self):
         self.assertEqual(_job_name("generate images", "Demo Song", [0, 2]), "generate images: Demo Song (segments 1, 3)")

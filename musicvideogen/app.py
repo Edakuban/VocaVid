@@ -119,6 +119,11 @@ def create_app() -> FastAPI:
         jobs.delete_queued_jobs()
         return RedirectResponse("/", status_code=303)
 
+    @app.post("/jobs/delete-finished")
+    def delete_finished_jobs():
+        jobs.delete_finished_jobs()
+        return RedirectResponse("/", status_code=303)
+
     @app.post("/projects")
     async def create_project(
         name: str = Form(...),
@@ -722,6 +727,7 @@ def _projects_html(projects, jobs, average_durations: dict[str, float] | None = 
   <h2>Jobs</h2>
   <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
   <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody>{job_rows}</tbody></table>
+  <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
 </div>
 """
 

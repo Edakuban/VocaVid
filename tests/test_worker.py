@@ -51,6 +51,22 @@ class WorkerTests(unittest.TestCase):
         gate.release()
         queue.executor.shutdown(wait=True)
 
+    def test_delete_finished_jobs_keeps_queued_and_running_jobs(self):
+        gate = queue_gate()
+        queue = JobQueue(max_workers=1)
+        done_id = queue.submit("done", lambda: "ok")
+        failed_id = queue.submit("failed", failing_job)
+        running_id = queue.submit("running", gate.wait)
+        queued_id = queue.submit("queued", lambda: "ok")
+        gate.started.wait(timeout=2)
+
+        deleted = queue.delete_finished_jobs()
+
+        self.assertEqual(deleted, 2)
+        self.assertEqual([job.id for job in queue.list_jobs()], [queued_id, running_id])
+        gate.release()
+        queue.executor.shutdown(wait=True)
+
     def test_jobs_store_project_item_metadata_and_list_active_project_jobs(self):
         gate = queue_gate()
         queue = JobQueue(max_workers=1)
@@ -113,3 +129,7 @@ class queue_gate:
 
     def release(self):
         self.released.set()
+
+
+def failing_job():
+    raise RuntimeError("boom")

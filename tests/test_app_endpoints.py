@@ -16,6 +16,27 @@ from musicvideogen.store import Store
 
 
 class AppEndpointTests(unittest.TestCase):
+    def test_delete_finished_jobs_endpoint_redirects_to_start_page(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+
+                client = TestClient(app_module.create_app())
+                response = client.post("/jobs/delete-finished", follow_redirects=False)
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(response.headers["location"], "/")
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
     def test_create_project_saves_clip_group_settings_from_start_page(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
