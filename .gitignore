@@ -15,6 +15,7 @@ env/
 
 # Local app state and generated media
 .musicvideogen/
+images/
 musicvideogen.sqlite3
 *.sqlite
 *.sqlite3
