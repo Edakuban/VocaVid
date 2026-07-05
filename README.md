@@ -12,7 +12,10 @@ VocaVid runs as a small local FastAPI web app. It keeps project state in a local
 - Generate or edit a full scene plan before rendering.
 - Generate image prompts, still images, avatar/reference-person image variants, image-to-video motion prompts, video clips, and the final assembled output.
 - Retry or rerun individual lines/segments instead of restarting the whole render.
-- Mark generated videos as approved and choose whether clips use the base image or avatar image source.
+- Edit image/video prompts per row, save each field independently, or use `AI fill` to turn a rough draft into a production-ready scene prompt.
+- Mark generated videos as approved with `OK`; approved rows are protected and skipped by later batch, selected-row, and redo generation actions.
+- Track the global render queue in the project header and browser tab title, so other tabs show how many queued/running jobs remain.
+- Choose whether clips use the base image or avatar image source.
 - Keep uploads, generated files, database state, logs, and Python bytecode out of Git via `.gitignore`.
 
 ## Requirements
@@ -69,15 +72,16 @@ start.bat
 6. Review and adjust line/segment timing where needed.
 7. Click `Scene Plan` and edit/save the result if needed.
 8. Click `Gen Prompts`.
-9. Click `Gen Images`.
-10. Click `Gen Avatar Image` when you want reference-person variants.
-11. Choose `Image` or `Avatar` as the clip source per row when both exist.
-12. Click `Gen Video Prompts`.
-13. Click `Gen Clips`.
-14. Mark usable clips with `OK`.
-15. Click `Assemble Final`.
+9. Review prompts; use per-field `Save` or `AI fill` under the Image/Video text boxes for manual prompt refinement.
+10. Click `Gen Images`.
+11. Click `Gen Avatar Image` when you want reference-person variants.
+12. Choose `Image` or `Avatar` as the clip source per row when both exist.
+13. Click `Gen Video Prompts`.
+14. Click `Gen Clips`.
+15. Mark usable clips with `OK`.
+16. Click `Assemble Final`.
 
-Most actions can be run on selected rows only, so failed or weak segments can be rerendered without losing the whole project.
+Most actions can be run on selected rows only, so failed or weak segments can be rerendered without losing the whole project. Rows marked `OK` are treated as locked and are skipped even when selected or when processing the whole project.
 
 ## Workflow Files
 
@@ -113,7 +117,7 @@ Prompt instructions live in `prompts/` and can be edited without touching code:
 - `prompts/videoprompt.txt`
 - `prompts/avatar_image.txt`
 
-If `workflows/promptgen.json` is missing, VocaVid falls back to deterministic local prompt text for image and video prompts where possible. Scene plans also have a local fallback.
+`prompts/scenefill.txt` powers the row-level `AI fill` buttons. If `workflows/promptgen.json` is missing, VocaVid falls back to deterministic local prompt text for image and video prompts where possible. Scene plans also have a local fallback.
 
 ## Template Variables
 
@@ -199,7 +203,7 @@ It performs even alignment, builds segments, generates a scene plan, prompts, im
 Run the test suite with:
 
 ```powershell
-python -m unittest discover
+python -m unittest discover -s tests
 ```
 
 The tests cover workflow conversion, prompt/template behavior, alignment logic, UI HTML generation, project actions, segment planning, and assembly helpers.
