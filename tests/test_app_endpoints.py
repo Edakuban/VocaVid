@@ -17,6 +17,88 @@ from musicvideogen.store import Store
 
 
 class AppEndpointTests(unittest.TestCase):
+    def test_jobs_status_endpoint_returns_current_queue_payload(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+
+                app = app_module.create_app()
+                app.state.jobs.submit("queued job", lambda: "ok", action="prompts")
+                client = TestClient(app)
+
+                response = client.get("/jobs/status")
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertIn("jobs_html", payload)
+                self.assertIn("queued job", payload["jobs_html"])
+                self.assertIn("queue_count", payload)
+                self.assertIn("queue_estimate_seconds", payload)
+                self.assertFalse(payload["autodelete_finished"])
+                self.assertFalse(payload["shutdown_after_queue"])
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
+    def test_job_options_endpoint_toggles_autodelete_and_shutdown(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+
+                app = app_module.create_app()
+                client = TestClient(app)
+                response = client.post(
+                    "/jobs/options",
+                    data={"autodelete_finished": "on", "shutdown_after_queue": "on"},
+                    follow_redirects=False,
+                )
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(response.headers["location"], "/")
+                self.assertTrue(app.state.job_options.autodelete_finished)
+                self.assertTrue(app.state.job_options.shutdown_after_queue)
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
+    def test_shutdown_controller_schedules_fifteen_minute_shutdown_after_last_queue(self):
+        commands = []
+        controller = app_module.ShutdownController(runner=commands.append)
+
+        controller.enable()
+        controller.schedule_after_queue_empty()
+
+        self.assertEqual(commands, [["shutdown", "/s", "/t", "900"]])
+        self.assertTrue(controller.scheduled)
+
+    def test_shutdown_controller_cancels_pending_shutdown_when_disabled_or_queue_restarts(self):
+        commands = []
+        controller = app_module.ShutdownController(runner=commands.append)
+
+        controller.enable()
+        controller.schedule_after_queue_empty()
+        controller.cancel_pending()
+        controller.disable()
+
+        self.assertEqual(commands, [["shutdown", "/s", "/t", "900"], ["shutdown", "/a"]])
+        self.assertFalse(controller.scheduled)
+
     def test_prompt_field_save_endpoints_update_only_one_field(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS

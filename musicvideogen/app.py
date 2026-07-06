@@ -4,9 +4,12 @@ import json
 import logging
 import re
 import shutil
+import subprocess
+from dataclasses import dataclass
 from datetime import datetime
 from html import escape
 from pathlib import Path
+from typing import Callable
 from urllib.parse import quote
 
 try:
@@ -30,24 +33,64 @@ logger = logging.getLogger(__name__)
 _SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
 
 
+@dataclass
+class JobOptions:
+    autodelete_finished: bool = False
+    shutdown_after_queue: bool = False
+
+
+class ShutdownController:
+    def __init__(self, runner: Callable[[list[str]], object] | None = None):
+        self._runner = runner or (lambda command: subprocess.run(command, check=False))
+        self.enabled = False
+        self.scheduled = False
+
+    def enable(self) -> None:
+        self.enabled = True
+
+    def disable(self) -> None:
+        self.enabled = False
+        self.cancel_pending()
+
+    def schedule_after_queue_empty(self) -> None:
+        if not self.enabled or self.scheduled:
+            return
+        self._runner(["shutdown", "/s", "/t", "900"])
+        self.scheduled = True
+
+    def cancel_pending(self) -> None:
+        if not self.scheduled:
+            return
+        self._runner(["shutdown", "/a"])
+        self.scheduled = False
+
+
 def create_app() -> FastAPI:
     UPLOADS.mkdir(parents=True, exist_ok=True)
     store = Store(DB_PATH)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
+    job_options = JobOptions()
+    shutdown_controller = ShutdownController()
 
     def record_finished_job(job) -> None:
-        if not job.action or job.duration_seconds is None:
-            return
-        store.record_job_run(
-            job.action,
-            job.item_kind,
-            max(1, len(job.selected_indices or [])),
-            job.duration_seconds,
-            job.status,
-        )
+        if job.action and job.duration_seconds is not None:
+            store.record_job_run(
+                job.action,
+                job.item_kind,
+                max(1, len(job.selected_indices or [])),
+                job.duration_seconds,
+                job.status,
+            )
+        if job_options.autodelete_finished:
+            jobs.delete_finished_jobs()
+        if job_options.shutdown_after_queue and not jobs.active_jobs():
+            shutdown_controller.schedule_after_queue_empty()
 
     jobs = JobQueue(max_workers=1, on_finish=record_finished_job)
     app = FastAPI(title="VocaVid")
+    app.state.jobs = jobs
+    app.state.job_options = job_options
+    app.state.shutdown_controller = shutdown_controller
     app.mount("/assets", StaticFiles(directory=str(APP_ROOT)), name="assets")
 
     def mark_used(project_id: int, action: str) -> None:
@@ -89,6 +132,7 @@ def create_app() -> FastAPI:
             if not indices:
                 return False
             for index in indices:
+                shutdown_controller.cancel_pending()
                 jobs.submit(
                     _job_name(label, project["name"], [index], item_kind=item_kind),
                     lambda selected_index=index: _run_project_action(pipeline, project_id, action, [selected_index]),
@@ -98,6 +142,7 @@ def create_app() -> FastAPI:
                     selected_indices=[index],
                 )
             return True
+        shutdown_controller.cancel_pending()
         jobs.submit(
             _job_name(label, project["name"], selected, item_kind=item_kind if selected else None),
             callback,
@@ -110,7 +155,46 @@ def create_app() -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     def index():
-        return _page("Projects", _projects_html(store.list_projects(), jobs.list_jobs(), store.average_job_durations()), queue_count=len(jobs.active_jobs()))
+        active_jobs = jobs.active_jobs()
+        average_durations = store.average_job_durations()
+        return _page(
+            "Projects",
+            _projects_html(
+                store.list_projects(),
+                jobs.list_jobs(),
+                average_durations,
+                queue_estimate_seconds=_queue_estimate_seconds(active_jobs, average_durations),
+                job_options=job_options,
+            ),
+            queue_count=len(active_jobs),
+        )
+
+    @app.get("/jobs/status")
+    def jobs_status():
+        active_jobs = jobs.active_jobs()
+        average_durations = store.average_job_durations()
+        return {
+            "jobs_html": _jobs_table_body_html(jobs.list_jobs(), average_durations),
+            "queue_estimate_seconds": _queue_estimate_seconds(active_jobs, average_durations),
+            "queue_count": len(active_jobs),
+            "autodelete_finished": job_options.autodelete_finished,
+            "shutdown_after_queue": job_options.shutdown_after_queue,
+        }
+
+    @app.post("/jobs/options")
+    def update_job_options(
+        autodelete_finished: str | None = Form(None),
+        shutdown_after_queue: str | None = Form(None),
+    ):
+        job_options.autodelete_finished = autodelete_finished == "on"
+        job_options.shutdown_after_queue = shutdown_after_queue == "on"
+        if job_options.autodelete_finished:
+            jobs.delete_finished_jobs()
+        if job_options.shutdown_after_queue:
+            shutdown_controller.enable()
+        else:
+            shutdown_controller.disable()
+        return RedirectResponse("/", status_code=303)
 
     @app.post("/jobs/{job_id}/delete")
     def delete_job(job_id: int):
@@ -529,6 +613,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .prompt-actions {{ display: flex; gap: 8px; margin: 6px 0 10px; }}
     .hidden-action-form {{ display: none; }}
     .compact-form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
+    .jobs-heading {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
+    .job-options {{ display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; align-items: center; }}
+    .job-options label {{ display: inline-flex; gap: 6px; align-items: center; margin: 0; }}
+    .job-options input {{ width: auto; }}
     .timing-column {{ width: 11rem; min-width: 11rem; }}
     .timing-form {{ display: grid; grid-template-columns: max-content max-content auto; gap: 4px; align-items: center; }}
     .timing-form input {{ width: 7ch; padding-left: 6px; padding-right: 6px; }}
@@ -697,6 +785,30 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         window.setTimeout(() => pollProjectStatus(projectId), 2500);
       }}
     }}
+    function updateJobsStatus(data) {{
+      updateQueueEstimate(data.queue_estimate_seconds);
+      updateBrowserTitle(data.queue_count);
+      const jobsBody = document.getElementById('jobs-table-body');
+      if (jobsBody && data.jobs_html !== undefined) jobsBody.innerHTML = data.jobs_html;
+      const autodelete = document.querySelector('input[name="autodelete_finished"]');
+      if (autodelete && data.autodelete_finished !== undefined) autodelete.checked = Boolean(data.autodelete_finished);
+      const shutdown = document.querySelector('input[name="shutdown_after_queue"]');
+      if (shutdown && data.shutdown_after_queue !== undefined) shutdown.checked = Boolean(data.shutdown_after_queue);
+    }}
+    async function refreshJobsStatus() {{
+      const response = await fetch('/jobs/status');
+      if (!response.ok) return;
+      updateJobsStatus(await response.json());
+    }}
+    async function pollJobsStatus() {{
+      try {{
+        await refreshJobsStatus();
+      }} catch (error) {{
+        return;
+      }} finally {{
+        window.setTimeout(pollJobsStatus, 2500);
+      }}
+    }}
     function formatDuration(seconds) {{
       const total = Math.max(0, Math.round(Number(seconds) || 0));
       const hours = Math.floor(total / 3600);
@@ -825,13 +937,20 @@ def _selected_action_indices(project_id: int, item_kind: str, selected: list[int
     return [_row_index(row, item_kind) for row in rows]
 
 
-def _projects_html(projects, jobs, average_durations: dict[str, float] | None = None) -> str:
+def _projects_html(
+    projects,
+    jobs,
+    average_durations: dict[str, float] | None = None,
+    queue_estimate_seconds: float | None = None,
+    job_options: JobOptions | None = None,
+) -> str:
     average_durations = average_durations or {}
+    job_options = job_options or JobOptions()
     rows = "".join(_project_list_item_html(p) for p in projects)
-    job_rows = "".join(
-        f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
-        for job in jobs
-    )
+    job_rows = _jobs_table_body_html(jobs, average_durations)
+    queue_estimate = _queue_estimate_html(queue_estimate_seconds)
+    autodelete_checked = " checked" if job_options.autodelete_finished else ""
+    shutdown_checked = " checked" if job_options.shutdown_after_queue else ""
     return f"""
 <h1>VocaVid</h1>
 <form action="/projects" method="post" enctype="multipart/form-data">
@@ -846,12 +965,24 @@ def _projects_html(projects, jobs, average_durations: dict[str, float] | None = 
 </form>
 <div class="panel"><h2>Projects</h2><ul class="project-list">{rows}</ul></div>
 <div class="panel">
-  <h2>Jobs</h2>
+  <h2 class="jobs-heading">Jobs {queue_estimate}</h2>
   <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
-  <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody>{job_rows}</tbody></table>
+  <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody id="jobs-table-body">{job_rows}</tbody></table>
   <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
+  <form class="compact-form job-options" action="/jobs/options" method="post">
+    <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
+    <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
+  </form>
 </div>
+<script>setupQueueEstimateCountdown(); pollJobsStatus();</script>
 """
+
+
+def _jobs_table_body_html(jobs, average_durations: dict[str, float]) -> str:
+    return "".join(
+        f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
+        for job in jobs
+    )
 
 
 def _project_list_item_html(project) -> str:

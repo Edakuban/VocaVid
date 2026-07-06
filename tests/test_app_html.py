@@ -94,6 +94,19 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<th></th>", html)
         self.assertGreater(html.index('action="/jobs/delete-finished"'), html.index("</table>"))
 
+    def test_start_page_has_queue_polling_and_queue_options(self):
+        html = _page("Projects", _projects_html([], [], queue_estimate_seconds=70.0), queue_count=2)
+
+        self.assertIn('id="queue-estimate"', html)
+        self.assertIn("Queue ca. 1m 10s", html)
+        self.assertIn('id="jobs-table-body"', html)
+        self.assertIn('name="autodelete_finished"', html)
+        self.assertIn("Autodelete finished", html)
+        self.assertIn('name="shutdown_after_queue"', html)
+        self.assertIn("Shutdown computer 15mins after last queue", html)
+        self.assertIn("setupQueueEstimateCountdown(); pollJobsStatus();", html)
+        self.assertIn("fetch('/jobs/status')", html)
+
     def test_job_name_includes_one_based_selected_segment_indices(self):
         self.assertEqual(_job_name("generate images", "Demo Song", [0, 2]), "generate images: Demo Song (segments 1, 3)")
         self.assertEqual(_job_name("generate images", "Demo Song", []), "generate images: Demo Song")
