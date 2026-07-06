@@ -26,6 +26,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("form, .panel { background: #fff; border: 1px solid #d8d3c8; color: #1c2526;", html)
         self.assertIn("table { width: 100%; border-collapse: collapse; background: white; color: #1c2526;", html)
         self.assertIn("button, .button { border: 0; border-radius: 12px; background: var(--studio-accent);", html)
+        self.assertIn(".danger-panel { border-color: #e2b1b1; background: #fff8f8; color: #1c2526;", html)
+        self.assertIn(".queue-estimate { margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d;", html)
 
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
         html = _projects_html([], [])

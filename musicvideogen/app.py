@@ -719,7 +719,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .wip-button:hover, .wip-button:focus {{ background: #c92878; }}
     .used-button {{ background: #555; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
     .used-button:hover, .used-button:focus {{ background: #444; }}
-    .danger-panel {{ border-color: #e2b1b1; background: #fff8f8; }}
+    .danger-panel {{ border-color: #e2b1b1; background: #fff8f8; color: #1c2526; }}
     .danger-button {{ border: 1px solid rgba(255,79,139,.42); background: rgba(255,79,139,.12); color: #ffd7e5; }}
     .danger-button:hover, .danger-button:focus {{ background: rgba(255,79,139,.18); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
@@ -739,7 +739,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-nav-button:hover, .project-nav-button:focus {{ background: #444; }}
     .project-nav-disabled {{ opacity: .32; cursor: default; }}
     .project-nav-disabled:hover, .project-nav-disabled:focus {{ background: #555; }}
-    .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; font-weight: 750; white-space: nowrap; }}
+    .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: white; color: #1c2526; border: 1px solid #d8d3c8; }}
     th, td {{ padding: 8px; border-bottom: 1px solid #e7e1d6; text-align: left; vertical-align: top; font-size: 13px; }}
