@@ -634,10 +634,13 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .danger-button:hover, .danger-button:focus {{ background: #7f1717; }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
-    .project-list {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 18px; padding-left: 20px; }}
-    .project-list-item {{ padding-right: 8px; }}
+    .project-list {{ display: grid; grid-template-columns: 1fr; gap: 6px 18px; padding: 8px 10px 4px 26px; }}
+    .project-list-item {{ min-width: 0; padding: 4px 8px 4px 0; }}
+    .project-list-item a {{ display: inline-block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 44px); vertical-align: bottom; }}
     .project-list-item.project-done a {{ text-decoration: line-through; color: #66706d; }}
-    .project-done-label {{ margin-left: 8px; color: #66706d; font-size: 12px; font-weight: 700; }}
+    .project-done-label {{ margin-left: 6px; color: #66706d; font-size: 12px; font-weight: 700; white-space: nowrap; }}
+    @media (min-width: 820px) {{ .project-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
+    @media (min-width: 1240px) {{ .project-list {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
     .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}

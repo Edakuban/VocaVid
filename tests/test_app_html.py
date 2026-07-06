@@ -66,7 +66,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<span class="project-done-label">fertig</span>', body)
         self.assertIn('<li class="project-list-item"><a href="/projects/1">Open Song</a></li>', body)
         self.assertIn(".project-list { display: grid;", html)
-        self.assertIn("repeat(auto-fit, minmax(240px, 1fr))", html)
+        self.assertIn("grid-template-columns: 1fr", html)
+        self.assertIn("@media (min-width: 820px)", html)
+        self.assertIn("@media (min-width: 1240px)", html)
+        self.assertIn(".project-list-item a { display: inline-block; white-space: nowrap;", html)
         self.assertIn(".project-list-item.project-done a { text-decoration: line-through;", html)
 
     def test_jobs_table_has_delete_actions_except_running_and_clear_queued_button(self):
