@@ -724,13 +724,55 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .danger-button:hover, .danger-button:focus {{ background: rgba(255,79,139,.18); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
+    .start-dashboard {{ display: grid; gap: 18px; }}
+    .start-hero {{ display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 18px; align-items: stretch; }}
+    .start-hero > div, .production-status {{
+      border: 1px solid var(--studio-line);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.028));
+      padding: 22px;
+      box-shadow: 0 24px 80px rgba(0,0,0,.22);
+    }}
+    .start-hero h1 {{ font-size: 42px; line-height: 1.02; margin: 0 0 12px; }}
+    .start-hero p {{ max-width: 720px; margin: 0; color: var(--studio-muted); font-size: 17px; line-height: 1.5; }}
+    .production-status h2 {{ margin: 0 0 14px; }}
+    .stat-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }}
+    .stat {{ border: 1px solid var(--studio-line); border-radius: 12px; background: rgba(255,255,255,.055); padding: 12px; }}
+    .stat strong {{ display: block; font-size: 24px; line-height: 1.1; }}
+    .stat span {{ display: block; margin-top: 4px; color: var(--studio-muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }}
+    .start-layout {{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }}
+    .project-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px; }}
+    .project-card {{ min-width: 0; border: 1px solid var(--studio-line); border-radius: 8px; background: rgba(255,255,255,.045); overflow: hidden; }}
+    .project-card-link {{ display: grid; grid-template-columns: 86px minmax(0, 1fr); min-height: 112px; color: var(--studio-text); text-decoration: none; }}
+    .project-card-art {{ background: linear-gradient(135deg, rgba(53,224,179,.42), rgba(255,79,139,.28)); }}
+    .project-card-body {{ padding: 14px; min-width: 0; }}
+    .project-card-body h3 {{ margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .project-card-body p {{ margin: 0; color: var(--studio-muted); }}
+    .project-card-done {{ border-color: rgba(53,224,179,.45); }}
+    .project-card-done .project-card-art {{ background: linear-gradient(135deg, rgba(53,224,179,.72), rgba(53,224,179,.18)); }}
+    .project-done-label {{ display: inline-flex; margin-top: 12px; padding: 4px 8px; border-radius: 999px; background: rgba(53,224,179,.12); color: #dcfff6; font-size: 12px; font-weight: 900; text-transform: uppercase; }}
+    .modal-content {{ width: min(560px, 94vw); max-height: 88vh; overflow: auto; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
+    .modal-content .studio-panel-head {{ color: #1c2526; border-bottom: 1px solid #d8d3c8; }}
+    .modal-content h2 {{ margin: 0; }}
+    .new-project-form {{ margin: 0; border: 0; border-radius: 0; }}
     .project-list {{ display: grid; grid-template-columns: 1fr; gap: 6px 18px; padding: 8px 10px 4px 26px; }}
     .project-list-item {{ min-width: 0; padding: 4px 8px 4px 0; }}
     .project-list-item a {{ display: inline-block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 44px); vertical-align: bottom; }}
     .project-list-item.project-done a {{ text-decoration: line-through; color: #66706d; }}
-    .project-done-label {{ margin-left: 6px; color: #66706d; font-size: 12px; font-weight: 700; white-space: nowrap; }}
     @media (min-width: 820px) {{ .project-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
     @media (min-width: 1240px) {{ .project-list {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
+    @media (max-width: 980px) {{
+      .start-hero {{ grid-template-columns: 1fr; }}
+      .project-grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (max-width: 680px) {{
+      main {{ padding: 14px; }}
+      .studio-topbar {{ align-items: stretch; flex-direction: column; }}
+      .studio-spacer {{ display: none; }}
+      .start-hero h1 {{ font-size: 32px; }}
+      .stat-grid, .project-grid {{ grid-template-columns: 1fr; }}
+      .project-card-link {{ grid-template-columns: 72px minmax(0, 1fr); }}
+    }}
     .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
@@ -926,6 +968,16 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         updateQueueEstimate(value);
       }}, 1000);
     }}
+    function openNewProjectModal() {{
+      const box = document.getElementById('new-project-modal');
+      if (!box) return;
+      box.classList.add('open');
+    }}
+    function closeNewProjectModal() {{
+      const box = document.getElementById('new-project-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
     function scrollToTop() {{
       const firstSegment = document.querySelector('tr[id^="segment-row-"]');
       const target = firstSegment || document.querySelector('tr[id^="line-row-"]');
@@ -1041,24 +1093,19 @@ def _projects_html(
     job_options = job_options or JobOptions()
     rows = "".join(_project_list_item_html(p) for p in projects)
     job_rows = _jobs_table_body_html(jobs, average_durations)
-    queue_estimate = _queue_estimate_html(queue_estimate_seconds)
     autodelete_checked = " checked" if job_options.autodelete_finished else ""
     shutdown_checked = " checked" if job_options.shutdown_after_queue else ""
     return f"""
-<h1>VocaVid</h1>
-<form action="/projects" method="post" enctype="multipart/form-data">
-  <label>Name</label><input name="name" required>
-  <label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>
-  <label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>
-  <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="2">
-  <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="1">
-  <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5">
-  <label>Whisper Model</label>{_whisper_model_select_html("small")}
-  <p><button>Create Project</button></p>
-</form>
-<div class="panel"><h2>Projects</h2><ul class="project-list">{rows}</ul></div>
-<div class="panel">
-  <h2 class="jobs-heading">Jobs {queue_estimate}</h2>
+<div class="start-dashboard">
+{_start_topbar_html(queue_estimate_seconds)}
+{_start_hero_html(projects, jobs, queue_estimate_seconds)}
+<div class="start-layout">
+<section class="studio-panel">
+  <div class="studio-panel-head"><h2>Projects</h2></div>
+  <div class="project-grid">{rows}</div>
+</section>
+<section id="jobs-panel" class="panel studio-panel">
+  <h2 class="jobs-heading">Jobs</h2>
   <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
   <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody id="jobs-table-body">{job_rows}</tbody></table>
   <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
@@ -1066,8 +1113,67 @@ def _projects_html(
     <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
     <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
   </form>
+</section>
+</div>
+{_new_project_modal_html()}
 </div>
 <script>setupQueueEstimateCountdown(); pollJobsStatus();</script>
+"""
+
+
+def _start_topbar_html(queue_estimate_seconds: float | None) -> str:
+    return f"""
+<div class="studio-topbar">
+  <div class="studio-brand">VocaVid</div>
+  <div class="studio-tagline">Local AI music-video studio</div>
+  <div class="studio-spacer"></div>
+  {_queue_estimate_html(queue_estimate_seconds)}
+  <button class="studio-button" type="button" onclick="openNewProjectModal()">New Project</button>
+  <a class="studio-button studio-button-secondary" href="#jobs-panel">Jobs</a>
+</div>
+"""
+
+
+def _new_project_modal_html() -> str:
+    return f"""
+<div id="new-project-modal" class="modal lightbox" onclick="if (event.target === this) closeNewProjectModal()">
+  <div class="modal-content">
+    <div class="studio-panel-head">
+      <h2>New Project</h2>
+      <button class="studio-button studio-button-secondary" type="button" onclick="closeNewProjectModal()">Close</button>
+    </div>
+    <form class="new-project-form" action="/projects" method="post" enctype="multipart/form-data">
+      <label>Name</label><input name="name" required>
+      <label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>
+      <label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>
+      <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="2">
+      <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="1">
+      <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5">
+      <label>Whisper Model</label>{_whisper_model_select_html("small")}
+      <p><button>Create Project</button></p>
+    </form>
+  </div>
+</div>
+"""
+
+
+def _start_hero_html(projects, jobs, queue_estimate_seconds: float | None) -> str:
+    open_jobs = len([job for job in jobs if job.status in {"queued", "running"}])
+    return f"""
+<section class="start-hero">
+  <div>
+    <h1>Build, review, rerender.</h1>
+    <p>Projects are the main act, queue health stays visible, and creating a new video opens as a focused modal.</p>
+  </div>
+  <div class="production-status">
+    <h2>Production status</h2>
+    <div class="stat-grid">
+      <div class="stat"><strong>{len(projects)}</strong><span>projects</span></div>
+      <div class="stat"><strong>{open_jobs}</strong><span>active jobs</span></div>
+      <div class="stat"><strong>{_text(_format_duration(queue_estimate_seconds or 0))}</strong><span>queue estimate</span></div>
+    </div>
+  </div>
+</section>
 """
 
 
@@ -1080,9 +1186,21 @@ def _jobs_table_body_html(jobs, average_durations: dict[str, float]) -> str:
 
 def _project_list_item_html(project) -> str:
     done = _is_kdenlive_project_done(project)
-    css_class = "project-list-item project-done" if done else "project-list-item"
-    done_label = '<span class="project-done-label">fertig</span>' if done else ""
-    return f'<li class="{css_class}"><a href="/projects/{project["id"]}">{_text(project["name"])}</a>{done_label}</li>'
+    css_class = "project-card project-card-done" if done else "project-card"
+    done_label = '<span class="project-done-label">done</span>' if done else ""
+    status = "Final assembled" if done else "Open project"
+    return f"""
+<article class="{css_class}">
+  <a class="project-card-link" href="/projects/{project["id"]}">
+    <div class="project-card-art"></div>
+    <div class="project-card-body">
+      <h3>{_text(project["name"])}</h3>
+      <p>{_text(status)}</p>
+      {done_label}
+    </div>
+  </a>
+</article>
+"""
 
 
 def _is_kdenlive_project_done(project) -> bool:

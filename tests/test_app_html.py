@@ -37,12 +37,21 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("workflows/image.json", html)
         self.assertNotIn("workflows/image_reference.json", html)
 
-    def test_project_form_is_minimal_import_form(self):
+    def test_start_page_has_new_project_modal_trigger_and_form(self):
         html = _projects_html([], [])
 
+        self.assertIn('class="start-dashboard"', html)
+        self.assertIn('class="studio-button" type="button" onclick="openNewProjectModal()"', html)
+        self.assertIn('id="new-project-modal"', html)
+        self.assertIn('action="/projects"', html)
+        self.assertIn('method="post" enctype="multipart/form-data"', html)
         self.assertIn('<label>Name</label><input name="name" required>', html)
         self.assertIn('<label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>', html)
         self.assertIn('<label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>', html)
+        self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
+        self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
+        self.assertIn('name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5"', html)
+        self.assertIn('name="whisper_model_size"', html)
         self.assertNotIn("SUNO Lyrics", html)
         self.assertNotIn("Global Style Prompt", html)
         self.assertNotIn('name="global_style_prompt"', html)
@@ -67,7 +76,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('name="transition_handle_seconds"'), html.index('name="whisper_model_size"'))
         self.assertLess(html.index('name="whisper_model_size"'), html.index("<p><button>Create Project</button></p>"))
 
-    def test_projects_list_is_responsive_and_marks_kdenlive_projects_done(self):
+    def test_start_page_renders_project_cards_and_marks_done_projects(self):
         projects = [
             {"id": 2, "name": "Finished Song", "final_video_path": "outputs/finished/final.kdenlive"},
             {"id": 1, "name": "Open Song", "final_video_path": None},
@@ -76,17 +85,13 @@ class AppHtmlTests(unittest.TestCase):
         body = _projects_html(projects, [])
         html = _page("Projects", body)
 
-        self.assertIn('<ul class="project-list">', body)
-        self.assertIn('class="project-list-item project-done"', body)
-        self.assertIn('<a href="/projects/2">Finished Song</a>', body)
-        self.assertIn('<span class="project-done-label">fertig</span>', body)
-        self.assertIn('<li class="project-list-item"><a href="/projects/1">Open Song</a></li>', body)
-        self.assertIn(".project-list { display: grid;", html)
-        self.assertIn("grid-template-columns: 1fr", html)
-        self.assertIn("@media (min-width: 820px)", html)
-        self.assertIn("@media (min-width: 1240px)", html)
-        self.assertIn(".project-list-item a { display: inline-block; white-space: nowrap;", html)
-        self.assertIn(".project-list-item.project-done a { text-decoration: line-through;", html)
+        self.assertIn('class="project-card project-card-done"', body)
+        self.assertIn('<a class="project-card-link" href="/projects/2">', body)
+        self.assertIn("Finished Song", body)
+        self.assertIn('<span class="project-done-label">done</span>', body)
+        self.assertIn('<a class="project-card-link" href="/projects/1">', body)
+        self.assertIn(".project-grid", html)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", html)
 
     def test_jobs_table_has_delete_actions_except_running_and_clear_queued_button(self):
         jobs = [
