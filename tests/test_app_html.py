@@ -115,6 +115,25 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<button>8. Gen Clips</button>', html)
         self.assertNotIn('class="button wip-button"', html)
 
+    def test_project_header_has_previous_and_next_project_triangle_links(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+
+        html = _page("Demo", _project_html(project, [], previous_project_id=8, next_project_id=6))
+
+        self.assertIn('<a class="project-nav-button" href="/projects/8" title="Vorhergehendes Projekt">◀</a>', html)
+        self.assertIn('<a class="project-nav-button" href="/projects/6" title="Nachfolgendes Projekt">▶</a>', html)
+        self.assertLess(html.index('title="Vorhergehendes Projekt"'), html.index("<h1>Demo</h1>"))
+        self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
+        self.assertIn(".project-nav-button", html)
+
+    def test_project_header_disables_missing_project_navigation(self):
+        project = {"id": 9, "name": "Newest", "audio_path": "song.wav", "final_video_path": None}
+
+        html = _project_html(project, [], previous_project_id=None, next_project_id=8)
+
+        self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein vorhergehendes Projekt">◀</span>', html)
+        self.assertIn('<a class="project-nav-button" href="/projects/8" title="Nachfolgendes Projekt">▶</a>', html)
+
     def test_low_confidence_alignment_rows_are_marked(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
         lines = [

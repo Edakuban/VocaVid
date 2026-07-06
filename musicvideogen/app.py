@@ -175,6 +175,8 @@ def create_app() -> FastAPI:
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
     def project_detail(project_id: int):
         project = store.get_project(project_id)
+        projects = store.list_projects()
+        previous_project_id, next_project_id = _project_navigation_ids(projects, project_id)
         lines = store.list_lines(project_id)
         segments = store.list_segments(project_id)
         used_actions = store.list_used_project_actions(project_id)
@@ -190,6 +192,8 @@ def create_app() -> FastAPI:
                 used_actions=used_actions,
                 active_jobs=active_jobs,
                 queue_estimate_seconds=_queue_estimate_seconds(queue_jobs, averages),
+                previous_project_id=previous_project_id,
+                next_project_id=next_project_id,
             ),
             queue_count=len(queue_jobs),
         )
@@ -550,6 +554,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
     .project-title-row .button {{ margin-left: 0; }}
+    .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: #555; color: white; font-size: 18px; font-weight: 900; line-height: 1; text-decoration: none; }}
+    .project-nav-button:hover, .project-nav-button:focus {{ background: #444; }}
+    .project-nav-disabled {{ opacity: .32; cursor: default; }}
+    .project-nav-disabled:hover, .project-nav-disabled:focus {{ background: #555; }}
     .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; font-weight: 750; white-space: nowrap; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8d3c8; }}
@@ -901,7 +909,16 @@ def _merge_row_class(row_class: str, extra_class: str) -> str:
     return row_class[:-1] + f" {extra_class}\""
 
 
-def _project_html(project, lines, segments=None, used_actions=None, active_jobs=None, queue_estimate_seconds: float | None = None) -> str:
+def _project_html(
+    project,
+    lines,
+    segments=None,
+    used_actions=None,
+    active_jobs=None,
+    queue_estimate_seconds: float | None = None,
+    previous_project_id: int | None = None,
+    next_project_id: int | None = None,
+) -> str:
     segments = segments or []
     used_actions = used_actions or set()
     active_jobs = active_jobs or []
@@ -934,10 +951,14 @@ def _project_html(project, lines, segments=None, used_actions=None, active_jobs=
     )
     open_filter = _open_filter_html(work_items)
     queue_estimate = _queue_estimate_html(queue_estimate_seconds)
+    previous_project_nav = _project_nav_html(previous_project_id, "previous")
+    next_project_nav = _project_nav_html(next_project_id, "next")
     return f"""
 <div class="project-topbar">
   <div class="project-title-row">
+    {previous_project_nav}
     <h1>{project['name']}</h1>
+    {next_project_nav}
     {queue_estimate}
     <a class="button" href="/">Back</a>
   </div>
@@ -952,6 +973,31 @@ def _project_html(project, lines, segments=None, used_actions=None, active_jobs=
 {_scroll_top_button_html()}
 <script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]});</script>
 """
+
+
+def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
+    project_ids = [int(project["id"]) for project in projects]
+    try:
+        index = project_ids.index(int(project_id))
+    except ValueError:
+        return None, None
+    previous_project_id = project_ids[index - 1] if index > 0 else None
+    next_project_id = project_ids[index + 1] if index + 1 < len(project_ids) else None
+    return previous_project_id, next_project_id
+
+
+def _project_nav_html(project_id: int | None, direction: str) -> str:
+    if direction == "previous":
+        symbol = "◀"
+        active_title = "Vorhergehendes Projekt"
+        disabled_title = "Kein vorhergehendes Projekt"
+    else:
+        symbol = "▶"
+        active_title = "Nachfolgendes Projekt"
+        disabled_title = "Kein nachfolgendes Projekt"
+    if project_id is None:
+        return f'<span class="project-nav-button project-nav-disabled" title="{disabled_title}">{symbol}</span>'
+    return f'<a class="project-nav-button" href="/projects/{project_id}" title="{active_title}">{symbol}</a>'
 
 
 def _segment_settings_html(project) -> str:
