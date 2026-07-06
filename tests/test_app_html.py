@@ -13,6 +13,17 @@ class RowLike:
 
 
 class AppHtmlTests(unittest.TestCase):
+    def test_page_uses_dark_studio_shell_styles(self):
+        html = _page("Projects", "")
+
+        self.assertIn(":root", html)
+        self.assertIn("--studio-bg", html)
+        self.assertIn("background:", html)
+        self.assertIn(".studio-topbar", html)
+        self.assertIn(".studio-panel", html)
+        self.assertIn(".studio-button", html)
+        self.assertIn(".studio-chip", html)
+
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
         html = _projects_html([], [])
 

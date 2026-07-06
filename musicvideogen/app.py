@@ -602,8 +602,98 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{_text(browser_title)}</title>
   <style>
-    body {{ margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f4ee; color: #1c2526; }}
+    :root {{
+      color-scheme: dark;
+      --studio-bg: #08090d;
+      --studio-surface: #11151d;
+      --studio-surface-2: #171d28;
+      --studio-line: rgba(255,255,255,.12);
+      --studio-text: #f6f7fb;
+      --studio-muted: #9aa6b8;
+      --studio-accent: #35e0b3;
+      --studio-pink: #ff4f8b;
+      --studio-amber: #f5b84b;
+    }}
+    body {{
+      margin: 0;
+      font-family: Inter, Segoe UI, Arial, sans-serif;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(53,224,179,.14), transparent 26%),
+        radial-gradient(circle at 78% 0%, rgba(255,79,139,.12), transparent 28%),
+        linear-gradient(180deg, #0b0d12, #07080b);
+      color: var(--studio-text);
+    }}
     main {{ max-width: none; margin: 0; padding: 24px; }}
+    .studio-topbar {{
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px 16px;
+      border: 1px solid var(--studio-line);
+      border-radius: 20px;
+      background: rgba(8,9,13,.74);
+      backdrop-filter: blur(18px);
+    }}
+    .studio-brand {{ font-size: 23px; font-weight: 950; letter-spacing: 0; }}
+    .studio-tagline {{ color: var(--studio-muted); font-weight: 750; }}
+    .studio-spacer {{ flex: 1; }}
+    .studio-panel {{
+      border: 1px solid var(--studio-line);
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.065), rgba(255,255,255,.026));
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,.24);
+    }}
+    .studio-panel-head {{
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--studio-line);
+    }}
+    .studio-chip {{
+      border: 1px solid var(--studio-line);
+      border-radius: 999px;
+      padding: 8px 11px;
+      background: rgba(255,255,255,.05);
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }}
+    .studio-chip-green {{
+      border-color: rgba(53,224,179,.42);
+      background: rgba(53,224,179,.1);
+      color: #dcfff6;
+    }}
+    .studio-chip-pink {{
+      border-color: rgba(255,79,139,.4);
+      background: rgba(255,79,139,.1);
+      color: #ffd7e5;
+    }}
+    .studio-button, button, .button {{
+      border: 0;
+      border-radius: 12px;
+      background: var(--studio-accent);
+      color: #06100d;
+      padding: 10px 13px;
+      font-weight: 950;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }}
+    .studio-button-secondary {{
+      border: 1px solid var(--studio-line);
+      background: rgba(255,255,255,.055);
+      color: #e7edf7;
+    }}
+    .studio-button-danger, .danger-button {{
+      border: 1px solid rgba(255,79,139,.42);
+      background: rgba(255,79,139,.12);
+      color: #ffd7e5;
+    }}
     h1 {{ font-size: 28px; margin: 0; }}
     form, .panel {{ background: #fff; border: 1px solid #d8d3c8; border-radius: 8px; padding: 16px; margin-bottom: 16px; }}
     label {{ display: block; font-size: 13px; font-weight: 650; margin-top: 10px; }}
