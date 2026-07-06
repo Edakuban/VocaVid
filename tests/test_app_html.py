@@ -23,6 +23,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".studio-panel", html)
         self.assertIn(".studio-button", html)
         self.assertIn(".studio-chip", html)
+        self.assertIn("form, .panel { background: #fff; border: 1px solid #d8d3c8; color: #1c2526;", html)
+        self.assertIn("table { width: 100%; border-collapse: collapse; background: white; color: #1c2526;", html)
+        self.assertIn("button, .button { border: 0; border-radius: 12px; background: var(--studio-accent);", html)
 
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
         html = _projects_html([], [])

@@ -673,7 +673,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       background: rgba(255,79,139,.1);
       color: #ffd7e5;
     }}
-    .studio-button, button, .button {{
+    .studio-button {{
       border: 0;
       border-radius: 12px;
       background: var(--studio-accent);
@@ -695,7 +695,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       color: #ffd7e5;
     }}
     h1 {{ font-size: 28px; margin: 0; }}
-    form, .panel {{ background: #fff; border: 1px solid #d8d3c8; border-radius: 8px; padding: 16px; margin-bottom: 16px; }}
+    form, .panel {{ background: #fff; border: 1px solid #d8d3c8; color: #1c2526; border-radius: 8px; padding: 16px; margin-bottom: 16px; }}
     label {{ display: block; font-size: 13px; font-weight: 650; margin-top: 10px; }}
     input, textarea, select {{ box-sizing: border-box; width: 100%; border: 1px solid #b9c0bd; border-radius: 6px; padding: 8px; font: inherit; }}
     textarea {{ min-height: 80px; }}
@@ -713,15 +713,15 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .section-form select {{ min-width: 104px; }}
     .approval-label {{ display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 650; }}
     .approval-label input {{ width: auto; }}
-    button, .button {{ border: 0; border-radius: 6px; background: #245c54; color: white; padding: 8px 12px; font-weight: 650; cursor: pointer; text-decoration: none; display: inline-block; }}
+    button, .button {{ border: 0; border-radius: 12px; background: var(--studio-accent); color: #06100d; padding: 10px 13px; font-weight: 950; cursor: pointer; text-decoration: none; display: inline-block; }}
     .icon-button {{ width: 34px; height: 34px; padding: 0; border-radius: 50%; line-height: 34px; text-align: center; }}
     .wip-button {{ background: #e53d91; box-shadow: inset 0 -2px 0 rgba(0,0,0,.16); }}
     .wip-button:hover, .wip-button:focus {{ background: #c92878; }}
     .used-button {{ background: #555; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
     .used-button:hover, .used-button:focus {{ background: #444; }}
     .danger-panel {{ border-color: #e2b1b1; background: #fff8f8; }}
-    .danger-button {{ background: #9b1c1c; }}
-    .danger-button:hover, .danger-button:focus {{ background: #7f1717; }}
+    .danger-button {{ border: 1px solid rgba(255,79,139,.42); background: rgba(255,79,139,.12); color: #ffd7e5; }}
+    .danger-button:hover, .danger-button:focus {{ background: rgba(255,79,139,.18); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
     .project-list {{ display: grid; grid-template-columns: 1fr; gap: 6px 18px; padding: 8px 10px 4px 26px; }}
@@ -741,7 +741,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-nav-disabled:hover, .project-nav-disabled:focus {{ background: #555; }}
     .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; font-weight: 750; white-space: nowrap; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
-    table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8d3c8; }}
+    table {{ width: 100%; border-collapse: collapse; background: white; color: #1c2526; border: 1px solid #d8d3c8; }}
     th, td {{ padding: 8px; border-bottom: 1px solid #e7e1d6; text-align: left; vertical-align: top; font-size: 13px; }}
     th {{ background: #e9efe9; }}
     .status {{ font-weight: 700; }}
