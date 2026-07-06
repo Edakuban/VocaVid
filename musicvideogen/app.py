@@ -542,6 +542,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .danger-button:hover, .danger-button:focus {{ background: #7f1717; }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
+    .project-list {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 18px; padding-left: 20px; }}
+    .project-list-item {{ padding-right: 8px; }}
+    .project-list-item.project-done a {{ text-decoration: line-through; color: #66706d; }}
+    .project-done-label {{ margin-left: 8px; color: #66706d; font-size: 12px; font-weight: 700; }}
     .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
@@ -815,7 +819,7 @@ def _selected_action_indices(project_id: int, item_kind: str, selected: list[int
 
 def _projects_html(projects, jobs, average_durations: dict[str, float] | None = None) -> str:
     average_durations = average_durations or {}
-    rows = "".join(f"<li><a href='/projects/{p['id']}'>{_text(p['name'])}</a></li>" for p in projects)
+    rows = "".join(_project_list_item_html(p) for p in projects)
     job_rows = "".join(
         f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
         for job in jobs
@@ -832,7 +836,7 @@ def _projects_html(projects, jobs, average_durations: dict[str, float] | None = 
   <label>Whisper Model</label>{_whisper_model_select_html("small")}
   <p><button>Create Project</button></p>
 </form>
-<div class="panel"><h2>Projects</h2><ul>{rows}</ul></div>
+<div class="panel"><h2>Projects</h2><ul class="project-list">{rows}</ul></div>
 <div class="panel">
   <h2>Jobs</h2>
   <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
@@ -840,6 +844,18 @@ def _projects_html(projects, jobs, average_durations: dict[str, float] | None = 
   <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
 </div>
 """
+
+
+def _project_list_item_html(project) -> str:
+    done = _is_kdenlive_project_done(project)
+    css_class = "project-list-item project-done" if done else "project-list-item"
+    done_label = '<span class="project-done-label">fertig</span>' if done else ""
+    return f'<li class="{css_class}"><a href="/projects/{project["id"]}">{_text(project["name"])}</a>{done_label}</li>'
+
+
+def _is_kdenlive_project_done(project) -> bool:
+    final_video_path = str(_row_value(project, "final_video_path", "") or "")
+    return final_video_path.lower().endswith(".kdenlive")
 
 
 def _job_name(label: str, project_name: str, selected_indices: list[int] | None = None, item_kind: str | None = None) -> str:

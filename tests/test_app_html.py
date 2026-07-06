@@ -51,6 +51,24 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('name="transition_handle_seconds"'), html.index('name="whisper_model_size"'))
         self.assertLess(html.index('name="whisper_model_size"'), html.index("<p><button>Create Project</button></p>"))
 
+    def test_projects_list_is_responsive_and_marks_kdenlive_projects_done(self):
+        projects = [
+            {"id": 2, "name": "Finished Song", "final_video_path": "outputs/finished/final.kdenlive"},
+            {"id": 1, "name": "Open Song", "final_video_path": None},
+        ]
+
+        body = _projects_html(projects, [])
+        html = _page("Projects", body)
+
+        self.assertIn('<ul class="project-list">', body)
+        self.assertIn('class="project-list-item project-done"', body)
+        self.assertIn('<a href="/projects/2">Finished Song</a>', body)
+        self.assertIn('<span class="project-done-label">fertig</span>', body)
+        self.assertIn('<li class="project-list-item"><a href="/projects/1">Open Song</a></li>', body)
+        self.assertIn(".project-list { display: grid;", html)
+        self.assertIn("repeat(auto-fit, minmax(240px, 1fr))", html)
+        self.assertIn(".project-list-item.project-done a { text-decoration: line-through;", html)
+
     def test_jobs_table_has_delete_actions_except_running_and_clear_queued_button(self):
         jobs = [
             Job(id=4, name="generate prompts: Demo Song", status="queued", created_at="2026-06-27T19:15:24"),
