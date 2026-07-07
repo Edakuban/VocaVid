@@ -1,5 +1,10 @@
+import tempfile
 import unittest
+from pathlib import Path
 
+from fastapi.testclient import TestClient
+
+import musicvideogen.app as app_module
 from musicvideogen.app import APP_ROOT, _job_name, _local_asset_url, _page, _project_html, _projects_html, _reference_paths_from_text
 from musicvideogen.worker import Job
 
@@ -144,6 +149,7 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('id="queue-estimate"', html)
         self.assertIn("Queue ca. 1m 10s", html)
+        self.assertIn('id="queue-summary"', html)
         self.assertIn('id="jobs-table-body"', html)
         self.assertIn('name="autodelete_finished"', html)
         self.assertIn("Autodelete finished", html)
@@ -151,6 +157,38 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("Shutdown computer 15mins after last queue", html)
         self.assertIn("setupQueueEstimateCountdown(); pollJobsStatus();", html)
         self.assertIn("fetch('/jobs/status')", html)
+        self.assertIn("data.queue_summary_html", html)
+        self.assertIn("queueSummary.innerHTML = data.queue_summary_html", html)
+
+    def test_jobs_status_endpoint_returns_queue_summary_for_polling(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+
+                app = app_module.create_app()
+                app.state.jobs.submit("queued job", lambda: "ok", action="prompts")
+                client = TestClient(app)
+
+                response = client.get("/jobs/status")
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertIn("queue_summary_html", payload)
+                self.assertIn("<span>queued</span>", payload["queue_summary_html"])
+                self.assertIn("<span>running</span>", payload["queue_summary_html"])
+                self.assertIn("<span>estimate</span>", payload["queue_summary_html"])
+                self.assertNotIn('id="queue-summary"', payload["queue_summary_html"])
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
 
     def test_job_name_includes_one_based_selected_segment_indices(self):
         self.assertEqual(_job_name("generate images", "Demo Song", [0, 2]), "generate images: Demo Song (segments 1, 3)")

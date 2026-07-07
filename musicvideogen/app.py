@@ -173,9 +173,12 @@ def create_app() -> FastAPI:
     def jobs_status():
         active_jobs = jobs.active_jobs()
         average_durations = store.average_job_durations()
+        queue_estimate_seconds = _queue_estimate_seconds(active_jobs, average_durations)
+        listed_jobs = jobs.list_jobs()
         return {
-            "jobs_html": _jobs_table_body_html(jobs.list_jobs(), average_durations),
-            "queue_estimate_seconds": _queue_estimate_seconds(active_jobs, average_durations),
+            "jobs_html": _jobs_table_body_html(listed_jobs, average_durations),
+            "queue_summary_html": _queue_summary_cards_html(listed_jobs, queue_estimate_seconds),
+            "queue_estimate_seconds": queue_estimate_seconds,
             "queue_count": len(active_jobs),
             "autodelete_finished": job_options.autodelete_finished,
             "shutdown_after_queue": job_options.shutdown_after_queue,
@@ -937,6 +940,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function updateJobsStatus(data) {{
       updateQueueEstimate(data.queue_estimate_seconds);
       updateBrowserTitle(data.queue_count);
+      const queueSummary = document.getElementById('queue-summary');
+      if (queueSummary && data.queue_summary_html !== undefined) queueSummary.innerHTML = data.queue_summary_html;
       const jobsBody = document.getElementById('jobs-table-body');
       if (jobsBody && data.jobs_html !== undefined) jobsBody.innerHTML = data.jobs_html;
       const autodelete = document.querySelector('input[name="autodelete_finished"]');
@@ -1204,19 +1209,25 @@ def _queue_section_html(
 
 
 def _queue_summary_html(jobs, queue_estimate_seconds: float | None) -> str:
+    return f"""
+  <div id="queue-summary" class="queue-summary-grid">
+{_queue_summary_cards_html(jobs, queue_estimate_seconds)}
+  </div>
+"""
+
+
+def _queue_summary_cards_html(jobs, queue_estimate_seconds: float | None) -> str:
     counts = {status: 0 for status in ("queued", "running", "done", "failed")}
     for job in jobs:
         if job.status in counts:
             counts[job.status] += 1
     estimate = _format_duration(queue_estimate_seconds or 0)
     return f"""
-  <div class="queue-summary-grid">
     <div class="queue-summary-card queue-summary-card-active"><strong>{counts["queued"]}</strong><span>queued</span></div>
     <div class="queue-summary-card queue-summary-card-active"><strong>{counts["running"]}</strong><span>running</span></div>
     <div class="queue-summary-card"><strong>{counts["done"]}</strong><span>done</span></div>
     <div class="queue-summary-card"><strong>{counts["failed"]}</strong><span>failed</span></div>
     <div class="queue-summary-card"><strong>{_text(estimate)}</strong><span>estimate</span></div>
-  </div>
 """
 
 
