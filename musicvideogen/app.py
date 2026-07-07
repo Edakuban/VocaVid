@@ -805,7 +805,17 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-storyboard {{ display: grid; gap: 12px; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; }}
-    .storyboard-card-media {{ display: flex; align-items: center; justify-content: center; min-height: 96px; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; }}
+    .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
+    .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
+    .storyboard-card-image {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
+    .storyboard-card-media-clip {{ background: linear-gradient(135deg, #23312f, #53605b); color: #fff; }}
+    .storyboard-card-media-clip::before {{ content: ""; position: absolute; inset: 0; background: linear-gradient(160deg, rgba(255,255,255,.12), transparent 42%), repeating-linear-gradient(90deg, rgba(255,255,255,.12) 0 2px, transparent 2px 18px); opacity: .58; }}
+    .storyboard-play-button {{ position: relative; z-index: 1; display: grid; gap: 8px; place-items: center; color: #fff; font-weight: 900; }}
+    .storyboard-play-icon {{ display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.92); color: #20302d; box-shadow: 0 10px 28px rgba(0,0,0,.24); }}
+    .storyboard-card-media-empty {{ padding: 14px; text-align: center; }}
+    .storyboard-empty-mark {{ display: grid; gap: 4px; }}
+    .storyboard-empty-mark strong {{ color: #20302d; }}
+    .storyboard-empty-mark span {{ color: #69736f; font-size: 12px; font-weight: 650; }}
     .storyboard-card-body {{ display: grid; gap: 8px; padding: 12px; }}
     .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
     .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
@@ -1401,7 +1411,7 @@ def _project_html(
     queue_estimate = _queue_estimate_html(queue_estimate_seconds)
     previous_project_nav = _project_nav_html(previous_project_id, "previous")
     next_project_nav = _project_nav_html(next_project_id, "next")
-    storyboard = _storyboard_html(work_items, item_kind)
+    storyboard = _storyboard_html(project, work_items, item_kind)
     table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
 <div class="project-studio">
@@ -1434,7 +1444,7 @@ def _project_html(
 """
 
 
-def _storyboard_html(work_items, item_kind: str) -> str:
+def _storyboard_html(project, work_items, item_kind: str) -> str:
     if not work_items:
         return """
   <section id="project-storyboard" class="project-storyboard">
@@ -1449,7 +1459,7 @@ def _storyboard_html(work_items, item_kind: str) -> str:
     </div>
   </section>
 """
-    cards = "".join(_storyboard_card_html(row, item_kind) for row in work_items)
+    cards = "".join(_storyboard_card_html(project, row, item_kind) for row in work_items)
     return f"""
   <section id="project-storyboard" class="project-storyboard">
     <h2>Storyboard</h2>
@@ -1458,7 +1468,7 @@ def _storyboard_html(work_items, item_kind: str) -> str:
 """
 
 
-def _storyboard_card_html(row, item_kind: str) -> str:
+def _storyboard_card_html(project, row, item_kind: str) -> str:
     index_key = "segment_index" if item_kind == "segments" else "line_index"
     label = "Segment" if item_kind == "segments" else "Line"
     index = _row_value(row, index_key, 0)
@@ -1467,9 +1477,10 @@ def _storyboard_card_html(row, item_kind: str) -> str:
     status = _row_value(row, "status", "") or "pending"
     timing_html = f'<span>{_text(timing)}</span>' if timing else ""
     text_html = _multiline_text_html(text) or _text(text)
+    media_html = _storyboard_card_media_html(project, row)
     return f"""
       <article class="storyboard-card">
-        <div class="storyboard-card-media">Media</div>
+        {media_html}
         <div class="storyboard-card-body">
           <div class="storyboard-card-title"><span>{label} {_text(index)}</span>{timing_html}</div>
           <div class="storyboard-card-text">{text_html}</div>
@@ -1477,6 +1488,33 @@ def _storyboard_card_html(row, item_kind: str) -> str:
         </div>
       </article>
 """
+
+
+def _storyboard_card_media_html(project, row) -> str:
+    clip_path = _row_value(row, "clip_path", "")
+    if clip_path:
+        url = _generated_asset_url(project, clip_path)
+        return f"""
+        <div class="storyboard-card-media storyboard-card-media-clip">
+          <button type="button" title="Play clip" onclick="openClipLightbox({_js_arg(url)})">
+            <span class="storyboard-play-button"><span class="storyboard-play-icon">▶</span><span>Play clip</span></span>
+          </button>
+        </div>"""
+
+    image_path = _row_value(row, "avatar_image_path", "") or _row_value(row, "image_path", "")
+    if image_path:
+        url = _generated_asset_url(project, image_path)
+        return f"""
+        <div class="storyboard-card-media storyboard-card-media-image">
+          <button type="button" title="Open image" onclick="openImageLightbox({_js_arg(url)})">
+            <img class="storyboard-card-image" src="{url}" alt="Storyboard image">
+          </button>
+        </div>"""
+
+    return """
+        <div class="storyboard-card-media storyboard-card-media-empty">
+          <span class="storyboard-empty-mark"><strong>Awaiting media</strong><span>Generate an image or clip to preview this item.</span></span>
+        </div>"""
 
 
 def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
@@ -1589,7 +1627,7 @@ def _project_status_payload(
         "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
         "queue_count": len(counted_jobs),
         "rows": _extract_row_snippets(html),
-        "storyboard_html": _storyboard_html(rows, item_kind),
+        "storyboard_html": _storyboard_html(project, rows, item_kind),
     }
 
 

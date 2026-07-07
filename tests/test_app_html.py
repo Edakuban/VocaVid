@@ -267,6 +267,110 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
         self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
 
+    def test_storyboard_card_media_prefers_clip_over_images(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Clip wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-line-000.png",
+                "clip_path": "outputs/project-7/clips/line-000.mp4",
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('class="storyboard-card-media storyboard-card-media-clip"', html)
+        self.assertIn("openClipLightbox('/assets/outputs/project-7/clips/line-000.mp4", html)
+        self.assertIn('class="storyboard-play-button"', html)
+        self.assertNotIn('class="storyboard-card-image"', html)
+
+    def test_storyboard_card_media_prefers_avatar_over_image(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Avatar wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-line-000.png",
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
+        self.assertIn("openImageLightbox('/assets/outputs/project-7/images/avatar-line-000.png')", html)
+        self.assertNotIn('src="/assets/outputs/project-7/images/line-000.png"', html)
+
+    def test_storyboard_card_media_uses_image_before_fallback(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Image wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', html)
+        self.assertIn("openImageLightbox('/assets/outputs/project-7/images/line-000.png')", html)
+        self.assertNotIn("Awaiting media", html)
+
+    def test_storyboard_card_media_falls_back_when_empty(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "No media yet",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('class="storyboard-card-media storyboard-card-media-empty"', html)
+        self.assertIn("Awaiting media", html)
+
     def test_project_header_disables_missing_project_navigation(self):
         project = {"id": 9, "name": "Newest", "audio_path": "song.wav", "final_video_path": None}
 
@@ -395,6 +499,7 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, [], segments)
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('name="lyric_group_size"', html)
         self.assertIn('value="2"', html)
@@ -413,9 +518,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('data-audio-src="/assets/outputs/segment-000.wav"', html)
         self.assertNotIn("<td>outputs/segment-000.wav</td>", html)
         self.assertNotIn("Slow establishing shot", html)
-        self.assertNotIn('<button class="icon-button" type="button" title="Play clip"', html)
-        self.assertNotIn("openClipLightbox", html)
-        self.assertNotIn("clip-000.mp4", html)
+        self.assertNotIn('<button class="icon-button" type="button" title="Play clip"', table_html)
+        self.assertNotIn("openClipLightbox", table_html)
+        self.assertNotIn("clip-000.mp4", table_html)
         self.assertIn("<th>#</th>", html)
         self.assertNotIn("<th>Section</th>", html)
         self.assertNotIn("<th>Chorus</th>", html)
@@ -451,6 +556,7 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, [], segments, used_actions={"segments"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn("<th>Typ</th>", html)
         self.assertIn('<th class="timing-column">Timing</th>', html)
@@ -461,7 +567,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("<th>Redo</th>", html)
         self.assertNotIn("<th>OK</th>", html)
         self.assertNotIn("image prompt", html)
-        self.assertNotIn("openClipLightbox", html)
+        self.assertNotIn("openClipLightbox", table_html)
 
     def test_segment_table_hides_alignment_columns_after_scene_plan(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
