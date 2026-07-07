@@ -37,6 +37,11 @@ local ComfyUI server, and the final video can be assembled from approved clips.
 | --- | --- |
 | ![VocaVid create project form and project list](docs/screenshots/vocavid-projects.png) | ![VocaVid render queue view](docs/screenshots/vocavid-jobs.png) |
 
+## Sample generated Video
+
+![](docs/samples/segment-025.mp4) 
+(compressed)
+
 ## Quick Start
 
 Requirements:
