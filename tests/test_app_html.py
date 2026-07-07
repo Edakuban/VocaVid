@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from html import unescape
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -290,7 +291,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('class="storyboard-card-media storyboard-card-media-clip"', html)
-        self.assertIn("openClipLightbox(&#x27;/assets/outputs/project-7/clips/line-000.mp4", html)
+        self.assertIn("openClipLightbox(&quot;/assets/outputs/project-7/clips/line-000.mp4", html)
         self.assertIn('class="storyboard-play-button"', html)
         self.assertNotIn('class="storyboard-card-image"', html)
 
@@ -317,7 +318,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
-        self.assertIn("openImageLightbox(&#x27;/assets/outputs/project-7/images/avatar-line-000.png&#x27;)", html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/avatar-line-000.png&quot;)", html)
         self.assertNotIn('src="/assets/outputs/project-7/images/line-000.png"', html)
 
     def test_storyboard_card_media_uses_selected_image_when_both_images_exist(self):
@@ -344,7 +345,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', html)
-        self.assertIn("openImageLightbox(&#x27;/assets/outputs/project-7/images/line-000.png&#x27;)", html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/line-000.png&quot;)", html)
         self.assertNotIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
 
     def test_storyboard_card_media_escapes_url_attributes(self):
@@ -376,9 +377,63 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('src="http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output"', html)
-        self.assertIn('onclick="openImageLightbox(&#x27;http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output&#x27;)"', html)
+        self.assertIn('onclick="openImageLightbox(&quot;http://example.test/\\&quot;quoted\\&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output&quot;)"', html)
         self.assertNotIn('src="http://example.test/"quoted"', html)
         self.assertNotIn('onclick="openImageLightbox(\'http://example.test/"quoted"', html)
+
+    def test_storyboard_card_media_serializes_onclick_urls_with_control_chars(self):
+        project = {
+            "id": 7,
+            "name": "Demo",
+            "audio_path": "song.wav",
+            "final_video_path": None,
+            "comfy_base_url": "http://example.test/'quoted\ncontrol\x01",
+        }
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Escaped image URL",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "musicvideogen/project-7/line-000.png",
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            },
+            {
+                "line_index": 1,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Escaped clip URL",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": "musicvideogen/project-7/clip-001.mp4",
+                "status": "done",
+                "error": "",
+            },
+        ]
+
+        html = _project_html(project, lines)
+        image_onclick = html.split('onclick="openImageLightbox(', 1)[1].split(')"', 1)[0]
+        clip_onclick = html.split('onclick="openClipLightbox(', 1)[1].split(')"', 1)[0]
+
+        self.assertNotIn("\n", image_onclick)
+        self.assertNotIn("\n", clip_onclick)
+        self.assertNotIn("\x01", image_onclick)
+        self.assertNotIn("\x01", clip_onclick)
+        self.assertIn(r"\ncontrol\u0001/view?filename=line-000.png", unescape(image_onclick))
+        self.assertIn(r"\ncontrol\u0001/view?filename=clip-001.mp4", unescape(clip_onclick))
+        self.assertIn(r"http://example.test/'quoted", unescape(image_onclick))
+        self.assertIn(r"http://example.test/'quoted", unescape(clip_onclick))
 
     def test_storyboard_card_media_uses_image_before_fallback(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -403,7 +458,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', html)
-        self.assertIn("openImageLightbox(&#x27;/assets/outputs/project-7/images/line-000.png&#x27;)", html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/line-000.png&quot;)", html)
         self.assertNotIn("Awaiting media", html)
 
     def test_storyboard_card_media_falls_back_when_empty(self):

@@ -1496,7 +1496,7 @@ def _storyboard_card_media_html(project, row) -> str:
         url = _generated_asset_url(project, clip_path)
         return f"""
         <div class="storyboard-card-media storyboard-card-media-clip">
-          <button type="button" title="Play clip" onclick="openClipLightbox({_attr(_js_arg(_url_for_html_attribute(url)))})">
+          <button type="button" title="Play clip" onclick="openClipLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))})">
             <span class="storyboard-play-button"><span class="storyboard-play-icon">▶</span><span>Play clip</span></span>
           </button>
         </div>"""
@@ -1506,7 +1506,7 @@ def _storyboard_card_media_html(project, row) -> str:
         url = _generated_asset_url(project, image_path)
         return f"""
         <div class="storyboard-card-media storyboard-card-media-image">
-          <button type="button" title="Open image" onclick="openImageLightbox({_attr(_js_arg(_url_for_html_attribute(url)))})">
+          <button type="button" title="Open image" onclick="openImageLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))})">
             <img class="storyboard-card-image" src="{_attr(_url_for_html_attribute(url))}" alt="Storyboard image">
           </button>
         </div>"""
@@ -2282,6 +2282,10 @@ def _attr(value) -> str:
 
 def _js_arg(value) -> str:
     return "'" + str(value).replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _js_string_arg(value) -> str:
+    return json.dumps(str(value))
 
 
 def _text(value) -> str:
