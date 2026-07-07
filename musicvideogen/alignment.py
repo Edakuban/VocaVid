@@ -113,7 +113,7 @@ def transcribe_words_with_fallback(
     if transcriber_factory is not None:
         active_runner = _runner_from_factory(transcriber_factory)
     else:
-        active_runner = runner or _transcribe_words_in_process
+        active_runner = runner or _transcribe_words_direct
 
     if prefer_device == "cpu":
         logger.info("whisper attempt start model_size=%s device=cpu compute_type=int8 audio=%s language=%s", model_size, audio_path, language or "auto")
@@ -174,6 +174,24 @@ def _runner_from_factory(transcriber_factory):
         return transcriber.transcribe_words(audio_path, language=language)
 
     return run
+
+
+
+def _transcribe_words_direct(
+    audio_path: Path,
+    language: str | None,
+    device: str,
+    compute_type: str,
+    timeout_sec: float,
+    model_size: str = "small",
+) -> list[TranscriptWord]:
+    """Transcribe words directly in the current process without spawning a subprocess."""
+    try:
+        words = WhisperTranscriber(model_size=model_size, device=device, compute_type=compute_type).transcribe_words(audio_path, language=language)
+        return words
+    except Exception:
+        logger.exception("whisper transcription failed device=%s", device)
+        raise
 
 
 def _transcribe_words_in_process(

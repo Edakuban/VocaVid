@@ -375,13 +375,33 @@ def create_app() -> FastAPI:
     @app.post("/projects/{project_id}/realign-lyrics")
     def realign_lyrics(project_id: int):
         logger.info("manual realign start project_id=%s", project_id)
-        regroup_now(project_id, "manual realign")
+        project = store.get_project(project_id)
+        def job_action():
+            pipeline.regroup_project(project_id)
+            mark_used(project_id, "align")
+            mark_used(project_id, "segments")
+        jobs.submit(
+            f"realign lyrics: {project['name']}",
+            job_action,
+            project_id=project_id,
+            action="align",
+        )
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/realign-lyrics-cpu")
     def realign_lyrics_cpu(project_id: int):
         logger.info("manual realign cpu start project_id=%s", project_id)
-        regroup_now(project_id, "manual realign cpu", force_cpu=True)
+        project = store.get_project(project_id)
+        def job_action():
+            pipeline.regroup_project(project_id, force_cpu=True)
+            mark_used(project_id, "align")
+            mark_used(project_id, "segments")
+        jobs.submit(
+            f"realign lyrics (CPU): {project['name']}",
+            job_action,
+            project_id=project_id,
+            action="align",
+        )
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/segments")
@@ -765,6 +785,13 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       document.title = count > 0 ? '(' + count + ') ' + baseDocumentTitle : baseDocumentTitle;
     }}
     function updateProjectStatus(data) {{
+      // Detect if the structure has changed (lines → segments after realignment)
+      if (window._currentItemKind !== undefined && data.item_kind !== window._currentItemKind) {{
+        location.reload();
+        return;
+      }}
+      window._currentItemKind = data.item_kind;
+
       updateQueueEstimate(data.queue_estimate_seconds);
       updateBrowserTitle(data.queue_count);
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
@@ -1212,6 +1239,7 @@ def _project_status_payload(
     locked = _locked_indices(active_jobs, item_kind, rows)
     html = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return {
+        "item_kind": item_kind,
         "locked": {
             "segments": sorted(locked) if item_kind == "segments" else [],
             "lines": sorted(locked) if item_kind == "lines" else [],
