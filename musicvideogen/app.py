@@ -920,6 +920,16 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       row.replaceWith(replacement);
       projectRowServerHtml.set(replacement.id, replacement.outerHTML);
     }}
+    function replaceProjectStoryboard(html) {{
+      const storyboard = document.getElementById('project-storyboard');
+      if (!storyboard || html === undefined) return;
+      const template = document.createElement('template');
+      template.innerHTML = html.trim();
+      const replacement = template.content.firstElementChild;
+      if (!replacement) return;
+      replacement.hidden = storyboard.hidden;
+      storyboard.replaceWith(replacement);
+    }}
     const baseDocumentTitle = document.title.replace(/^\\(\\d+\\)\\s+/, '');
     function updateBrowserTitle(queueCount) {{
       if (queueCount === undefined || queueCount === null) return;
@@ -933,6 +943,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         const row = document.getElementById(rowId);
         if (row) replaceProjectRow(row, html);
       }});
+      if (data.storyboard_html !== undefined) replaceProjectStoryboard(data.storyboard_html);
     }}
     async function refreshProjectStatus(projectId) {{
       if (!projectId) return;
@@ -1578,6 +1589,7 @@ def _project_status_payload(
         "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
         "queue_count": len(counted_jobs),
         "rows": _extract_row_snippets(html),
+        "storyboard_html": _storyboard_html(rows, item_kind),
     }
 
 

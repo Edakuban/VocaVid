@@ -5,7 +5,16 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import musicvideogen.app as app_module
-from musicvideogen.app import APP_ROOT, _job_name, _local_asset_url, _page, _project_html, _projects_html, _reference_paths_from_text
+from musicvideogen.app import (
+    APP_ROOT,
+    _job_name,
+    _local_asset_url,
+    _page,
+    _project_html,
+    _project_status_payload,
+    _projects_html,
+    _reference_paths_from_text,
+)
 from musicvideogen.worker import Job
 
 
@@ -688,6 +697,46 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("return previousHtml !== replacement.outerHTML", html)
         self.assertIn("if (!projectRowChanged(row, replacement)) return", html)
         self.assertIn("projectRowServerHtml.set(replacement.id, replacement.outerHTML)", html)
+
+    def test_project_status_payload_includes_storyboard_html_for_polling(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Fresh storyboard text",
+                "start_sec": 1.0,
+                "end_sec": 2.0,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "scene_plan": "",
+                "video_approved": 0,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        payload = _project_status_payload(project, [], segments, active_jobs=[])
+
+        self.assertIn("storyboard_html", payload)
+        self.assertIn('id="project-storyboard"', payload["storyboard_html"])
+        self.assertIn("Fresh storyboard text", payload["storyboard_html"])
+        self.assertIn("done", payload["storyboard_html"])
+        self.assertIn("rows", payload)
+        self.assertIn("segment-row-0", payload["rows"])
+
+    def test_project_status_polling_replaces_visible_storyboard(self):
+        html = _page("Demo", "")
+
+        self.assertIn("function replaceProjectStoryboard", html)
+        self.assertIn("data.storyboard_html", html)
+        self.assertIn("const storyboard = document.getElementById('project-storyboard')", html)
+        self.assertIn("replacement.hidden = storyboard.hidden", html)
+        self.assertIn("storyboard.replaceWith(replacement)", html)
 
     def test_segment_table_has_editable_section_type_after_text(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
