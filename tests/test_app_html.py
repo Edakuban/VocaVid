@@ -1039,6 +1039,25 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("replacement.hidden = storyboard.hidden", html)
         self.assertIn("storyboard.replaceWith(replacement)", html)
 
+    def test_project_status_polling_skips_storyboard_when_editor_is_active_or_dirty(self):
+        html = _page("Demo", "")
+
+        self.assertIn("const projectStoryboardFieldSelector = 'input, textarea, select'", html)
+        self.assertIn("function projectStoryboardHasActiveEdit", html)
+        self.assertIn("const active = document.activeElement", html)
+        self.assertIn("storyboard.contains(active)", html)
+        self.assertIn("active.matches(projectStoryboardFieldSelector)", html)
+        self.assertIn("function projectStoryboardFieldDirty", html)
+        self.assertIn("field.checked !== field.defaultChecked", html)
+        self.assertIn("field.value !== field.defaultValue", html)
+        self.assertIn("option.selected !== option.defaultSelected", html)
+        self.assertIn("function projectStoryboardHasDirtyFields", html)
+        self.assertIn("querySelectorAll(projectStoryboardFieldSelector)", html)
+        self.assertIn("function shouldReplaceProjectStoryboard", html)
+        self.assertIn("!projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard)", html)
+        self.assertIn("if (!shouldReplaceProjectStoryboard(storyboard)) return", html)
+        self.assertLess(html.index("if (!shouldReplaceProjectStoryboard(storyboard)) return"), html.index("storyboard.replaceWith(replacement)"))
+
     def test_segment_table_has_editable_section_type_after_text(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
         segments = [

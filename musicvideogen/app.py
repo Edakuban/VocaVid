@@ -940,9 +940,30 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       row.replaceWith(replacement);
       projectRowServerHtml.set(replacement.id, replacement.outerHTML);
     }}
+    const projectStoryboardFieldSelector = 'input, textarea, select';
+    function projectStoryboardHasActiveEdit(storyboard) {{
+      const active = document.activeElement;
+      return !!(active && active.closest && storyboard.contains(active) && active.matches(projectStoryboardFieldSelector));
+    }}
+    function projectStoryboardFieldDirty(field) {{
+      if (field.type === 'checkbox' || field.type === 'radio') {{
+        return field.checked !== field.defaultChecked;
+      }}
+      if (field.tagName === 'SELECT') {{
+        return Array.from(field.options).some((option) => option.selected !== option.defaultSelected);
+      }}
+      return field.value !== field.defaultValue;
+    }}
+    function projectStoryboardHasDirtyFields(storyboard) {{
+      return Array.from(storyboard.querySelectorAll(projectStoryboardFieldSelector)).some(projectStoryboardFieldDirty);
+    }}
+    function shouldReplaceProjectStoryboard(storyboard) {{
+      return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard);
+    }}
     function replaceProjectStoryboard(html) {{
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard || html === undefined) return;
+      if (!shouldReplaceProjectStoryboard(storyboard)) return;
       const template = document.createElement('template');
       template.innerHTML = html.trim();
       const replacement = template.content.firstElementChild;
