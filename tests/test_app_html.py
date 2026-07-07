@@ -348,6 +348,83 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/line-000.png&quot;)", html)
         self.assertNotIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
 
+    def test_storyboard_includes_segment_inspector_with_existing_item_controls(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 2,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Inspector lyric",
+                "start_sec": 1.0,
+                "end_sec": 2.0,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": "outputs/project-7/images/segment-002.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-segment-002.png",
+                "selected_image_source": "image",
+                "clip_path": None,
+                "audio_path": None,
+                "last_action": "images",
+                "scene_plan": "",
+                "video_approved": 1,
+                "status": "failed",
+                "error": "render exploded",
+            }
+        ]
+
+        html = _project_html(project, [], segments)
+
+        self.assertIn('class="segment-inspector"', html)
+        self.assertIn("Selected Segment 2", html)
+        self.assertIn("Inspector lyric", html)
+        self.assertIn('action="/projects/7/segments/2/prompts/image/save"', html)
+        self.assertIn('formaction="/projects/7/segments/2/prompts/image/ai-fill"', html)
+        self.assertIn('action="/projects/7/segments/2/prompts/video/save"', html)
+        self.assertIn('formaction="/projects/7/segments/2/prompts/video/ai-fill"', html)
+        self.assertIn('action="/projects/7/segments/2/image-source"', html)
+        self.assertIn('name="selected_image_source" value="image" checked', html)
+        self.assertIn('action="/projects/7/segments/2/redo"', html)
+        self.assertIn('<div class="redo-action">images</div>', html)
+        self.assertIn('action="/projects/7/segments/2/approval"', html)
+        self.assertIn('name="video_approved" value="1" checked', html)
+        self.assertIn('<div class="status">failed</div>', html)
+        self.assertIn('<div class="status-error">render exploded</div>', html)
+        self.assertIn('class="storyboard-card-media storyboard-card-media-image"', html)
+        self.assertIn(".segment-inspector", _page("Demo", ""))
+
+    def test_storyboard_includes_line_inspector_when_segments_are_absent(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 3,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Line inspector lyric",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": "line image prompt",
+                "video_prompt": "line video prompt",
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": None,
+                "last_action": "",
+                "video_approved": 0,
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn("Selected Line 3", html)
+        self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
+        self.assertIn('action="/projects/7/lines/3/approval"', html)
+        self.assertIn("Line inspector lyric", html)
+        self.assertIn('<div class="status">pending</div>', html)
+
     def test_storyboard_card_media_escapes_url_attributes(self):
         project = {
             "id": 7,
@@ -673,15 +750,15 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, [], segments, used_actions={"segments"})
         table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
-        self.assertIn("<th>Typ</th>", html)
-        self.assertIn('<th class="timing-column">Timing</th>', html)
-        self.assertIn("<th>Audio</th>", html)
-        self.assertNotIn('<th colspan="2">Prompts</th>', html)
-        self.assertNotIn("<th>Images</th>", html)
-        self.assertNotIn("<th>Clip</th>", html)
-        self.assertNotIn("<th>Redo</th>", html)
-        self.assertNotIn("<th>OK</th>", html)
-        self.assertNotIn("image prompt", html)
+        self.assertIn("<th>Typ</th>", table_html)
+        self.assertIn('<th class="timing-column">Timing</th>', table_html)
+        self.assertIn("<th>Audio</th>", table_html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', table_html)
+        self.assertNotIn("<th>Images</th>", table_html)
+        self.assertNotIn("<th>Clip</th>", table_html)
+        self.assertNotIn("<th>Redo</th>", table_html)
+        self.assertNotIn("<th>OK</th>", table_html)
+        self.assertNotIn("image prompt", table_html)
         self.assertNotIn("openClipLightbox", table_html)
 
     def test_segment_table_hides_alignment_columns_after_scene_plan(self):
@@ -736,15 +813,16 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines, used_actions={"align"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
-        self.assertIn("<th>Lyrics</th>", html)
-        self.assertIn('<th class="timing-column">Timing</th>', html)
-        self.assertNotIn('<th colspan="2">Prompts</th>', html)
-        self.assertNotIn("<th>Images</th>", html)
-        self.assertNotIn("<th>Clip</th>", html)
-        self.assertNotIn("<th>Redo</th>", html)
-        self.assertNotIn("<th>OK</th>", html)
-        self.assertNotIn("image prompt", html)
+        self.assertIn("<th>Lyrics</th>", table_html)
+        self.assertIn('<th class="timing-column">Timing</th>', table_html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', table_html)
+        self.assertNotIn("<th>Images</th>", table_html)
+        self.assertNotIn("<th>Clip</th>", table_html)
+        self.assertNotIn("<th>Redo</th>", table_html)
+        self.assertNotIn("<th>OK</th>", table_html)
+        self.assertNotIn("image prompt", table_html)
 
     def test_segment_scene_plan_is_saved_but_hidden_from_segment_table(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -947,6 +1025,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('id="project-storyboard"', payload["storyboard_html"])
         self.assertIn("Fresh storyboard text", payload["storyboard_html"])
         self.assertIn("done", payload["storyboard_html"])
+        self.assertIn('class="segment-inspector"', payload["storyboard_html"])
+        self.assertIn('action="/projects/7/segments/0/approval"', payload["storyboard_html"])
         self.assertIn("rows", payload)
         self.assertIn("segment-row-0", payload["rows"])
 
@@ -1449,6 +1529,7 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, [], segments, used_actions={"scene-plan"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('src="/assets/outputs/project-1/images/segment-000.png', html)
         self.assertIn('src="/assets/outputs/project-1/images/avatar-segment-000.png"', html)
@@ -1457,7 +1538,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<div class="asset-previews">', html)
         self.assertIn('<form class="compact-form image-choice"', html)
         self.assertLess(html.index("segment-000.png"), html.index("avatar-segment-000.png"))
-        self.assertLess(html.index('class="asset-previews"'), html.index('class="compact-form image-choice"'))
+        self.assertLess(table_html.index('class="asset-previews"'), table_html.index('class="compact-form image-choice"'))
         self.assertNotIn('<span class="asset-path">', html)
 
     def test_project_page_is_full_width_and_includes_image_lightbox(self):

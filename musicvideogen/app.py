@@ -803,6 +803,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .view-switch button {{ margin: 0; border-radius: 6px; background: transparent; color: #20302d; }}
     .view-switch button.active {{ background: #20302d; color: #fff; }}
     .project-storyboard {{ display: grid; gap: 12px; }}
+    .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
@@ -820,6 +821,15 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
     .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
     .storyboard-card-status {{ color: #5b6462; font-size: 12px; }}
+    .segment-inspector {{ display: grid; gap: 12px; min-width: 0; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
+    .segment-inspector h3 {{ margin: 0; color: #20302d; }}
+    .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
+    .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}
+    .segment-inspector-text {{ margin: 0; overflow-wrap: anywhere; }}
+    .segment-inspector-actions {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
+    .segment-inspector .storyboard-card-media {{ border-radius: 6px; border: 1px solid #d8d3c8; }}
+    .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
+    @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} }}
     .project-table-view[hidden] {{ display: none; }}
     .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
@@ -1460,11 +1470,71 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
   </section>
 """
     cards = "".join(_storyboard_card_html(project, row, item_kind) for row in work_items)
+    inspector = _segment_inspector_html(project, item_kind, work_items[0])
     return f"""
   <section id="project-storyboard" class="project-storyboard">
     <h2>Storyboard</h2>
-    <div class="storyboard-rail">{cards}</div>
+    <div class="storyboard-workspace">
+      <div class="storyboard-rail">{cards}</div>
+      {inspector}
+    </div>
   </section>
+"""
+
+
+def _segment_inspector_html(project, item_kind: str, row) -> str:
+    index_key = "segment_index" if item_kind == "segments" else "line_index"
+    label = "Segment" if item_kind == "segments" else "Line"
+    item_index = int(_row_value(row, index_key, 0))
+    text = _row_value(row, "clean_text", "") or "(empty)"
+    timing = _timing_text(_row_value(row, "start_sec", None), _row_value(row, "end_sec", None))
+    prompt = _row_value(row, "prompt", "") or ""
+    video_prompt = _row_value(row, "video_prompt", "") or ""
+    last_action = _row_value(row, "last_action", "")
+    image_choice_html = _image_choice_html(project["id"], item_kind, item_index, row)
+    redo_html = _redo_html(project["id"], item_kind, item_index, last_action)
+    approval_html = _approval_html(project["id"], item_kind, item_index, row)
+    status_html = _status_html(_row_value(row, "status", "") or "pending", _row_value(row, "error", "") or "")
+    prompt_editor = _prompt_editor_html(f"/projects/{project['id']}/{item_kind}/{item_index}/prompts", prompt, video_prompt)
+    media_html = _storyboard_card_media_html(project, row)
+    text_html = _multiline_text_html(text) or _text(text)
+    timing_html = f'<div class="storyboard-card-status">{_text(timing)}</div>' if timing else ""
+    image_choice_section = f"""
+      <div class="segment-inspector-section">
+        <div class="segment-inspector-label">Image source</div>
+        {image_choice_html}
+      </div>""" if image_choice_html else ""
+    redo_section = f"""
+      <div class="segment-inspector-section">
+        <div class="segment-inspector-label">Redo</div>
+        {redo_html}
+      </div>""" if redo_html else ""
+    return f"""
+      <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
+        <h3>Selected {label} {_text(item_index)}</h3>
+        <div class="segment-inspector-section">
+          <div class="segment-inspector-label">Preview</div>
+          {media_html}
+        </div>
+        <div class="segment-inspector-section">
+          <div class="segment-inspector-label">Text</div>
+          <div class="segment-inspector-text">{text_html}</div>
+          {timing_html}
+        </div>
+        <div class="segment-inspector-section">
+          <div class="segment-inspector-label">Prompts</div>
+          {prompt_editor}
+        </div>
+        {image_choice_section}
+        <div class="segment-inspector-actions">
+          {approval_html}
+        </div>
+        {redo_section}
+        <div class="segment-inspector-section">
+          <div class="segment-inspector-label">Status</div>
+          {status_html}
+        </div>
+      </aside>
 """
 
 
