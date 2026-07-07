@@ -751,6 +751,20 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-card-done {{ border-color: rgba(53,224,179,.45); }}
     .project-card-done .project-card-art {{ background: linear-gradient(135deg, rgba(53,224,179,.72), rgba(53,224,179,.18)); }}
     .project-done-label {{ display: inline-flex; margin-top: 12px; padding: 4px 8px; border-radius: 999px; background: rgba(53,224,179,.12); color: #dcfff6; font-size: 12px; font-weight: 900; text-transform: uppercase; }}
+    .queue-panel {{ display: grid; gap: 14px; }}
+    .queue-panel-head {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; padding: 16px 16px 0; }}
+    .queue-panel-head h2 {{ margin: 0; }}
+    .queue-panel-head p {{ margin: 4px 0 0; color: var(--studio-muted); }}
+    .queue-summary-grid {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 0 16px; }}
+    .queue-summary-card {{ border: 1px solid var(--studio-line); border-radius: 8px; background: rgba(255,255,255,.045); padding: 12px; min-width: 0; }}
+    .queue-summary-card-active {{ border-color: rgba(53,224,179,.42); background: rgba(53,224,179,.08); }}
+    .queue-summary-card strong {{ display: block; color: var(--studio-text); font-size: 22px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .queue-summary-card span {{ display: block; margin-top: 5px; color: var(--studio-muted); font-size: 11px; font-weight: 900; text-transform: uppercase; }}
+    .jobs-table-wrap {{ overflow-x: auto; padding: 0 16px; }}
+    .queue-admin-controls {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 0 16px 16px; }}
+    .queue-admin-controls .compact-form {{ margin: 0; }}
+    .queue-admin-controls .job-options {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
+    .queue-admin-controls .job-options label {{ margin: 0; }}
     .modal-content {{ width: min(560px, 94vw); max-height: 88vh; overflow: auto; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
     .modal-content .studio-panel-head {{ color: #1c2526; border-bottom: 1px solid #d8d3c8; }}
     .modal-content h2 {{ margin: 0; }}
@@ -770,7 +784,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       .studio-topbar {{ align-items: stretch; flex-direction: column; }}
       .studio-spacer {{ display: none; }}
       .start-hero h1 {{ font-size: 32px; }}
-      .stat-grid, .project-grid {{ grid-template-columns: 1fr; }}
+      .stat-grid, .project-grid, .queue-summary-grid {{ grid-template-columns: 1fr; }}
       .project-card-link {{ grid-template-columns: 72px minmax(0, 1fr); }}
     }}
     .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
@@ -1092,9 +1106,6 @@ def _projects_html(
     average_durations = average_durations or {}
     job_options = job_options or JobOptions()
     rows = "".join(_project_list_item_html(p) for p in projects)
-    job_rows = _jobs_table_body_html(jobs, average_durations)
-    autodelete_checked = " checked" if job_options.autodelete_finished else ""
-    shutdown_checked = " checked" if job_options.shutdown_after_queue else ""
     return f"""
 <div class="start-dashboard">
 {_start_topbar_html(queue_estimate_seconds)}
@@ -1104,16 +1115,7 @@ def _projects_html(
   <div class="studio-panel-head"><h2>Projects</h2></div>
   <div class="project-grid">{rows}</div>
 </section>
-<section id="jobs-panel" class="panel studio-panel">
-  <h2 class="jobs-heading">Jobs</h2>
-  <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
-  <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody id="jobs-table-body">{job_rows}</tbody></table>
-  <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
-  <form class="compact-form job-options" action="/jobs/options" method="post">
-    <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
-    <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
-  </form>
-</section>
+{_queue_section_html(jobs, average_durations, queue_estimate_seconds, job_options)}
 </div>
 {_new_project_modal_html()}
 </div>
@@ -1174,6 +1176,62 @@ def _start_hero_html(projects, jobs, queue_estimate_seconds: float | None) -> st
     </div>
   </div>
 </section>
+"""
+
+
+def _queue_section_html(
+    jobs,
+    average_durations: dict[str, float],
+    queue_estimate_seconds: float | None,
+    job_options: JobOptions,
+) -> str:
+    job_rows = _jobs_table_body_html(jobs, average_durations)
+    return f"""
+<section id="jobs-panel" class="panel studio-panel queue-panel">
+  <div class="queue-panel-head">
+    <div>
+      <h2 class="jobs-heading">Jobs</h2>
+      <p>Live queue, recent results, and cleanup controls.</p>
+    </div>
+  </div>
+  {_queue_summary_html(jobs, queue_estimate_seconds)}
+  <div class="jobs-table-wrap">
+    <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody id="jobs-table-body">{job_rows}</tbody></table>
+  </div>
+  {_queue_admin_html(job_options)}
+</section>
+"""
+
+
+def _queue_summary_html(jobs, queue_estimate_seconds: float | None) -> str:
+    counts = {status: 0 for status in ("queued", "running", "done", "failed")}
+    for job in jobs:
+        if job.status in counts:
+            counts[job.status] += 1
+    estimate = _format_duration(queue_estimate_seconds or 0)
+    return f"""
+  <div class="queue-summary-grid">
+    <div class="queue-summary-card queue-summary-card-active"><strong>{counts["queued"]}</strong><span>queued</span></div>
+    <div class="queue-summary-card queue-summary-card-active"><strong>{counts["running"]}</strong><span>running</span></div>
+    <div class="queue-summary-card"><strong>{counts["done"]}</strong><span>done</span></div>
+    <div class="queue-summary-card"><strong>{counts["failed"]}</strong><span>failed</span></div>
+    <div class="queue-summary-card"><strong>{_text(estimate)}</strong><span>estimate</span></div>
+  </div>
+"""
+
+
+def _queue_admin_html(job_options: JobOptions) -> str:
+    autodelete_checked = " checked" if job_options.autodelete_finished else ""
+    shutdown_checked = " checked" if job_options.shutdown_after_queue else ""
+    return f"""
+  <div class="queue-admin-controls">
+    <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
+    <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
+    <form class="compact-form job-options" action="/jobs/options" method="post">
+      <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
+      <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
+    </form>
+  </div>
 """
 
 

@@ -107,6 +107,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<button>Delete queued</button>", html)
         self.assertIn('action="/jobs/delete-finished"', html)
         self.assertIn("<button>Delete finished</button>", html)
+        self.assertIn('class="queue-summary-grid"', html)
+        self.assertIn('class="queue-admin-controls"', html)
         self.assertIn("generate prompts: Demo Song", html)
         self.assertIn("<th>Avg</th>", html)
         self.assertIn("<td>12s</td>", html)
@@ -117,6 +119,25 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/jobs/1/delete"', html)
         self.assertIn("<th></th>", html)
         self.assertGreater(html.index('action="/jobs/delete-finished"'), html.index("</table>"))
+        self.assertGreater(html.index('class="queue-admin-controls"'), html.index("</table>"))
+
+    def test_start_page_queue_summary_shows_status_counts_and_estimate(self):
+        jobs = [
+            Job(id=4, name="queued", status="queued", created_at="2026-06-27T19:15:24"),
+            Job(id=3, name="running", status="running", created_at="2026-06-27T19:03:22"),
+            Job(id=2, name="done", status="done", created_at="2026-06-27T18:00:00"),
+            Job(id=1, name="failed", status="failed", created_at="2026-06-27T17:00:00"),
+        ]
+
+        html = _projects_html([], jobs, queue_estimate_seconds=70.0)
+
+        self.assertIn('class="queue-panel-head"', html)
+        self.assertIn('class="queue-summary-card queue-summary-card-active"', html)
+        self.assertIn("<strong>1</strong><span>queued</span>", html)
+        self.assertIn("<strong>1</strong><span>running</span>", html)
+        self.assertIn("<strong>1</strong><span>done</span>", html)
+        self.assertIn("<strong>1</strong><span>failed</span>", html)
+        self.assertIn("<strong>1m 10s</strong><span>estimate</span>", html)
 
     def test_start_page_has_queue_polling_and_queue_options(self):
         html = _page("Projects", _projects_html([], [], queue_estimate_seconds=70.0), queue_count=2)
