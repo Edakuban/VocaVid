@@ -39,8 +39,8 @@ local ComfyUI server, and the final video can be assembled from approved clips.
 
 ## Sample generated Video
 
-![](docs/samples/segment-025.mp4) 
-(compressed)
+<video src="https://github.com/user-attachments/assets/b8f790c5-25cf-4209-939d-533e54425808" width="100%" controls></video>
+Sample clip from Feuer & Stahl - 12 - Feuerregen (compressed)
 
 ## Quick Start
 
