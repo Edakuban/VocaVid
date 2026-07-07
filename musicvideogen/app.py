@@ -1496,18 +1496,18 @@ def _storyboard_card_media_html(project, row) -> str:
         url = _generated_asset_url(project, clip_path)
         return f"""
         <div class="storyboard-card-media storyboard-card-media-clip">
-          <button type="button" title="Play clip" onclick="openClipLightbox({_js_arg(url)})">
+          <button type="button" title="Play clip" onclick="openClipLightbox({_attr(_js_arg(_url_for_html_attribute(url)))})">
             <span class="storyboard-play-button"><span class="storyboard-play-icon">▶</span><span>Play clip</span></span>
           </button>
         </div>"""
 
-    image_path = _row_value(row, "avatar_image_path", "") or _row_value(row, "image_path", "")
+    image_path = _storyboard_image_path(row)
     if image_path:
         url = _generated_asset_url(project, image_path)
         return f"""
         <div class="storyboard-card-media storyboard-card-media-image">
-          <button type="button" title="Open image" onclick="openImageLightbox({_js_arg(url)})">
-            <img class="storyboard-card-image" src="{url}" alt="Storyboard image">
+          <button type="button" title="Open image" onclick="openImageLightbox({_attr(_js_arg(_url_for_html_attribute(url)))})">
+            <img class="storyboard-card-image" src="{_attr(_url_for_html_attribute(url))}" alt="Storyboard image">
           </button>
         </div>"""
 
@@ -1515,6 +1515,19 @@ def _storyboard_card_media_html(project, row) -> str:
         <div class="storyboard-card-media storyboard-card-media-empty">
           <span class="storyboard-empty-mark"><strong>Awaiting media</strong><span>Generate an image or clip to preview this item.</span></span>
         </div>"""
+
+
+def _storyboard_image_path(row) -> str:
+    image_path = _row_value(row, "image_path", "")
+    avatar_image_path = _row_value(row, "avatar_image_path", "")
+    if image_path and avatar_image_path:
+        selected = _row_value(row, "selected_image_source", "avatar")
+        return image_path if selected == "image" else avatar_image_path
+    return avatar_image_path or image_path
+
+
+def _url_for_html_attribute(url: str) -> str:
+    return str(url).replace("&amp;", "&")
 
 
 def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:

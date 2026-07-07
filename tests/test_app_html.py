@@ -290,7 +290,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('class="storyboard-card-media storyboard-card-media-clip"', html)
-        self.assertIn("openClipLightbox('/assets/outputs/project-7/clips/line-000.mp4", html)
+        self.assertIn("openClipLightbox(&#x27;/assets/outputs/project-7/clips/line-000.mp4", html)
         self.assertIn('class="storyboard-play-button"', html)
         self.assertNotIn('class="storyboard-card-image"', html)
 
@@ -317,8 +317,68 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
-        self.assertIn("openImageLightbox('/assets/outputs/project-7/images/avatar-line-000.png')", html)
+        self.assertIn("openImageLightbox(&#x27;/assets/outputs/project-7/images/avatar-line-000.png&#x27;)", html)
         self.assertNotIn('src="/assets/outputs/project-7/images/line-000.png"', html)
+
+    def test_storyboard_card_media_uses_selected_image_when_both_images_exist(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Selected image wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-line-000.png",
+                "selected_image_source": "image",
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', html)
+        self.assertIn("openImageLightbox(&#x27;/assets/outputs/project-7/images/line-000.png&#x27;)", html)
+        self.assertNotIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
+
+    def test_storyboard_card_media_escapes_url_attributes(self):
+        project = {
+            "id": 7,
+            "name": "Demo",
+            "audio_path": "song.wav",
+            "final_video_path": None,
+            "comfy_base_url": 'http://example.test/"quoted"',
+        }
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Escaped image URL",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "musicvideogen/project-7/line-000.png",
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('src="http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output"', html)
+        self.assertIn('onclick="openImageLightbox(&#x27;http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output&#x27;)"', html)
+        self.assertNotIn('src="http://example.test/"quoted"', html)
+        self.assertNotIn('onclick="openImageLightbox(\'http://example.test/"quoted"', html)
 
     def test_storyboard_card_media_uses_image_before_fallback(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -343,7 +403,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', html)
-        self.assertIn("openImageLightbox('/assets/outputs/project-7/images/line-000.png')", html)
+        self.assertIn("openImageLightbox(&#x27;/assets/outputs/project-7/images/line-000.png&#x27;)", html)
         self.assertNotIn("Awaiting media", html)
 
     def test_storyboard_card_media_falls_back_when_empty(self):
