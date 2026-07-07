@@ -38,6 +38,8 @@ class AppEndpointTests(unittest.TestCase):
                 payload = response.json()
                 self.assertIn("jobs_html", payload)
                 self.assertIn("queued job", payload["jobs_html"])
+                self.assertIn("queue_summary_html", payload)
+                self.assertIn("<span>queued</span>", payload["queue_summary_html"])
                 self.assertIn("queue_count", payload)
                 self.assertIn("queue_estimate_seconds", payload)
                 self.assertFalse(payload["autodelete_finished"])
@@ -344,8 +346,11 @@ class AppEndpointTests(unittest.TestCase):
                 payload = response.json()
                 self.assertIn("segment-row-0", payload["rows"])
                 self.assertIn("Updated row", payload["rows"]["segment-row-0"])
+                self.assertIn('id="project-storyboard"', payload["storyboard_html"])
+                self.assertIn("Updated row", payload["storyboard_html"])
                 self.assertEqual(payload["locked"], {"segments": [], "lines": []})
                 self.assertEqual(payload["queue_count"], 0)
+                self.assertEqual(payload["queue_estimate_seconds"], 0)
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads

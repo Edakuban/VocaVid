@@ -267,6 +267,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<table>", html)
         self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
         self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
+        self.assertIn('<tr id="line-row-3"', table_html)
+        self.assertIn('action="/projects/7/lines/3/timing"', table_html)
+        self.assertIn('action="/projects/7/lines/3/insert-after"', table_html)
+        self.assertIn('action="/projects/7/lines/3/delete"', table_html)
 
     def test_storyboard_card_media_prefers_clip_over_images(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -997,7 +1002,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("if (!projectRowChanged(row, replacement)) return", html)
         self.assertIn("projectRowServerHtml.set(replacement.id, replacement.outerHTML)", html)
 
-    def test_project_status_payload_includes_storyboard_html_for_polling(self):
+    def test_project_status_payload_includes_storyboard_and_segment_rows_for_polling(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
         segments = [
             {
@@ -1029,6 +1034,46 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/segments/0/approval"', payload["storyboard_html"])
         self.assertIn("rows", payload)
         self.assertIn("segment-row-0", payload["rows"])
+        self.assertIn('id="segment-row-0"', payload["rows"]["segment-row-0"])
+        self.assertIn("Fresh storyboard text", payload["rows"]["segment-row-0"])
+        self.assertIn('action="/projects/7/segments/0/timing"', payload["rows"]["segment-row-0"])
+        self.assertIn('<div class="status">done</div>', payload["rows"]["segment-row-0"])
+        self.assertNotIn('id="project-storyboard"', payload["rows"]["segment-row-0"])
+
+    def test_project_status_payload_includes_line_rows_when_storyboard_exists(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 2,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Fresh line text",
+                "start_sec": 1.0,
+                "end_sec": 2.0,
+                "confidence": None,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": None,
+                "clip_path": None,
+                "video_approved": 0,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        payload = _project_status_payload(project, lines, [], active_jobs=[])
+
+        self.assertIn("storyboard_html", payload)
+        self.assertIn('id="project-storyboard"', payload["storyboard_html"])
+        self.assertIn("Fresh line text", payload["storyboard_html"])
+        self.assertIn("rows", payload)
+        self.assertEqual(set(payload["rows"]), {"line-row-2"})
+        self.assertIn('id="line-row-2"', payload["rows"]["line-row-2"])
+        self.assertIn("Fresh line text", payload["rows"]["line-row-2"])
+        self.assertIn('action="/projects/7/lines/2/timing"', payload["rows"]["line-row-2"])
+        self.assertIn('action="/projects/7/lines/2/insert-after"', payload["rows"]["line-row-2"])
+        self.assertIn('<div class="status">done</div>', payload["rows"]["line-row-2"])
+        self.assertNotIn('id="project-storyboard"', payload["rows"]["line-row-2"])
 
     def test_project_status_polling_replaces_visible_storyboard(self):
         html = _page("Demo", "")
