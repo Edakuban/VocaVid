@@ -798,6 +798,19 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-nav-button:hover, .project-nav-button:focus {{ background: #444; }}
     .project-nav-disabled {{ opacity: .32; cursor: default; }}
     .project-nav-disabled:hover, .project-nav-disabled:focus {{ background: #555; }}
+    .project-studio {{ display: grid; gap: 18px; }}
+    .view-switch {{ display: inline-flex; gap: 4px; width: fit-content; padding: 4px; border: 1px solid #c7cdc9; border-radius: 8px; background: #eef1ed; }}
+    .view-switch button {{ margin: 0; border-radius: 6px; background: transparent; color: #20302d; }}
+    .view-switch button.active {{ background: #20302d; color: #fff; }}
+    .project-storyboard {{ display: grid; gap: 12px; }}
+    .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
+    .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; }}
+    .storyboard-card-media {{ display: flex; align-items: center; justify-content: center; min-height: 96px; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; }}
+    .storyboard-card-body {{ display: grid; gap: 8px; padding: 12px; }}
+    .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
+    .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
+    .storyboard-card-status {{ color: #5b6462; font-size: 12px; }}
+    .project-table-view[hidden] {{ display: none; }}
     .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: white; color: #1c2526; border: 1px solid #d8d3c8; }}
@@ -1008,6 +1021,19 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       const offset = topbar ? topbar.getBoundingClientRect().height : 0;
       const top = target.getBoundingClientRect().top + window.scrollY - offset;
       window.scrollTo({{ top: Math.max(0, top), behavior: 'smooth' }});
+    }}
+    function switchProjectView(view) {{
+      const storyboard = document.getElementById('project-storyboard');
+      const table = document.getElementById('project-table-view');
+      if (!storyboard || !table) return;
+      const showTable = view === 'table';
+      storyboard.hidden = showTable;
+      table.hidden = !showTable;
+      document.querySelectorAll('[data-project-view]').forEach((button) => {{
+        const active = button.dataset.projectView === view;
+        button.classList.toggle('active', active);
+        button.setAttribute('aria-pressed', active ? 'true' : 'false');
+      }});
     }}
     function scrollStorageKey() {{
       return 'musicvideogen-scroll:' + window.location.pathname;
@@ -1364,25 +1390,81 @@ def _project_html(
     queue_estimate = _queue_estimate_html(queue_estimate_seconds)
     previous_project_nav = _project_nav_html(previous_project_id, "previous")
     next_project_nav = _project_nav_html(next_project_id, "next")
+    storyboard = _storyboard_html(work_items, item_kind)
+    table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
-<div class="project-topbar">
-  <div class="project-title-row">
-    {previous_project_nav}
-    <h1>{project['name']}</h1>
-    {next_project_nav}
-    {queue_estimate}
-    <a class="button" href="/">Back</a>
+<div class="project-studio">
+  <div class="project-topbar">
+    <div class="project-title-row">
+      {previous_project_nav}
+      <h1>{project['name']}</h1>
+      {next_project_nav}
+      {queue_estimate}
+      <a class="button" href="/">Back</a>
+    </div>
+    <div class="actions">{actions}{open_filter}</div>
   </div>
-  <div class="actions">{actions}{open_filter}</div>
-</div>
 {_segment_settings_html(project)}
 {_scene_plan_editor_html(project)}
-{_work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)}
+  <div class="view-switch" role="group" aria-label="Project view">
+    <button type="button" class="active" data-project-view="storyboard" aria-pressed="true" onclick="switchProjectView('storyboard')">Storyboard</button>
+    <button type="button" data-project-view="table" aria-pressed="false" onclick="switchProjectView('table')">Advanced Table</button>
+  </div>
+  {storyboard}
+  <section id="project-table-view" class="project-table-view" hidden>
+    {table}
+  </section>
+</div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
 {_clear_project_html(project)}
 {_scroll_top_button_html()}
 <script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]});</script>
+"""
+
+
+def _storyboard_html(work_items, item_kind: str) -> str:
+    if not work_items:
+        return """
+  <section id="project-storyboard" class="project-storyboard">
+    <h2>Storyboard</h2>
+    <div class="storyboard-rail">
+      <article class="storyboard-card storyboard-card-empty">
+        <div class="storyboard-card-media">No items yet</div>
+        <div class="storyboard-card-body">
+          <p class="storyboard-card-text">Run alignment or segment generation to populate the storyboard.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+"""
+    cards = "".join(_storyboard_card_html(row, item_kind) for row in work_items)
+    return f"""
+  <section id="project-storyboard" class="project-storyboard">
+    <h2>Storyboard</h2>
+    <div class="storyboard-rail">{cards}</div>
+  </section>
+"""
+
+
+def _storyboard_card_html(row, item_kind: str) -> str:
+    index_key = "segment_index" if item_kind == "segments" else "line_index"
+    label = "Segment" if item_kind == "segments" else "Line"
+    index = _row_value(row, index_key, 0)
+    text = _row_value(row, "clean_text", "") or "(empty)"
+    timing = _timing_text(_row_value(row, "start_sec", None), _row_value(row, "end_sec", None))
+    status = _row_value(row, "status", "") or "pending"
+    timing_html = f'<span>{_text(timing)}</span>' if timing else ""
+    text_html = _multiline_text_html(text) or _text(text)
+    return f"""
+      <article class="storyboard-card">
+        <div class="storyboard-card-media">Media</div>
+        <div class="storyboard-card-body">
+          <div class="storyboard-card-title"><span>{label} {_text(index)}</span>{timing_html}</div>
+          <div class="storyboard-card-text">{text_html}</div>
+          <div class="storyboard-card-status">{_text(status)}</div>
+        </div>
+      </article>
 """
 
 

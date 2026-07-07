@@ -222,6 +222,42 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
         self.assertIn(".project-nav-button", html)
 
+    def test_project_page_wraps_storyboard_before_advanced_table(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 3,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Storyboard lyric",
+                "start_sec": 1.0,
+                "end_sec": 2.5,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines, previous_project_id=8, next_project_id=6)
+
+        self.assertIn('class="project-studio"', html)
+        self.assertLess(html.index('class="project-topbar"'), html.index('title="Vorhergehendes Projekt"'))
+        self.assertLess(html.index('title="Nachfolgendes Projekt"'), html.index('class="actions"'))
+        self.assertIn('class="view-switch"', html)
+        self.assertIn('data-project-view="storyboard"', html)
+        self.assertIn('data-project-view="table"', html)
+        self.assertIn('id="project-storyboard"', html)
+        self.assertIn('class="storyboard-rail"', html)
+        self.assertIn('id="project-table-view"', html)
+        self.assertIn('class="project-table-view"', html)
+        self.assertIn("Storyboard lyric", html)
+        self.assertIn("<table>", html)
+        self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
+        self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
+
     def test_project_header_disables_missing_project_navigation(self):
         project = {"id": 9, "name": "Newest", "audio_path": "song.wav", "final_video_path": None}
 
