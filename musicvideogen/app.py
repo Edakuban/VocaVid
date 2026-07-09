@@ -972,16 +972,28 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function shouldReplaceProjectStoryboard(storyboard) {{
       return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard);
     }}
+    function activeProjectStoryboardTemplateId(storyboard) {{
+      const activeCard = storyboard.querySelector('.storyboard-card-active');
+      return activeCard ? activeCard.dataset.inspectorTemplate : '';
+    }}
+    function restoreProjectStoryboardSelection(storyboard, templateId) {{
+      if (!templateId) return;
+      const card = storyboard.querySelector('[data-inspector-template="' + templateId + '"]');
+      if (!card) return;
+      selectStoryboardCard(storyboard, card);
+    }}
     function replaceProjectStoryboard(html) {{
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard || html === undefined) return;
       if (!shouldReplaceProjectStoryboard(storyboard)) return;
+      const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
       const template = document.createElement('template');
       template.innerHTML = html.trim();
       const replacement = template.content.firstElementChild;
       if (!replacement) return;
       replacement.hidden = storyboard.hidden;
       storyboard.replaceWith(replacement);
+      restoreProjectStoryboardSelection(replacement, activeTemplateId);
     }}
     const baseDocumentTitle = document.title.replace(/^\\(\\d+\\)\\s+/, '');
     function updateBrowserTitle(queueCount) {{
@@ -1119,19 +1131,24 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
       }});
     }}
-    function selectStoryboardItem(event, card) {{
-      const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
-      if (event && event.target && event.target.closest(interactiveSelector)) return;
+    function selectStoryboardCard(storyboard, card) {{
       const templateId = card.dataset.inspectorTemplate;
       const template = templateId ? document.getElementById(templateId) : null;
-      const current = document.getElementById('segment-inspector');
+      const current = storyboard.querySelector('#segment-inspector');
       if (!template || !current) return;
-      document.querySelectorAll('.storyboard-card-active').forEach((item) => item.classList.remove('storyboard-card-active'));
+      storyboard.querySelectorAll('.storyboard-card-active').forEach((item) => item.classList.remove('storyboard-card-active'));
       card.classList.add('storyboard-card-active');
       const fragment = template.content.cloneNode(true);
       const replacement = fragment.querySelector('#segment-inspector');
       if (!replacement) return;
       current.replaceWith(replacement);
+    }}
+    function selectStoryboardItem(event, card) {{
+      const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
+      if (event && event.target && event.target.closest(interactiveSelector)) return;
+      const storyboard = card.closest('#project-storyboard');
+      if (!storyboard) return;
+      selectStoryboardCard(storyboard, card);
     }}
     function scrollStorageKey() {{
       return 'musicvideogen-scroll:' + window.location.pathname;

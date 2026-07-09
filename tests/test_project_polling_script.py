@@ -34,6 +34,17 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("document.querySelector('tr[id^=\"segment-row-\"]')", app_source)
         self.assertIn("document.querySelector('.project-topbar')", app_source)
 
+    def test_storyboard_polling_preserves_active_card_selection(self):
+        app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")
+
+        self.assertIn("function activeProjectStoryboardTemplateId(storyboard)", app_source)
+        self.assertIn("function restoreProjectStoryboardSelection(storyboard, templateId)", app_source)
+        self.assertIn("storyboard.querySelector('.storyboard-card-active')", app_source)
+        self.assertIn("storyboard.querySelector('[data-inspector-template=\"' + templateId + '\"]')", app_source)
+        self.assertIn("selectStoryboardCard(storyboard, card)", app_source)
+        self.assertLess(app_source.index("const activeTemplateId = activeProjectStoryboardTemplateId(storyboard)"), app_source.index("storyboard.replaceWith(replacement)"))
+        self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreProjectStoryboardSelection(replacement, activeTemplateId)"))
+
 
 if __name__ == "__main__":
     unittest.main()
