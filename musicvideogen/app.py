@@ -790,8 +790,9 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       .stat-grid, .project-grid, .queue-summary-grid {{ grid-template-columns: 1fr; }}
       .project-card-link {{ grid-template-columns: 72px minmax(0, 1fr); }}
     }}
-    .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
-    .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
+    .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: var(--studio-text); white-space: nowrap; }}
+    .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(12,18,20,.94); border-bottom: 1px solid var(--studio-line); color: var(--studio-text); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.18); }}
+    .project-title-row h1 {{ color: var(--studio-text); text-shadow: 0 1px 18px rgba(0,0,0,.35); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
     .project-title-row .button {{ margin-left: 0; }}
     .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: #555; color: white; font-size: 18px; font-weight: 900; line-height: 1; text-decoration: none; }}
@@ -1456,8 +1457,6 @@ def _project_html(
     </div>
     <div class="actions">{actions}{open_filter}</div>
   </div>
-{_segment_settings_html(project)}
-{_scene_plan_editor_html(project)}
   <div class="view-switch" role="group" aria-label="Project view">
     <button type="button" class="active" data-project-view="storyboard" aria-pressed="true" onclick="switchProjectView('storyboard')">Storyboard</button>
     <button type="button" data-project-view="table" aria-pressed="false" onclick="switchProjectView('table')">Advanced Table</button>
@@ -1466,6 +1465,8 @@ def _project_html(
   <section id="project-table-view" class="project-table-view" hidden>
     {table}
   </section>
+{_segment_settings_html(project)}
+{_scene_plan_editor_html(project)}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}

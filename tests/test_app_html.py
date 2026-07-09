@@ -265,8 +265,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="project-table-view"', html)
         self.assertIn("Storyboard lyric", html)
         self.assertIn("<table>", html)
+        self.assertLess(html.index('class="view-switch"'), html.index('id="project-storyboard"'))
         self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
         self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
+        self.assertLess(html.index('id="project-table-view"'), html.index("<h2>Project Settings</h2>"))
+        self.assertLess(html.index("<h2>Project Settings</h2>"), html.index("<h2>Scene Plan</h2>"))
         table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
         self.assertIn('<tr id="line-row-3"', table_html)
         self.assertIn('action="/projects/7/lines/3/timing"', table_html)
@@ -1418,8 +1421,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("0: Neon intro", html)
         self.assertIn("1: Close chorus", html)
         self.assertIn("<button>Save Scene Plan</button>", html)
+        self.assertLess(html.index('id="project-storyboard"'), html.index("<h2>Project Settings</h2>"))
+        self.assertLess(html.index("<h2>Lyrics / Timing</h2>"), html.index("<h2>Project Settings</h2>"))
         self.assertLess(html.index("<h2>Project Settings</h2>"), html.index("<h2>Scene Plan</h2>"))
-        self.assertLess(html.index("<h2>Scene Plan</h2>"), html.index("<h2>Lyrics / Timing</h2>"))
 
     def test_project_page_has_sticky_header_and_no_audio_final_info_panel(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "final.mp4"}
@@ -1436,6 +1440,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("function scrollToTop", html)
         self.assertIn(".project-topbar", html)
         self.assertIn("position: sticky", html)
+        self.assertIn("background: rgba(12,18,20,.94)", html)
+        self.assertIn(".project-title-row h1 { color: var(--studio-text);", html)
         self.assertNotIn("<strong>Audio:</strong>", html)
         self.assertNotIn("<strong>Final:</strong>", html)
 
