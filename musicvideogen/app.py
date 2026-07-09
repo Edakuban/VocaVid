@@ -795,6 +795,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-title-row h1 {{ color: var(--studio-text); text-shadow: 0 1px 18px rgba(0,0,0,.35); }}
     .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
     .project-title-row .button {{ margin-left: 0; }}
+    .project-icon-button {{ width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 12px; border: 1px solid var(--studio-line); background: rgba(255,255,255,.075); color: var(--studio-text); font-size: 18px; }}
+    .project-icon-button:hover, .project-icon-button:focus {{ background: rgba(53,224,179,.16); border-color: rgba(53,224,179,.42); }}
     .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: #555; color: white; font-size: 18px; font-weight: 900; line-height: 1; text-decoration: none; }}
     .project-nav-button:hover, .project-nav-button:focus {{ background: #444; }}
     .project-nav-disabled {{ opacity: .32; cursor: default; }}
@@ -806,7 +808,9 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-storyboard {{ display: grid; gap: 12px; }}
     .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
-    .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; }}
+    .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
+    .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
+    .storyboard-card-active {{ border-color: var(--studio-accent); box-shadow: 0 0 0 3px rgba(53,224,179,.22), 0 18px 48px rgba(53,224,179,.16); transform: translateY(-1px); }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
     .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
     .storyboard-card-image {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
@@ -822,15 +826,22 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
     .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
     .storyboard-card-status {{ color: #5b6462; font-size: 12px; }}
-    .segment-inspector {{ display: grid; gap: 12px; min-width: 0; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
+    .storyboard-progress-strip {{ display: flex; flex-wrap: wrap; gap: 5px; }}
+    .progress-step {{ border-radius: 999px; border: 1px solid #d8d3c8; padding: 3px 7px; color: #6a7470; background: #f2f4ef; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
+    .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
+    .segment-inspector {{ position: sticky; top: 132px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 148px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
     .segment-inspector h3 {{ margin: 0; color: #20302d; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
     .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}
     .segment-inspector-text {{ margin: 0; overflow-wrap: anywhere; }}
     .segment-inspector-actions {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
+    .inspector-generation-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .inspector-generation-actions .compact-form {{ margin: 0; }}
     .segment-inspector .storyboard-card-media {{ border-radius: 6px; border: 1px solid #d8d3c8; }}
     .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
-    @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} }}
+    .project-modal-content {{ width: min(860px, 94vw); }}
+    .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
+    @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} }}
     .project-table-view[hidden] {{ display: none; }}
     .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
@@ -1063,6 +1074,26 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       if (!box) return;
       box.classList.remove('open');
     }}
+    function openProjectSettingsModal() {{
+      const box = document.getElementById('project-settings-modal');
+      if (!box) return;
+      box.classList.add('open');
+    }}
+    function closeProjectSettingsModal() {{
+      const box = document.getElementById('project-settings-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
+    function openScenePlanModal() {{
+      const box = document.getElementById('scene-plan-modal');
+      if (!box) return;
+      box.classList.add('open');
+    }}
+    function closeScenePlanModal() {{
+      const box = document.getElementById('scene-plan-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
     function scrollToTop() {{
       const firstSegment = document.querySelector('tr[id^="segment-row-"]');
       const target = firstSegment || document.querySelector('tr[id^="line-row-"]');
@@ -1087,6 +1118,20 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         button.classList.toggle('active', active);
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
       }});
+    }}
+    function selectStoryboardItem(event, card) {{
+      const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
+      if (event && event.target && event.target.closest(interactiveSelector)) return;
+      const templateId = card.dataset.inspectorTemplate;
+      const template = templateId ? document.getElementById(templateId) : null;
+      const current = document.getElementById('segment-inspector');
+      if (!template || !current) return;
+      document.querySelectorAll('.storyboard-card-active').forEach((item) => item.classList.remove('storyboard-card-active'));
+      card.classList.add('storyboard-card-active');
+      const fragment = template.content.cloneNode(true);
+      const replacement = fragment.querySelector('#segment-inspector');
+      if (!replacement) return;
+      current.replaceWith(replacement);
     }}
     function scrollStorageKey() {{
       return 'musicvideogen-scroll:' + window.location.pathname;
@@ -1453,6 +1498,8 @@ def _project_html(
       <h1>{project['name']}</h1>
       {next_project_nav}
       {queue_estimate}
+      <button class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()">⚙</button>
+      <button class="project-icon-button" type="button" title="Scene Plan" onclick="openScenePlanModal()">☰</button>
       <a class="button" href="/">Back</a>
     </div>
     <div class="actions">{actions}{open_filter}</div>
@@ -1465,14 +1512,42 @@ def _project_html(
   <section id="project-table-view" class="project-table-view" hidden>
     {table}
   </section>
-{_segment_settings_html(project)}
-{_scene_plan_editor_html(project)}
+{_project_settings_modal_html(project)}
+{_scene_plan_modal_html(project)}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
 {_clear_project_html(project)}
 {_scroll_top_button_html()}
 <script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]});</script>
+"""
+
+
+def _project_settings_modal_html(project) -> str:
+    return f"""
+<div id="project-settings-modal" class="modal lightbox" onclick="if (event.target === this) closeProjectSettingsModal()">
+  <div class="modal-content project-modal-content">
+    <div class="studio-panel-head">
+      <h2>Project Settings</h2>
+      <button class="studio-button studio-button-secondary" type="button" onclick="closeProjectSettingsModal()">Close</button>
+    </div>
+    {_segment_settings_html(project, show_heading=False)}
+  </div>
+</div>
+"""
+
+
+def _scene_plan_modal_html(project) -> str:
+    return f"""
+<div id="scene-plan-modal" class="modal lightbox" onclick="if (event.target === this) closeScenePlanModal()">
+  <div class="modal-content project-modal-content">
+    <div class="studio-panel-head">
+      <h2>Scene Plan</h2>
+      <button class="studio-button studio-button-secondary" type="button" onclick="closeScenePlanModal()">Close</button>
+    </div>
+    {_scene_plan_editor_html(project, show_heading=False)}
+  </div>
+</div>
 """
 
 
@@ -1491,7 +1566,8 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
     </div>
   </section>
 """
-    cards = "".join(_storyboard_card_html(project, row, item_kind) for row in work_items)
+    cards = "".join(_storyboard_card_html(project, row, item_kind, active=index == 0) for index, row in enumerate(work_items))
+    templates = "".join(_storyboard_inspector_template_html(project, item_kind, row) for row in work_items)
     inspector = _segment_inspector_html(project, item_kind, work_items[0])
     return f"""
   <section id="project-storyboard" class="project-storyboard">
@@ -1500,7 +1576,17 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
       <div class="storyboard-rail">{cards}</div>
       {inspector}
     </div>
+    {templates}
   </section>
+"""
+
+
+def _storyboard_inspector_template_html(project, item_kind: str, row) -> str:
+    item_index = _row_index(row, item_kind)
+    return f"""
+    <template id="segment-inspector-template-{item_kind}-{item_index}">
+      {_segment_inspector_html(project, item_kind, row)}
+    </template>
 """
 
 
@@ -1531,6 +1617,7 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         <div class="segment-inspector-label">Redo</div>
         {redo_html}
       </div>""" if redo_html else ""
+    quick_actions = _inspector_generation_actions_html(project["id"], item_kind, item_index, row)
     return f"""
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
         <h3>Selected {label} {_text(item_index)}</h3>
@@ -1551,6 +1638,7 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         <div class="segment-inspector-actions">
           {approval_html}
         </div>
+        {quick_actions}
         {redo_section}
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Status</div>
@@ -1560,7 +1648,7 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
 """
 
 
-def _storyboard_card_html(project, row, item_kind: str) -> str:
+def _storyboard_card_html(project, row, item_kind: str, active: bool = False) -> str:
     index_key = "segment_index" if item_kind == "segments" else "line_index"
     label = "Segment" if item_kind == "segments" else "Line"
     index = _row_value(row, index_key, 0)
@@ -1570,15 +1658,57 @@ def _storyboard_card_html(project, row, item_kind: str) -> str:
     timing_html = f'<span>{_text(timing)}</span>' if timing else ""
     text_html = _multiline_text_html(text) or _text(text)
     media_html = _storyboard_card_media_html(project, row)
+    active_class = " storyboard-card-active" if active else ""
+    progress = _storyboard_progress_strip_html(row)
     return f"""
-      <article class="storyboard-card">
+      <article class="storyboard-card{active_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" onclick="selectStoryboardItem(event, this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') selectStoryboardItem(event, this)">
         {media_html}
         <div class="storyboard-card-body">
           <div class="storyboard-card-title"><span>{label} {_text(index)}</span>{timing_html}</div>
+          {progress}
           <div class="storyboard-card-text">{text_html}</div>
           <div class="storyboard-card-status">{_text(status)}</div>
         </div>
       </article>
+"""
+
+
+def _storyboard_progress_strip_html(row) -> str:
+    steps = [
+        ("Prompt", bool(_row_value(row, "prompt", "") or _row_value(row, "video_prompt", ""))),
+        ("Image", bool(_row_value(row, "image_path", ""))),
+        ("Avatar", bool(_row_value(row, "avatar_image_path", ""))),
+        ("Clip", bool(_row_value(row, "clip_path", ""))),
+        ("OK", bool(_row_value(row, "video_approved", 0))),
+    ]
+    chips = "".join(
+        f'<span class="progress-step{" progress-step-done" if done else ""}">{_text(label)}</span>'
+        for label, done in steps
+    )
+    return f'<div class="storyboard-progress-strip">{chips}</div>'
+
+
+def _inspector_generation_actions_html(project_id: int, item_kind: str, item_index: int, row) -> str:
+    if not (_row_value(row, "prompt", "") or _row_value(row, "video_prompt", "")):
+        return ""
+    return f"""
+        <div class="segment-inspector-section">
+          <div class="segment-inspector-label">Next renders</div>
+          <div class="inspector-generation-actions">
+            {_inspector_action_form_html(project_id, "images", item_index, "Gen Images")}
+            {_inspector_action_form_html(project_id, "avatar-image", item_index, "Gen Avatar Image")}
+            {_inspector_action_form_html(project_id, "clips", item_index, "Gen Clips")}
+          </div>
+        </div>
+"""
+
+
+def _inspector_action_form_html(project_id: int, action: str, item_index: int, label: str) -> str:
+    return f"""
+<form class="compact-form" action="/projects/{project_id}/{action}" method="post" onsubmit="rememberScrollPosition()">
+  <input type="hidden" name="selected_lines" value="{_attr(item_index)}">
+  <button>{_text(label)}</button>
+</form>
 """
 
 
@@ -1647,7 +1777,7 @@ def _project_nav_html(project_id: int | None, direction: str) -> str:
     return f'<a class="project-nav-button" href="/projects/{project_id}" title="{active_title}">{symbol}</a>'
 
 
-def _segment_settings_html(project) -> str:
+def _segment_settings_html(project, show_heading: bool = True) -> str:
     name = _row_value(project, "name", "")
     audio_path = _row_value(project, "audio_path", "")
     lyrics_path = _row_value(project, "lyrics_path", "")
@@ -1661,12 +1791,13 @@ def _segment_settings_html(project) -> str:
     chorus_group_size = _row_value(project, "chorus_group_size", 1)
     transition_handle_seconds = _row_value(project, "transition_handle_seconds", 0.5)
     whisper_model_size = normalize_whisper_model_size(_row_value(project, "whisper_model_size", "small"))
+    heading_html = "<h2>Project Settings</h2>" if show_heading else ""
     return f"""
 <form class="hidden-action-form" id="global-style-prompt-form-{project['id']}" action="/projects/{project['id']}/global-style-prompt" method="post"></form>
 <form class="hidden-action-form" id="realign-lyrics-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics" method="post"></form>
 <form class="hidden-action-form" id="realign-lyrics-cpu-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics-cpu" method="post"></form>
 <form action="/projects/{project['id']}/settings" method="post" onsubmit="return confirmProjectSettingsSave(this)" data-original-lyric-group-size="{_attr(lyric_group_size)}" data-original-chorus-group-size="{_attr(chorus_group_size)}">
-  <h2>Project Settings</h2>
+  {heading_html}
   <label>Name</label><input name="name" value="{_attr(name)}" required>
   <label>WAV Path</label><input name="audio_path" value="{_attr(audio_path)}" required>
   <label>Lyrics Path</label><input name="lyrics_path" value="{_attr(lyrics_path)}" required>
@@ -1690,11 +1821,12 @@ def _segment_settings_html(project) -> str:
 """
 
 
-def _scene_plan_editor_html(project) -> str:
+def _scene_plan_editor_html(project, show_heading: bool = True) -> str:
     scene_plan = _row_value(project, "scene_plan", "") or ""
+    heading_html = "<h2>Scene Plan</h2>" if show_heading else ""
     return f"""
 <form action="/projects/{project['id']}/scene-plan/save" method="post">
-  <h2>Scene Plan</h2>
+  {heading_html}
   <textarea name="scene_plan">{_text(scene_plan)}</textarea>
   <p><button>Save Scene Plan</button></p>
 </form>

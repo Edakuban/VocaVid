@@ -15,6 +15,7 @@ from musicvideogen.app import (
     _project_status_payload,
     _projects_html,
     _reference_paths_from_text,
+    _segment_inspector_html,
 )
 from musicvideogen.worker import Job
 
@@ -401,6 +402,96 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<div class="status-error">render exploded</div>', html)
         self.assertIn('class="storyboard-card-media storyboard-card-media-image"', html)
         self.assertIn(".segment-inspector", _page("Demo", ""))
+
+    def test_storyboard_cards_select_active_inspector_and_show_progress(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "First segment",
+                "start_sec": None,
+                "end_sec": None,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": "outputs/project-7/images/segment-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-segment-000.png",
+                "clip_path": "outputs/project-7/clips/segment-000.mp4",
+                "audio_path": None,
+                "last_action": "clips",
+                "video_approved": 1,
+                "status": "done",
+                "error": "",
+            },
+            {
+                "segment_index": 1,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Second segment",
+                "start_sec": None,
+                "end_sec": None,
+                "prompt": None,
+                "video_prompt": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "last_action": "",
+                "video_approved": 0,
+                "status": "pending",
+                "error": "",
+            },
+        ]
+
+        html = _page("Demo", _project_html(project, [], segments))
+
+        self.assertIn('class="storyboard-card storyboard-card-active"', html)
+        self.assertIn('data-inspector-template="segment-inspector-template-segments-0"', html)
+        self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
+        self.assertIn('<template id="segment-inspector-template-segments-1">', html)
+        self.assertIn('class="storyboard-progress-strip"', html)
+        self.assertIn('<span class="progress-step progress-step-done">Prompt</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">Image</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">Avatar</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">Clip</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">OK</span>', html)
+        self.assertIn("function selectStoryboardItem", html)
+        self.assertIn("storyboard-card-active", html)
+
+    def test_segment_inspector_shows_quick_generation_actions_when_prompts_exist(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segment = {
+            "segment_index": 3,
+            "kind": "lyrics",
+            "section": "Verse",
+            "is_chorus": 0,
+            "clean_text": "Prompted segment",
+            "start_sec": None,
+            "end_sec": None,
+            "prompt": "image prompt",
+            "video_prompt": "video prompt",
+            "image_path": None,
+            "avatar_image_path": None,
+            "clip_path": None,
+            "last_action": "prompts",
+            "video_approved": 0,
+            "status": "done",
+            "error": "",
+        }
+
+        html = _segment_inspector_html(project, "segments", segment)
+
+        self.assertIn('class="inspector-generation-actions"', html)
+        self.assertIn('action="/projects/7/images"', html)
+        self.assertIn('<input type="hidden" name="selected_lines" value="3">', html)
+        self.assertIn("<button>Gen Images</button>", html)
+        self.assertIn('action="/projects/7/avatar-image"', html)
+        self.assertIn("<button>Gen Avatar Image</button>", html)
+        self.assertIn('action="/projects/7/clips"', html)
+        self.assertIn("<button>Gen Clips</button>", html)
 
     def test_storyboard_includes_line_inspector_when_segments_are_absent(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1393,7 +1484,14 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertNotIn("<details>", html)
         self.assertNotIn("<summary>Project Settings</summary>", html)
+        self.assertIn('id="project-settings-modal"', html)
+        self.assertIn('id="scene-plan-modal"', html)
+        self.assertIn('class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()"', html)
+        self.assertIn('class="project-icon-button" type="button" title="Scene Plan" onclick="openScenePlanModal()"', html)
+        self.assertIn("function openProjectSettingsModal", html)
+        self.assertIn("function openScenePlanModal", html)
         self.assertIn("<h2>Project Settings</h2>", html)
+        self.assertEqual(html.count("<h2>Project Settings</h2>"), 1)
         self.assertIn('data-original-lyric-group-size="2"', html)
         self.assertIn('data-original-chorus-group-size="1"', html)
         self.assertIn("confirmProjectSettingsSave(this)", html)
@@ -1416,6 +1514,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, [])
 
         self.assertIn("<h2>Scene Plan</h2>", html)
+        self.assertEqual(html.count("<h2>Scene Plan</h2>"), 1)
         self.assertIn('action="/projects/7/scene-plan/save"', html)
         self.assertIn('name="scene_plan"', html)
         self.assertIn("0: Neon intro", html)
@@ -1442,6 +1541,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("position: sticky", html)
         self.assertIn("background: rgba(12,18,20,.94)", html)
         self.assertIn(".project-title-row h1 { color: var(--studio-text);", html)
+        self.assertIn(".segment-inspector { position: sticky;", html)
+        self.assertIn("top: 132px", html)
         self.assertNotIn("<strong>Audio:</strong>", html)
         self.assertNotIn("<strong>Final:</strong>", html)
 
