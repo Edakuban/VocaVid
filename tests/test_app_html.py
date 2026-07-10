@@ -620,6 +620,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".storyboard-card-body { display: grid; grid-template-rows: auto auto 1fr auto;", html)
         self.assertIn(".storyboard-card-status { align-self: end;", html)
         self.assertIn(".storyboard-video-expand { position: absolute; right: 8px; bottom: 8px;", html)
+        self.assertIn(".modal-content { position: relative;", html)
+        self.assertIn(".lightbox { position: fixed; inset: 0; z-index: 120;", html)
         self.assertIn(".lightbox-close { position: absolute;", html)
         self.assertIn("background: #e53d91;", html)
         self.assertIn(".storyboard-ok-badge { position: absolute;", html)

@@ -770,7 +770,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .queue-admin-controls .compact-form {{ margin: 0; }}
     .queue-admin-controls .job-options {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
     .queue-admin-controls .job-options label {{ margin: 0; }}
-    .modal-content {{ width: min(560px, 94vw); max-height: 88vh; overflow: auto; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
+    .modal-content {{ position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: auto; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
     .modal-content .studio-panel-head {{ color: #1c2526; border-bottom: 1px solid #d8d3c8; }}
     .modal-content h2 {{ margin: 0; }}
     .new-project-form {{ margin: 0; border: 0; border-radius: 0; }}
@@ -910,7 +910,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .redo-cell {{ text-align: center; min-width: 72px; }}
     .redo-action {{ margin-top: 4px; color: #44504d; font-size: 11px; overflow-wrap: anywhere; }}
     .inline-player {{ width: 180px; max-width: 100%; margin-left: 8px; vertical-align: middle; }}
-    .lightbox {{ position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.78); padding: 24px; }}
+    .lightbox {{ position: fixed; inset: 0; z-index: 120; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.78); padding: 24px; }}
     .lightbox.open {{ display: flex; }}
     .lightbox-content {{ position: relative; width: min(960px, 94vw); }}
     .lightbox video, .lightbox img {{ width: 100%; max-height: 82vh; object-fit: contain; background: #000; border-radius: 8px; }}
