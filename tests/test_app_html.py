@@ -303,6 +303,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="storyboard-card-video"', html)
         self.assertIn('src="/assets/outputs/project-7/clips/line-000.mp4', html)
         self.assertIn('poster="/assets/outputs/project-7/images/avatar-line-000.png', html)
+        self.assertNotIn(" muted", html)
         self.assertIn('onclick="toggleStoryboardVideo(event, this)"', html)
         self.assertIn('class="storyboard-video-toggle"', html)
         self.assertIn("function toggleStoryboardVideo", _page("Demo", ""))

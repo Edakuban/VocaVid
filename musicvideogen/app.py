@@ -972,8 +972,11 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function projectStoryboardHasDirtyFields(storyboard) {{
       return Array.from(storyboard.querySelectorAll(projectStoryboardFieldSelector)).some(projectStoryboardFieldDirty);
     }}
+    function projectStoryboardHasPlayingVideo(storyboard) {{
+      return Array.from(storyboard.querySelectorAll('.storyboard-card-video')).some((video) => !video.paused && !video.ended);
+    }}
     function shouldReplaceProjectStoryboard(storyboard) {{
-      return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard);
+      return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard) && !projectStoryboardHasPlayingVideo(storyboard);
     }}
     function activeProjectStoryboardTemplateId(storyboard) {{
       const activeCard = storyboard.querySelector('.storyboard-card-active');
@@ -1769,7 +1772,7 @@ def _storyboard_card_media_html(project, row) -> str:
             poster_attr = f' poster="{_attr(_url_for_media_attribute(poster_url))}"'
         return f"""
         <div class="storyboard-card-media storyboard-card-media-clip" onclick="toggleStoryboardVideo(event, this)">
-          <video class="storyboard-card-video" src="{_attr(_url_for_media_attribute(url))}"{poster_attr} preload="none" muted playsinline></video>
+          <video class="storyboard-card-video" src="{_attr(_url_for_media_attribute(url))}"{poster_attr} preload="none" playsinline></video>
           <button class="storyboard-video-toggle" type="button" aria-label="Play clip" onclick="toggleStoryboardVideo(event, this)">
             <span class="storyboard-play-icon">▶</span>
           </button>

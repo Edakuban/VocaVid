@@ -45,6 +45,14 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertLess(app_source.index("const activeTemplateId = activeProjectStoryboardTemplateId(storyboard)"), app_source.index("storyboard.replaceWith(replacement)"))
         self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreProjectStoryboardSelection(replacement, activeTemplateId)"))
 
+    def test_storyboard_polling_skips_replacement_while_video_is_playing(self):
+        app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")
+
+        self.assertIn("function projectStoryboardHasPlayingVideo(storyboard)", app_source)
+        self.assertIn("storyboard.querySelectorAll('.storyboard-card-video')", app_source)
+        self.assertIn("!video.paused && !video.ended", app_source)
+        self.assertIn("!projectStoryboardHasPlayingVideo(storyboard)", app_source)
+
 
 if __name__ == "__main__":
     unittest.main()
