@@ -1142,16 +1142,6 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       if (!box) return;
       box.classList.remove('open');
     }}
-    function openScenePlanModal() {{
-      const box = document.getElementById('scene-plan-modal');
-      if (!box) return;
-      box.classList.add('open');
-    }}
-    function closeScenePlanModal() {{
-      const box = document.getElementById('scene-plan-modal');
-      if (!box) return;
-      box.classList.remove('open');
-    }}
     function openPromptModal(id) {{
       const box = document.getElementById(id);
       if (!box) return;
@@ -1622,7 +1612,6 @@ def _project_html(
       {next_project_nav}
       {queue_estimate}
       <button class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()">⚙</button>
-      <button class="project-icon-button" type="button" title="Scene Plan" onclick="openScenePlanModal()">☰</button>
       <a class="button" href="/">Back</a>
     </div>
     <div class="actions">{actions}{open_filter}</div>
@@ -1636,7 +1625,6 @@ def _project_html(
     {table}
   </section>
 {_project_settings_modal_html(project)}
-{_scene_plan_modal_html(project)}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
@@ -1655,20 +1643,6 @@ def _project_settings_modal_html(project) -> str:
       <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeProjectSettingsModal()">X</button>
     </div>
     {_segment_settings_html(project, show_heading=False)}
-  </div>
-</div>
-"""
-
-
-def _scene_plan_modal_html(project) -> str:
-    return f"""
-<div id="scene-plan-modal" class="modal lightbox" onclick="if (event.target === this) closeScenePlanModal()">
-  <div class="modal-content project-modal-content">
-    <div class="studio-panel-head">
-      <h2>Scene Plan</h2>
-      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeScenePlanModal()">X</button>
-    </div>
-    {_scene_plan_editor_html(project, show_heading=False)}
   </div>
 </div>
 """
@@ -1974,6 +1948,7 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
     audio_path = _row_value(project, "audio_path", "")
     lyrics_path = _row_value(project, "lyrics_path", "")
     global_style_prompt = _row_value(project, "global_style_prompt", "")
+    scene_plan = _row_value(project, "scene_plan", "") or ""
     genre = _row_value(project, "genre", "")
     reference_paths = "\n".join(_reference_paths_from_json(_row_value(project, "reference_image_paths", "[]")))
     comfy_base_url = _row_value(project, "comfy_base_url", "http://127.0.0.1:8188")
@@ -1986,6 +1961,7 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
     heading_html = "<h2>Project Settings</h2>" if show_heading else ""
     return f"""
 <form class="hidden-action-form" id="global-style-prompt-form-{project['id']}" action="/projects/{project['id']}/global-style-prompt" method="post"></form>
+<form class="hidden-action-form" id="scene-plan-form-{project['id']}" action="/projects/{project['id']}/scene-plan/save" method="post"></form>
 <form class="hidden-action-form" id="realign-lyrics-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics" method="post"></form>
 <form class="hidden-action-form" id="realign-lyrics-cpu-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics-cpu" method="post"></form>
 <form action="/projects/{project['id']}/settings" method="post" onsubmit="return confirmProjectSettingsSave(this)" data-original-lyric-group-size="{_attr(lyric_group_size)}" data-original-chorus-group-size="{_attr(chorus_group_size)}">
@@ -1995,6 +1971,8 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
   <label>Lyrics Path</label><input name="lyrics_path" value="{_attr(lyrics_path)}" required>
   <label>Global Style Prompt</label><textarea name="global_style_prompt" required>{_text(global_style_prompt)}</textarea>
   <p><button type="submit" form="global-style-prompt-form-{project['id']}">KI-Vorschlag erstellen</button></p>
+  <label>Scene Plan</label><textarea name="scene_plan" form="scene-plan-form-{project['id']}">{_text(scene_plan)}</textarea>
+  <p><button type="submit" form="scene-plan-form-{project['id']}">Save Scene Plan</button></p>
   <label>Genre</label><input name="genre" value="{_attr(genre)}">
   <label>Reference Image Paths</label><textarea name="reference_image_paths">{_text(reference_paths)}</textarea>
   <label>Comfy Base URL</label><input name="comfy_base_url" value="{_attr(comfy_base_url)}">
@@ -2009,18 +1987,6 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
     <button type="submit" form="realign-lyrics-form-{project['id']}" onclick="return confirm('Lyrics neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics</button>
     <button type="submit" form="realign-lyrics-cpu-form-{project['id']}" onclick="return confirm('Lyrics per CPU neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics (CPU)</button>
   </p>
-</form>
-"""
-
-
-def _scene_plan_editor_html(project, show_heading: bool = True) -> str:
-    scene_plan = _row_value(project, "scene_plan", "") or ""
-    heading_html = "<h2>Scene Plan</h2>" if show_heading else ""
-    return f"""
-<form action="/projects/{project['id']}/scene-plan/save" method="post">
-  {heading_html}
-  <textarea name="scene_plan">{_text(scene_plan)}</textarea>
-  <p><button>Save Scene Plan</button></p>
 </form>
 """
 

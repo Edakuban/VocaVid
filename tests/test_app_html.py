@@ -273,7 +273,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
         self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
         self.assertLess(html.index('id="project-table-view"'), html.index("<h2>Project Settings</h2>"))
-        self.assertLess(html.index("<h2>Project Settings</h2>"), html.index("<h2>Scene Plan</h2>"))
+        self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
+        self.assertLess(html.index('name="global_style_prompt"'), html.index('name="scene_plan" form="scene-plan-form-7"'))
         table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
         self.assertIn('<tr id="line-row-3"', table_html)
         self.assertIn('action="/projects/7/lines/3/timing"', table_html)
@@ -1081,9 +1082,10 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, [], segments))
 
-        self.assertIn("<h2>Scene Plan</h2>", html)
+        self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
+        self.assertNotIn("<h2>Scene Plan</h2>", html)
         self.assertNotIn('<th class="scene-plan-column">Scene Plan</th>', html)
-        self.assertNotIn('<td class="scene-plan-column">A long scene plan that should wrap in a narrow column</td>', html)
+        self.assertNotIn("A long scene plan that should wrap in a narrow column", html)
 
     def test_project_table_has_compact_timing_controls(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1628,11 +1630,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("<details>", html)
         self.assertNotIn("<summary>Project Settings</summary>", html)
         self.assertIn('id="project-settings-modal"', html)
-        self.assertIn('id="scene-plan-modal"', html)
+        self.assertNotIn('id="scene-plan-modal"', html)
         self.assertIn('class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()"', html)
-        self.assertIn('class="project-icon-button" type="button" title="Scene Plan" onclick="openScenePlanModal()"', html)
+        self.assertNotIn('title="Scene Plan" onclick="openScenePlanModal()"', html)
         self.assertIn("function openProjectSettingsModal", html)
-        self.assertIn("function openScenePlanModal", html)
+        self.assertNotIn("function openScenePlanModal", html)
         self.assertIn("<h2>Project Settings</h2>", html)
         self.assertEqual(html.count("<h2>Project Settings</h2>"), 1)
         self.assertIn('data-original-lyric-group-size="2"', html)
@@ -1641,6 +1643,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("Projekt leeren und Segmente neu erstellen?", html)
         self.assertIn("Lyrics neu alignen und Segmente neu erstellen?", html)
         self.assertIn('class="hidden-action-form" id="global-style-prompt-form-7"', html)
+        self.assertIn('class="hidden-action-form" id="scene-plan-form-7"', html)
         self.assertIn('class="hidden-action-form" id="realign-lyrics-form-7"', html)
         self.assertIn('class="hidden-action-form" id="realign-lyrics-cpu-form-7"', html)
         self.assertIn(".hidden-action-form { display: none; }", html)
@@ -1656,16 +1659,16 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, [])
 
-        self.assertIn("<h2>Scene Plan</h2>", html)
-        self.assertEqual(html.count("<h2>Scene Plan</h2>"), 1)
+        self.assertNotIn("<h2>Scene Plan</h2>", html)
         self.assertIn('action="/projects/7/scene-plan/save"', html)
-        self.assertIn('name="scene_plan"', html)
+        self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
         self.assertIn("0: Neon intro", html)
         self.assertIn("1: Close chorus", html)
-        self.assertIn("<button>Save Scene Plan</button>", html)
+        self.assertIn('<button type="submit" form="scene-plan-form-7">Save Scene Plan</button>', html)
         self.assertLess(html.index('id="project-storyboard"'), html.index("<h2>Project Settings</h2>"))
         self.assertLess(html.index("<h2>Lyrics / Timing</h2>"), html.index("<h2>Project Settings</h2>"))
-        self.assertLess(html.index("<h2>Project Settings</h2>"), html.index("<h2>Scene Plan</h2>"))
+        self.assertLess(html.index('name="global_style_prompt"'), html.index('name="scene_plan" form="scene-plan-form-7"'))
+        self.assertLess(html.index('name="scene_plan" form="scene-plan-form-7"'), html.index('name="genre"'))
 
     def test_project_page_has_sticky_header_and_no_audio_final_info_panel(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "final.mp4"}
