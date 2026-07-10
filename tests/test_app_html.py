@@ -215,12 +215,13 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="wip-button"', html)
         self.assertIn('title="WIP: not fully clean yet"', html)
         self.assertEqual(html.count('class="wip-button"'), 1)
-        self.assertIn('<button>1. Align</button>', html)
-        self.assertIn('<button>4. Gen Image Prompts</button>', html)
-        self.assertIn('<button>5. Gen Video Prompts</button>', html)
-        self.assertIn('<button>6. Gen Images</button>', html)
-        self.assertIn('<button>7. Gen Avatar Image</button>', html)
-        self.assertIn('<button>8. Gen Clips</button>', html)
+        self.assertIn('<button>1. Analyze + Split</button>', html)
+        self.assertNotIn("Segs + Audio", html)
+        self.assertIn('<button>3. Gen Image Prompts</button>', html)
+        self.assertIn('<button>4. Gen Video Prompts</button>', html)
+        self.assertIn('<button>5. Gen Images</button>', html)
+        self.assertIn('<button>6. Gen Avatar Image</button>', html)
+        self.assertIn('<button>7. Gen Clips</button>', html)
         self.assertNotIn('class="button wip-button"', html)
 
     def test_project_header_has_previous_and_next_project_triangle_links(self):
@@ -942,7 +943,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('name="chorus_group_size"', html)
         self.assertIn('value="4"', html)
         self.assertIn('action="/projects/7/settings"', html)
-        self.assertIn('action="/projects/7/segments"', html)
+        self.assertIn('action="/projects/7/align"', html)
+        self.assertIn('<button>1. Analyze + Split</button>', html)
+        self.assertNotIn('<button>2. Segs + Audio</button>', html)
         self.assertIn("<h2>Render Segments</h2>", html)
         self.assertNotIn('<th colspan="2">Prompts</th>', html)
         self.assertNotIn("<th>Images</th>", html)
@@ -1596,38 +1599,38 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("function openClipLightbox", html)
         self.assertIn("function closeClipLightbox", html)
 
-    def test_build_segments_button_is_in_top_action_row_after_align(self):
+    def test_analyze_split_is_single_top_action_before_generation(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
         html = _page("Demo", _project_html(project, []))
 
-        align_index = html.index('<button>1. Align</button>')
-        segments_index = html.index('<button>2. Segs + Audio</button>')
-        scene_plan_index = html.index('<button>3. Scene Plan</button>')
-        prompts_index = html.index('<button>4. Gen Image Prompts</button>')
-        video_prompts_index = html.index('<button>5. Gen Video Prompts</button>')
-        images_index = html.index('<button>6. Gen Images</button>')
-        avatar_index = html.index('<button>7. Gen Avatar Image</button>')
-        clips_index = html.index('<button>8. Gen Clips</button>')
-        assemble_index = html.index('9. Assemble Final')
+        align_index = html.index('<button>1. Analyze + Split</button>')
+        scene_plan_index = html.index('<button>2. Scene Plan</button>')
+        prompts_index = html.index('<button>3. Gen Image Prompts</button>')
+        video_prompts_index = html.index('<button>4. Gen Video Prompts</button>')
+        images_index = html.index('<button>5. Gen Images</button>')
+        avatar_index = html.index('<button>6. Gen Avatar Image</button>')
+        clips_index = html.index('<button>7. Gen Clips</button>')
+        assemble_index = html.index('8. Assemble Final')
         settings_index = html.index('action="/projects/7/settings"')
-        self.assertLess(align_index, segments_index)
-        self.assertLess(segments_index, scene_plan_index)
+        self.assertNotIn('<button>2. Segs + Audio</button>', html)
+        self.assertNotIn('action="/projects/7/segments"', html[:settings_index])
+        self.assertLess(align_index, scene_plan_index)
         self.assertLess(scene_plan_index, prompts_index)
         self.assertLess(prompts_index, video_prompts_index)
         self.assertLess(video_prompts_index, images_index)
         self.assertLess(images_index, avatar_index)
         self.assertLess(avatar_index, clips_index)
         self.assertLess(clips_index, assemble_index)
-        self.assertLess(segments_index, settings_index)
+        self.assertLess(align_index, settings_index)
 
     def test_used_top_actions_are_numbered_and_dark_grey_but_clickable(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
         html = _project_html(project, [], used_actions={"align", "prompts"})
 
-        self.assertIn('<button class="used-button" title="Already used; click to run again">1. Align</button>', html)
-        self.assertIn('<button class="used-button" title="Already used; click to run again">4. Gen Image Prompts</button>', html)
+        self.assertIn('<button class="used-button" title="Already used; click to run again">1. Analyze + Split</button>', html)
+        self.assertIn('<button class="used-button" title="Already used; click to run again">3. Gen Image Prompts</button>', html)
         self.assertIn('action="/projects/7/align"', html)
         self.assertIn('action="/projects/7/prompts"', html)
 
@@ -2103,7 +2106,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('type="button"', html)
         self.assertIn("alert('Bitte erst alle Videos mit OK freigeben.')", html)
         self.assertIn('title="Alle Videos erst mit OK markieren"', html)
-        self.assertIn("9. Assemble Final", html)
+        self.assertIn("8. Assemble Final", html)
 
         lines[1]["video_approved"] = 1
         approved_html = _project_html(project, lines)

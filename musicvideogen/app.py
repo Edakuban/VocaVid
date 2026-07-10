@@ -1591,8 +1591,7 @@ def _project_html(
     locked = _locked_indices(active_jobs, item_kind, work_items)
     assemble_enabled = _all_videos_approved(work_items)
     action_specs = [
-        ("align", "Align", False),
-        ("segments", "Segs + Audio", False),
+        ("align", "Analyze + Split", False),
         ("scene-plan", "Scene Plan", False),
         ("prompts", "Gen Image Prompts", False),
         ("video-prompts", "Gen Video Prompts", False),
