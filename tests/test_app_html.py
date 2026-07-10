@@ -470,6 +470,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('data-inspector-template="segment-inspector-template-segments-0"', html)
         self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
         self.assertIn('<template id="segment-inspector-template-segments-1">', html)
+        self.assertIn('class="segment-inspector-nav"', html)
+        self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein vorhergehendes Segment">◀</span>', html)
+        self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Nachfolgendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-1&#x27;)">▶</button>', html)
+        self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Vorhergehendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-0&#x27;)">◀</button>', html)
+        self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein nachfolgendes Segment">▶</span>', html)
         self.assertIn('class="storyboard-progress-strip"', html)
         self.assertIn('<span class="progress-step progress-step-done">Prompt</span>', html)
         self.assertIn('<span class="progress-step progress-step-done">Image</span>', html)
@@ -477,6 +482,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<span class="progress-step progress-step-done">Clip</span>', html)
         self.assertIn('<span class="progress-step progress-step-done">OK</span>', html)
         self.assertIn("function selectStoryboardItem", html)
+        self.assertIn("function selectStoryboardTemplate", html)
         self.assertIn("storyboard-card-active", html)
 
     def test_segment_inspector_shows_quick_generation_actions_when_prompts_exist(self):
@@ -599,6 +605,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
         self.assertIn(".finish-toggle { display: block; width: 100%;", html)
         self.assertIn(".storyboard-card-approved { background:", html)
+        self.assertIn(".segment-inspector-nav { display: flex; justify-content: space-between;", html)
+        self.assertIn(".segment-nav-button { border: 0;", html)
 
     def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
         html = _page("Demo", "body")

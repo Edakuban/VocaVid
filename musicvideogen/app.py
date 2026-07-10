@@ -837,6 +837,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
     .segment-inspector {{ position: sticky; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
     .segment-inspector h3 {{ margin: 0; color: #20302d; }}
+    .segment-inspector-nav {{ display: flex; justify-content: space-between; align-items: center; margin: -2px 0 0; }}
+    .segment-nav-button {{ border: 0; padding: 0; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
     .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}
     .segment-inspector-label-row {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; }}
@@ -1191,6 +1193,13 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       const replacement = fragment.querySelector('#segment-inspector');
       if (!replacement) return;
       current.replaceWith(replacement);
+    }}
+    function selectStoryboardTemplate(templateId) {{
+      const storyboard = document.getElementById('project-storyboard');
+      if (!storyboard || !templateId) return;
+      const card = storyboard.querySelector('[data-inspector-template="' + templateId + '"]');
+      if (!card) return;
+      selectStoryboardCard(storyboard, card);
     }}
     function selectStoryboardItem(event, card) {{
       const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
@@ -1676,8 +1685,23 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
   </section>
 """
     cards = "".join(_storyboard_card_html(project, row, item_kind, active=index == 0) for index, row in enumerate(work_items))
-    templates = "".join(_storyboard_inspector_template_html(project, item_kind, row) for row in work_items)
-    inspector = _segment_inspector_html(project, item_kind, work_items[0])
+    templates = "".join(
+        _storyboard_inspector_template_html(
+            project,
+            item_kind,
+            row,
+            _storyboard_neighbor_index(work_items, item_kind, index - 1),
+            _storyboard_neighbor_index(work_items, item_kind, index + 1),
+        )
+        for index, row in enumerate(work_items)
+    )
+    inspector = _segment_inspector_html(
+        project,
+        item_kind,
+        work_items[0],
+        None,
+        _storyboard_neighbor_index(work_items, item_kind, 1),
+    )
     return f"""
   <section id="project-storyboard" class="project-storyboard">
     <h2>Storyboard</h2>
@@ -1690,16 +1714,23 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
 """
 
 
-def _storyboard_inspector_template_html(project, item_kind: str, row) -> str:
+def _storyboard_neighbor_index(work_items, item_kind: str, position: int):
+    if position < 0 or position >= len(work_items):
+        return None
+    index_key = "segment_index" if item_kind == "segments" else "line_index"
+    return int(_row_value(work_items[position], index_key, 0))
+
+
+def _storyboard_inspector_template_html(project, item_kind: str, row, previous_index=None, next_index=None) -> str:
     item_index = _row_index(row, item_kind)
     return f"""
     <template id="segment-inspector-template-{item_kind}-{item_index}">
-      {_segment_inspector_html(project, item_kind, row)}
+      {_segment_inspector_html(project, item_kind, row, previous_index, next_index)}
     </template>
 """
 
 
-def _segment_inspector_html(project, item_kind: str, row) -> str:
+def _segment_inspector_html(project, item_kind: str, row, previous_index=None, next_index=None) -> str:
     index_key = "segment_index" if item_kind == "segments" else "line_index"
     label = "Segment" if item_kind == "segments" else "Line"
     item_index = int(_row_value(row, index_key, 0))
@@ -1732,9 +1763,11 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         {image_choice_html}
       </div>""" if image_choice_html else ""
     quick_actions = _inspector_generation_actions_html(project["id"], item_kind, item_index, row)
+    navigation = _segment_inspector_navigation_html(item_kind, label, previous_index, next_index)
     return f"""
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
         <h3>Selected {label} {_text(item_index)}</h3>
+        {navigation}
         {quick_actions}
         {image_choice_section}
         <div class="segment-inspector-section">
@@ -1756,6 +1789,28 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         </div>
       </aside>
 """
+
+
+def _segment_inspector_navigation_html(item_kind: str, label: str, previous_index, next_index) -> str:
+    return f"""
+        <div class="segment-inspector-nav">
+          {_segment_inspector_nav_button(item_kind, label, previous_index, "previous")}
+          {_segment_inspector_nav_button(item_kind, label, next_index, "next")}
+        </div>
+"""
+
+
+def _segment_inspector_nav_button(item_kind: str, label: str, item_index, direction: str) -> str:
+    symbol = "\u25c0" if direction == "previous" else "\u25b6"
+    active_title = f"{'Vorhergehendes' if direction == 'previous' else 'Nachfolgendes'} {label}"
+    disabled_title = f"Kein {'vorhergehendes' if direction == 'previous' else 'nachfolgendes'} {label}"
+    if item_index is None:
+        return f'<span class="project-nav-button project-nav-disabled" title="{_attr(disabled_title)}">{symbol}</span>'
+    template_id = f"segment-inspector-template-{item_kind}-{item_index}"
+    return (
+        f'<button class="project-nav-button segment-nav-button" type="button" title="{_attr(active_title)}" '
+        f'onclick="selectStoryboardTemplate({_attr(_js_arg(template_id))})">{symbol}</button>'
+    )
 
 
 def _storyboard_card_html(project, row, item_kind: str, active: bool = False) -> str:
