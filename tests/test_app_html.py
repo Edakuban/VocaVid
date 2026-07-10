@@ -300,8 +300,13 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('class="storyboard-card-media storyboard-card-media-clip"', html)
-        self.assertIn("openClipLightbox(&quot;/assets/outputs/project-7/clips/line-000.mp4", html)
-        self.assertIn('class="storyboard-play-button"', html)
+        self.assertIn('class="storyboard-card-video"', html)
+        self.assertIn('src="/assets/outputs/project-7/clips/line-000.mp4', html)
+        self.assertIn('poster="/assets/outputs/project-7/images/avatar-line-000.png', html)
+        self.assertIn('onclick="toggleStoryboardVideo(event, this)"', html)
+        self.assertIn('class="storyboard-video-toggle"', html)
+        self.assertIn("function toggleStoryboardVideo", _page("Demo", ""))
+        self.assertNotIn("openClipLightbox", html)
         self.assertNotIn('class="storyboard-card-image"', html)
 
     def test_storyboard_card_media_prefers_avatar_over_image(self):
@@ -600,16 +605,16 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, lines)
         image_onclick = html.split('onclick="openImageLightbox(', 1)[1].split(')"', 1)[0]
-        clip_onclick = html.split('onclick="openClipLightbox(', 1)[1].split(')"', 1)[0]
+        clip_src = html.split('<video class="storyboard-card-video"', 1)[1].split('src="', 1)[1].split('"', 1)[0]
 
         self.assertNotIn("\n", image_onclick)
-        self.assertNotIn("\n", clip_onclick)
+        self.assertNotIn("\n", clip_src)
         self.assertNotIn("\x01", image_onclick)
-        self.assertNotIn("\x01", clip_onclick)
+        self.assertNotIn("\x01", clip_src)
         self.assertIn(r"\ncontrol\u0001/view?filename=line-000.png", unescape(image_onclick))
-        self.assertIn(r"\ncontrol\u0001/view?filename=clip-001.mp4", unescape(clip_onclick))
+        self.assertIn(r"\ncontrol\u0001/view?filename=clip-001.mp4", unescape(clip_src))
         self.assertIn(r"http://example.test/'quoted", unescape(image_onclick))
-        self.assertIn(r"http://example.test/'quoted", unescape(clip_onclick))
+        self.assertIn(r"http://example.test/'quoted", unescape(clip_src))
 
     def test_storyboard_card_media_uses_image_before_fallback(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1708,7 +1713,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<td class="assets-column">', html)
         self.assertIn('<div class="asset-previews">', html)
         self.assertIn('<form class="compact-form image-choice"', html)
-        self.assertLess(html.index("segment-000.png"), html.index("avatar-segment-000.png"))
+        self.assertLess(table_html.index("segment-000.png"), table_html.index("avatar-segment-000.png"))
         self.assertLess(table_html.index('class="asset-previews"'), table_html.index('class="compact-form image-choice"'))
         self.assertNotIn('<span class="asset-path">', html)
 

@@ -815,9 +815,12 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
     .storyboard-card-image {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
     .storyboard-card-media-clip {{ background: linear-gradient(135deg, #23312f, #53605b); color: #fff; }}
-    .storyboard-card-media-clip::before {{ content: ""; position: absolute; inset: 0; background: linear-gradient(160deg, rgba(255,255,255,.12), transparent 42%), repeating-linear-gradient(90deg, rgba(255,255,255,.12) 0 2px, transparent 2px 18px); opacity: .58; }}
-    .storyboard-play-button {{ position: relative; z-index: 1; display: grid; gap: 8px; place-items: center; color: #fff; font-weight: 900; }}
-    .storyboard-play-icon {{ display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.92); color: #20302d; box-shadow: 0 10px 28px rgba(0,0,0,.24); }}
+    .storyboard-card-video {{ display: block; width: 100%; height: 100%; object-fit: cover; background: #111; }}
+    .storyboard-video-toggle {{ position: absolute; left: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.78) !important; color: #fff; box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
+    .storyboard-video-toggle:hover, .storyboard-video-toggle:focus {{ background: rgba(53,224,179,.88) !important; color: #10201c; outline: none; }}
+    .storyboard-play-icon {{ font-size: 0; line-height: 1; }}
+    .storyboard-video-toggle[aria-label="Play clip"] .storyboard-play-icon::before {{ content: "\\25b6"; font-size: 13px; }}
+    .storyboard-video-toggle[aria-label="Pause clip"] .storyboard-play-icon::before {{ content: "II"; font-size: 12px; letter-spacing: -1px; }}
     .storyboard-card-media-empty {{ padding: 14px; text-align: center; }}
     .storyboard-empty-mark {{ display: grid; gap: 4px; }}
     .storyboard-empty-mark strong {{ color: #20302d; }}
@@ -1180,6 +1183,32 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         button.textContent = '▶';
       }}
       audio.onended = () => {{ button.textContent = '▶'; }};
+    }}
+    function toggleStoryboardVideo(event, target) {{
+      if (event) event.stopPropagation();
+      const media = target.closest('.storyboard-card-media-clip');
+      if (!media) return;
+      const video = media.querySelector('video');
+      const button = media.querySelector('.storyboard-video-toggle');
+      if (!video) return;
+      if (video.paused) {{
+        video.play();
+        if (button) {{
+          button.setAttribute('aria-label', 'Pause clip');
+          button.querySelector('.storyboard-play-icon').textContent = 'Ⅱ';
+        }}
+      }} else {{
+        video.pause();
+        if (button) {{
+          button.setAttribute('aria-label', 'Play clip');
+          button.querySelector('.storyboard-play-icon').textContent = '▶';
+        }}
+      }}
+      video.onended = () => {{
+        if (!button) return;
+        button.setAttribute('aria-label', 'Play clip');
+        button.querySelector('.storyboard-play-icon').textContent = '▶';
+      }};
     }}
     function openClipLightbox(src) {{
       const box = document.getElementById('clip-lightbox');
@@ -1733,6 +1762,18 @@ def _storyboard_card_media_html(project, row) -> str:
     clip_path = _row_value(row, "clip_path", "")
     if clip_path:
         url = _generated_asset_url(project, clip_path)
+        poster_path = _storyboard_image_path(row)
+        poster_attr = ""
+        if poster_path:
+            poster_url = _generated_asset_url(project, poster_path)
+            poster_attr = f' poster="{_attr(_url_for_media_attribute(poster_url))}"'
+        return f"""
+        <div class="storyboard-card-media storyboard-card-media-clip" onclick="toggleStoryboardVideo(event, this)">
+          <video class="storyboard-card-video" src="{_attr(_url_for_media_attribute(url))}"{poster_attr} preload="none" muted playsinline></video>
+          <button class="storyboard-video-toggle" type="button" aria-label="Play clip" onclick="toggleStoryboardVideo(event, this)">
+            <span class="storyboard-play-icon">▶</span>
+          </button>
+        </div>"""
         return f"""
         <div class="storyboard-card-media storyboard-card-media-clip">
           <button type="button" title="Play clip" onclick="openClipLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))})">
@@ -1767,6 +1808,10 @@ def _storyboard_image_path(row) -> str:
 
 def _url_for_html_attribute(url: str) -> str:
     return str(url).replace("&amp;", "&")
+
+
+def _url_for_media_attribute(url: str) -> str:
+    return json.dumps(_url_for_html_attribute(url))[1:-1]
 
 
 def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
