@@ -809,6 +809,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
+    .storyboard-card-approved {{ background: #eef9f2; border-color: rgba(53,224,179,.36); }}
     .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
     .storyboard-card-active {{ border-color: var(--studio-accent); box-shadow: 0 0 0 3px rgba(53,224,179,.22), 0 18px 48px rgba(53,224,179,.16); transform: translateY(-1px); }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
@@ -836,19 +837,22 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .segment-inspector h3 {{ margin: 0; color: #20302d; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
     .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}
+    .segment-inspector-label-row {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; }}
+    .segment-inspector-meta {{ color: #5b6462; font-size: 12px; font-weight: 750; white-space: nowrap; }}
     .segment-inspector-text {{ margin: 0; overflow-wrap: anywhere; }}
     .segment-inspector-actions {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
+    .segment-inspector-actions .compact-form {{ width: 100%; }}
     .inspector-generation-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .inspector-generation-actions .compact-form {{ margin: 0; }}
     .segment-inspector .storyboard-card-media {{ border-radius: 6px; border: 1px solid #d8d3c8; }}
     .inspector-prompt-preview {{ display: grid; gap: 8px; align-items: start; }}
-    .inspector-prompt-media-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px; align-items: end; }}
+    .inspector-prompt-media-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }}
     .inspector-prompt-media {{ display: grid; gap: 5px; min-width: 0; }}
     .inspector-prompt-media span {{ color: #5b6462; font-size: 11px; font-weight: 850; text-transform: uppercase; }}
     .inspector-prompt-media .preview-button {{ display: block; width: 100%; padding: 0; border: 0; background: transparent; }}
     .inspector-prompt-image {{ display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; background: #eef1ed; }}
-    .inspector-prompt-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
-    .finish-toggle {{ width: 100%; border-radius: 8px; }}
+    .inspector-prompt-actions {{ display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .finish-toggle {{ display: block; width: 100%; border-radius: 8px; }}
     .finish-toggle-inactive {{ background: #eef1ed; color: #20302d; border: 1px solid #c7cdc9; }}
     .finish-toggle-active {{ background: #178a68; color: #fff; border: 1px solid #178a68; }}
     .image-prompt-modal-content {{ width: min(760px, 94vw); }}
@@ -1719,7 +1723,7 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
     )
     media_html = _storyboard_card_media_html(project, row)
     text_html = _multiline_text_html(text) or _text(text)
-    timing_html = f'<div class="storyboard-card-status">{_text(timing)}</div>' if timing else ""
+    timing_html = f'<div class="segment-inspector-meta">{_text(timing)}</div>' if timing else ""
     image_choice_section = f"""
       <div class="segment-inspector-section">
         <div class="segment-inspector-label">Image source</div>
@@ -1736,9 +1740,8 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
           {media_html}
         </div>
         <div class="segment-inspector-section">
-          <div class="segment-inspector-label">Text</div>
+          <div class="segment-inspector-label-row"><div class="segment-inspector-label">Text</div>{timing_html}</div>
           <div class="segment-inspector-text">{text_html}</div>
-          {timing_html}
         </div>
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Prompts</div>
@@ -1764,9 +1767,10 @@ def _storyboard_card_html(project, row, item_kind: str, active: bool = False) ->
     text_html = _multiline_text_html(text) or _text(text)
     media_html = _storyboard_card_media_html(project, row)
     active_class = " storyboard-card-active" if active else ""
+    approved_class = " storyboard-card-approved" if bool(_row_value(row, "video_approved", 0)) else ""
     progress = _storyboard_progress_strip_html(row)
     return f"""
-      <article class="storyboard-card{active_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" onclick="selectStoryboardItem(event, this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') selectStoryboardItem(event, this)">
+      <article class="storyboard-card{active_class}{approved_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" onclick="selectStoryboardItem(event, this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') selectStoryboardItem(event, this)">
         {media_html}
         <div class="storyboard-card-body">
           <div class="storyboard-card-title"><span>{label} {_text(index)}</span>{timing_html}</div>
@@ -2347,9 +2351,9 @@ def _prompt_preview_html(project, row, image_modal_id: str, video_modal_id: str)
     avatar_image_path = _row_value(row, "avatar_image_path", "")
     media_html = ""
     if image_path:
-        media_html += _inspector_prompt_media_html(project, image_path, "Image", "image", wide=False)
+        media_html += _inspector_prompt_media_html(project, image_path, "Image", "image")
     if avatar_image_path:
-        media_html += _inspector_prompt_media_html(project, avatar_image_path, "Avatar", "avatar", wide=True)
+        media_html += _inspector_prompt_media_html(project, avatar_image_path, "Avatar", "avatar")
     if media_html:
         media_html = f'<div class="inspector-prompt-media-grid">{media_html}</div>'
     else:
@@ -2365,12 +2369,11 @@ def _prompt_preview_html(project, row, image_modal_id: str, video_modal_id: str)
 """
 
 
-def _inspector_prompt_media_html(project, path: str, label: str, kind: str, wide: bool = False) -> str:
+def _inspector_prompt_media_html(project, path: str, label: str, kind: str) -> str:
     url = _generated_asset_url(project, path)
     url_attr = _url_for_html_attribute(url)
-    wide_class = " inspector-prompt-media-wide" if wide else ""
     return (
-        f'<div class="inspector-prompt-media inspector-prompt-media-{_attr(kind)}{wide_class}">'
+        f'<div class="inspector-prompt-media inspector-prompt-media-{_attr(kind)}">'
         f'<button class="preview-button" type="button" onclick="openImageLightbox({_attr(_js_arg(url_attr))})">'
         f'<img class="inspector-prompt-image" src="{_attr(url_attr)}" alt="{_attr(label)} prompt reference">'
         "</button>"

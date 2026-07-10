@@ -413,6 +413,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('name="video_approved" value="0"', html)
         self.assertIn('class="finish-toggle finish-toggle-active"', html)
         self.assertIn("Mark as unfinished", html)
+        self.assertIn('class="segment-inspector-label-row"', html)
+        self.assertIn('<div class="segment-inspector-label">Text</div><div class="segment-inspector-meta">1.0 - 2.0</div>', html)
         self.assertNotIn('<div class="segment-inspector-label">Status</div>', inspector_html)
         self.assertIn('class="storyboard-card-media storyboard-card-media-image"', html)
         self.assertIn(".segment-inspector", _page("Demo", ""))
@@ -463,7 +465,7 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, [], segments))
 
-        self.assertIn('class="storyboard-card storyboard-card-active"', html)
+        self.assertIn('class="storyboard-card storyboard-card-active storyboard-card-approved"', html)
         self.assertIn('data-inspector-template="segment-inspector-template-segments-0"', html)
         self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
         self.assertIn('<template id="segment-inspector-template-segments-1">', html)
@@ -534,7 +536,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="inspector-prompt-preview"', html)
         self.assertIn('class="inspector-prompt-media-grid"', html)
         self.assertIn('class="inspector-prompt-media inspector-prompt-media-image"', html)
-        self.assertIn('class="inspector-prompt-media inspector-prompt-media-avatar inspector-prompt-media-wide"', html)
+        self.assertIn('class="inspector-prompt-media inspector-prompt-media-avatar"', html)
+        self.assertNotIn("inspector-prompt-media-wide", html)
         self.assertIn('src="/assets/outputs/project-7/images/segment-003.png', html)
         self.assertIn('src="/assets/outputs/project-7/images/avatar-segment-003.png', html)
         self.assertIn("<span>Image</span>", html)
@@ -586,6 +589,15 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="compact-form image-choice image-choice-inline"', html)
         self.assertIn('class="finish-toggle finish-toggle-inactive"', html)
         self.assertIn("Mark as finished", html)
+
+    def test_segment_inspector_css_keeps_actions_and_media_balanced(self):
+        html = _page("Demo", "")
+
+        self.assertIn(".inspector-prompt-media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));", html)
+        self.assertIn(".inspector-prompt-actions { display: flex; justify-content: space-between;", html)
+        self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
+        self.assertIn(".finish-toggle { display: block; width: 100%;", html)
+        self.assertIn(".storyboard-card-approved { background:", html)
 
     def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
         html = _page("Demo", "body")
