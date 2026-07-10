@@ -315,7 +315,12 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="storyboard-video-expand"', html)
         self.assertIn('aria-label="Open clip in lightbox"', html)
         self.assertIn("openClipLightbox(&quot;/assets/outputs/project-7/clips/line-000.mp4", html)
+        self.assertIn(", this)", html)
         self.assertIn("function toggleStoryboardVideo", _page("Demo", ""))
+        page_html = _page("Demo", "")
+        self.assertIn("function resetStoryboardVideo(target)", page_html)
+        self.assertIn("video.currentTime = 0;", page_html)
+        self.assertIn("resetStoryboardVideo(source);", page_html)
         self.assertNotIn('class="storyboard-card-image"', html)
 
     def test_storyboard_card_media_prefers_avatar_over_image(self):

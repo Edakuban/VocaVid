@@ -1278,7 +1278,22 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
         button.querySelector('.storyboard-play-icon').textContent = '▶';
       }};
     }}
-    function openClipLightbox(src) {{
+    function resetStoryboardVideo(target) {{
+      const media = target && target.closest ? target.closest('.storyboard-card-media-clip') : null;
+      if (!media) return;
+      const video = media.querySelector('video');
+      const button = media.querySelector('.storyboard-video-toggle');
+      if (video) {{
+        video.pause();
+        video.currentTime = 0;
+      }}
+      if (button) {{
+        button.setAttribute('aria-label', 'Play clip');
+        button.querySelector('.storyboard-play-icon').textContent = '▶';
+      }}
+    }}
+    function openClipLightbox(src, source) {{
+      resetStoryboardVideo(source);
       const box = document.getElementById('clip-lightbox');
       const video = document.getElementById('clip-lightbox-video');
       video.src = src;
@@ -1868,7 +1883,7 @@ def _storyboard_card_media_html(project, row) -> str:
           <button class="storyboard-video-toggle" type="button" aria-label="Play clip" onclick="toggleStoryboardVideo(event, this)">
             <span class="storyboard-play-icon">▶</span>
           </button>
-          <button class="storyboard-video-expand" type="button" aria-label="Open clip in lightbox" onclick="event.stopPropagation(); openClipLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))})">⛶</button>
+          <button class="storyboard-video-expand" type="button" aria-label="Open clip in lightbox" onclick="event.stopPropagation(); openClipLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))}, this)">⛶</button>
           {ok_badge}
         </div>"""
         return f"""
