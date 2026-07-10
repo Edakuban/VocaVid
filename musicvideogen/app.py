@@ -810,8 +810,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-storyboard {{ display: grid; gap: 12px; }}
     .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
-    .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
-    .storyboard-card-approved {{ background: #eef9f2; border-color: rgba(53,224,179,.36); }}
+    .storyboard-card {{ display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
+    .storyboard-card-approved {{ background: #dff3e8; border-color: rgba(24,151,108,.5); }}
     .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
     .storyboard-card-active {{ border-color: var(--studio-accent); box-shadow: 0 0 0 3px rgba(53,224,179,.22), 0 18px 48px rgba(53,224,179,.16); transform: translateY(-1px); }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
@@ -828,10 +828,11 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-empty-mark {{ display: grid; gap: 4px; }}
     .storyboard-empty-mark strong {{ color: #20302d; }}
     .storyboard-empty-mark span {{ color: #69736f; font-size: 12px; font-weight: 650; }}
-    .storyboard-card-body {{ display: grid; gap: 8px; padding: 12px; }}
+    .storyboard-ok-badge {{ position: absolute; top: 8px; right: 8px; z-index: 3; pointer-events: none; border: 1px solid rgba(24,151,108,.42); border-radius: 999px; background: rgba(239,255,247,.94); color: #0b6d51; padding: 5px 9px; font-size: 11px; font-weight: 950; letter-spacing: .02em; box-shadow: 0 8px 18px rgba(0,0,0,.16); }}
+    .storyboard-card-body {{ display: grid; grid-template-rows: auto auto 1fr auto; gap: 8px; padding: 12px; }}
     .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
     .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
-    .storyboard-card-status {{ color: #5b6462; font-size: 12px; }}
+    .storyboard-card-status {{ align-self: end; color: #5b6462; font-size: 12px; }}
     .storyboard-progress-strip {{ display: flex; flex-wrap: wrap; gap: 5px; }}
     .progress-step {{ border-radius: 999px; border: 1px solid #d8d3c8; padding: 3px 7px; color: #6a7470; background: #f2f4ef; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
     .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
@@ -1845,7 +1846,6 @@ def _storyboard_progress_strip_html(row) -> str:
         ("Image", bool(_row_value(row, "image_path", ""))),
         ("Avatar", bool(_row_value(row, "avatar_image_path", ""))),
         ("Clip", bool(_row_value(row, "clip_path", ""))),
-        ("OK", bool(_row_value(row, "video_approved", 0))),
     ]
     chips = "".join(
         f'<span class="progress-step{" progress-step-done" if done else ""}">{_text(label)}</span>'
@@ -1880,6 +1880,7 @@ def _inspector_action_form_html(project_id: int, action: str, item_index: int, l
 
 def _storyboard_card_media_html(project, row) -> str:
     clip_path = _row_value(row, "clip_path", "")
+    ok_badge = _storyboard_ok_badge_html(row)
     if clip_path:
         url = _generated_asset_url(project, clip_path)
         return f"""
@@ -1888,6 +1889,7 @@ def _storyboard_card_media_html(project, row) -> str:
           <button class="storyboard-video-toggle" type="button" aria-label="Play clip" onclick="toggleStoryboardVideo(event, this)">
             <span class="storyboard-play-icon">▶</span>
           </button>
+          {ok_badge}
         </div>"""
         return f"""
         <div class="storyboard-card-media storyboard-card-media-clip">
@@ -1904,12 +1906,20 @@ def _storyboard_card_media_html(project, row) -> str:
           <button type="button" title="Open image" onclick="openImageLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))})">
             <img class="storyboard-card-image" src="{_attr(_url_for_html_attribute(url))}" alt="Storyboard image">
           </button>
+          {ok_badge}
         </div>"""
 
-    return """
+    return f"""
         <div class="storyboard-card-media storyboard-card-media-empty">
           <span class="storyboard-empty-mark"><strong>Awaiting media</strong><span>Generate an image or clip to preview this item.</span></span>
+          {ok_badge}
         </div>"""
+
+
+def _storyboard_ok_badge_html(row) -> str:
+    if not bool(_row_value(row, "video_approved", 0)):
+        return ""
+    return '<span class="storyboard-ok-badge">OK</span>'
 
 
 def _storyboard_image_path(row) -> str:
