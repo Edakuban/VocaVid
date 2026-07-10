@@ -1159,7 +1159,18 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function scrollStorageKey() {{
       return 'musicvideogen-scroll:' + window.location.pathname;
     }}
+    function storyboardSelectionStorageKey() {{
+      return 'musicvideogen-storyboard-selection:' + window.location.pathname;
+    }}
+    function rememberProjectStoryboardSelection() {{
+      const storyboard = document.getElementById('project-storyboard');
+      if (!storyboard) return;
+      const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
+      if (!activeTemplateId) return;
+      sessionStorage.setItem(storyboardSelectionStorageKey(), activeTemplateId);
+    }}
     function rememberScrollPosition() {{
+      rememberProjectStoryboardSelection();
       sessionStorage.setItem(scrollStorageKey(), String(window.scrollY));
     }}
     function confirmProjectSettingsSave(form) {{
@@ -1169,6 +1180,11 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     document.addEventListener('submit', rememberScrollPosition);
     document.addEventListener('DOMContentLoaded', () => {{
       rememberProjectRows();
+      const storyboard = document.getElementById('project-storyboard');
+      const storedStoryboardTemplate = sessionStorage.getItem(storyboardSelectionStorageKey());
+      if (storyboard && storedStoryboardTemplate) {{
+        restoreProjectStoryboardSelection(storyboard, storedStoryboardTemplate);
+      }}
       const stored = sessionStorage.getItem(scrollStorageKey());
       if (stored === null) return;
       const scrollY = Number(stored);

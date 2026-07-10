@@ -53,6 +53,17 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("!video.paused && !video.ended", app_source)
         self.assertIn("!projectStoryboardHasPlayingVideo(storyboard)", app_source)
 
+    def test_storyboard_selection_is_restored_after_form_reload(self):
+        app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")
+
+        self.assertIn("function storyboardSelectionStorageKey()", app_source)
+        self.assertIn("function rememberProjectStoryboardSelection()", app_source)
+        self.assertIn("sessionStorage.setItem(storyboardSelectionStorageKey(), activeTemplateId)", app_source)
+        self.assertIn("rememberProjectStoryboardSelection();", app_source)
+        self.assertIn("const storedStoryboardTemplate = sessionStorage.getItem(storyboardSelectionStorageKey())", app_source)
+        self.assertIn("restoreProjectStoryboardSelection(storyboard, storedStoryboardTemplate)", app_source)
+        self.assertLess(app_source.index("rememberProjectRows();"), app_source.index("restoreProjectStoryboardSelection(storyboard, storedStoryboardTemplate)"))
+
 
 if __name__ == "__main__":
     unittest.main()
