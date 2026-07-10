@@ -333,10 +333,11 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines)
+        card_html = html[html.index('<article class="storyboard-card') : html.index("</article>", html.index('<article class="storyboard-card'))]
 
-        self.assertIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', html)
-        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/avatar-line-000.png&quot;)", html)
-        self.assertNotIn('src="/assets/outputs/project-7/images/line-000.png"', html)
+        self.assertIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', card_html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/avatar-line-000.png&quot;)", card_html)
+        self.assertNotIn('src="/assets/outputs/project-7/images/line-000.png"', card_html)
 
     def test_storyboard_card_media_uses_selected_image_when_both_images_exist(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -407,10 +408,13 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn('action="/projects/7/segments/2/redo"', inspector_html)
         self.assertNotIn('<div class="redo-action">images</div>', inspector_html)
         self.assertIn('action="/projects/7/segments/2/approval"', html)
-        self.assertIn('name="video_approved" value="1" checked', html)
+        self.assertIn('name="video_approved" value="0"', html)
+        self.assertIn('class="finish-toggle finish-toggle-active"', html)
+        self.assertIn("Mark as unfinished", html)
         self.assertNotIn('<div class="segment-inspector-label">Status</div>', inspector_html)
         self.assertIn('class="storyboard-card-media storyboard-card-media-image"', html)
         self.assertIn(".segment-inspector", _page("Demo", ""))
+        self.assertIn("minmax(360px, 520px)", _page("Demo", ""))
 
     def test_storyboard_cards_select_active_inspector_and_show_progress(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -526,11 +530,17 @@ class AppHtmlTests(unittest.TestCase):
         html = _segment_inspector_html(project, "segments", segment)
 
         self.assertIn('class="inspector-prompt-preview"', html)
-        self.assertIn('class="inspector-prompt-image"', html)
+        self.assertIn('class="inspector-prompt-media-grid"', html)
+        self.assertIn('class="inspector-prompt-media inspector-prompt-media-image"', html)
+        self.assertIn('class="inspector-prompt-media inspector-prompt-media-avatar inspector-prompt-media-wide"', html)
+        self.assertIn('src="/assets/outputs/project-7/images/segment-003.png', html)
         self.assertIn('src="/assets/outputs/project-7/images/avatar-segment-003.png', html)
-        self.assertIn("Show image", html)
+        self.assertIn("<span>Image</span>", html)
+        self.assertIn("<span>Avatar</span>", html)
+        self.assertNotIn("Show image", html)
         self.assertIn("Edit image prompt", html)
         self.assertIn("Edit video prompt", html)
+        self.assertIn('onclick="openImageLightbox(&#x27;/assets/outputs/project-7/images/segment-003.png&#x27;)"', html)
         self.assertIn('onclick="openImageLightbox(&#x27;/assets/outputs/project-7/images/avatar-segment-003.png&#x27;)"', html)
         self.assertIn('id="image-prompt-modal-segments-3"', html)
         self.assertIn('id="video-prompt-modal-segments-3"', html)
@@ -545,6 +555,35 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("<div class=\"segment-inspector-label\">Redo</div>", html)
         self.assertNotIn("<div class=\"segment-inspector-label\">Status</div>", html)
         self.assertNotIn('action="/projects/7/segments/3/redo"', html)
+
+    def test_segment_inspector_orders_actions_source_and_preview(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segment = {
+            "segment_index": 3,
+            "kind": "lyrics",
+            "section": "Verse",
+            "is_chorus": 0,
+            "clean_text": "Prompted segment",
+            "start_sec": None,
+            "end_sec": None,
+            "prompt": "image prompt",
+            "video_prompt": "video prompt",
+            "image_path": "outputs/project-7/images/segment-003.png",
+            "avatar_image_path": "outputs/project-7/images/avatar-segment-003.png",
+            "clip_path": None,
+            "last_action": "clips",
+            "video_approved": 0,
+            "status": "done",
+            "error": "",
+        }
+
+        html = _segment_inspector_html(project, "segments", segment)
+
+        self.assertLess(html.index("Next renders"), html.index("Image source"))
+        self.assertLess(html.index("Image source"), html.index("Preview"))
+        self.assertIn('class="compact-form image-choice image-choice-inline"', html)
+        self.assertIn('class="finish-toggle finish-toggle-inactive"', html)
+        self.assertIn("Mark as finished", html)
 
     def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
         html = _page("Demo", "body")
@@ -1767,9 +1806,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("openClipLightbox('/assets/outputs/project-1/clips/segment-000.mp4", html)
         self.assertIn('<td class="assets-column">', html)
         self.assertIn('<div class="asset-previews">', html)
-        self.assertIn('<form class="compact-form image-choice"', html)
+        self.assertIn('<form class="compact-form image-choice image-choice-inline"', html)
         self.assertLess(table_html.index("segment-000.png"), table_html.index("avatar-segment-000.png"))
-        self.assertLess(table_html.index('class="asset-previews"'), table_html.index('class="compact-form image-choice"'))
+        self.assertLess(table_html.index('class="asset-previews"'), table_html.index('class="compact-form image-choice image-choice-inline"'))
         self.assertNotIn('<span class="asset-path">', html)
 
     def test_project_page_is_full_width_and_includes_image_lightbox(self):

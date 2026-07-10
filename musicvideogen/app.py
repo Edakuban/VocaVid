@@ -806,7 +806,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .view-switch button {{ margin: 0; border-radius: 6px; background: transparent; color: #20302d; }}
     .view-switch button.active {{ background: #20302d; color: #fff; }}
     .project-storyboard {{ display: grid; gap: 12px; }}
-    .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: 14px; align-items: start; }}
+    .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
     .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
@@ -842,8 +842,15 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .inspector-generation-actions .compact-form {{ margin: 0; }}
     .segment-inspector .storyboard-card-media {{ border-radius: 6px; border: 1px solid #d8d3c8; }}
     .inspector-prompt-preview {{ display: grid; gap: 8px; align-items: start; }}
-    .inspector-prompt-image {{ display: block; width: min(50%, 190px); max-height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; background: #eef1ed; }}
+    .inspector-prompt-media-grid {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px; align-items: end; }}
+    .inspector-prompt-media {{ display: grid; gap: 5px; min-width: 0; }}
+    .inspector-prompt-media span {{ color: #5b6462; font-size: 11px; font-weight: 850; text-transform: uppercase; }}
+    .inspector-prompt-media .preview-button {{ display: block; width: 100%; padding: 0; border: 0; background: transparent; }}
+    .inspector-prompt-image {{ display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; background: #eef1ed; }}
     .inspector-prompt-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .finish-toggle {{ width: 100%; border-radius: 8px; }}
+    .finish-toggle-inactive {{ background: #eef1ed; color: #20302d; border: 1px solid #c7cdc9; }}
+    .finish-toggle-active {{ background: #178a68; color: #fff; border: 1px solid #178a68; }}
     .image-prompt-modal-content {{ width: min(760px, 94vw); }}
     .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
     .project-modal-content {{ width: min(860px, 94vw); }}
@@ -882,6 +889,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .assets-stack {{ display: grid; gap: 8px; align-content: start; }}
     .asset-previews {{ display: flex; gap: 8px; align-items: flex-start; }}
     .image-choice {{ display: grid; gap: 6px; min-width: 90px; }}
+    .image-choice-inline {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
     .image-choice label {{ display: flex; gap: 6px; align-items: center; margin: 0; font-weight: 500; }}
     .image-choice input {{ width: auto; }}
     .asset-path {{ display: block; max-width: 140px; margin-top: 4px; color: #5b6462; overflow-wrap: anywhere; font-size: 11px; }}
@@ -1681,7 +1689,7 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
     prompt = _row_value(row, "prompt", "") or ""
     video_prompt = _row_value(row, "video_prompt", "") or ""
     image_choice_html = _image_choice_html(project["id"], item_kind, item_index, row)
-    approval_html = _approval_html(project["id"], item_kind, item_index, row)
+    approval_html = _approval_html(project["id"], item_kind, item_index, row, button=True)
     prompt_action = f"/projects/{project['id']}/{item_kind}/{item_index}/prompts"
     image_prompt_modal_id = f"image-prompt-modal-{item_kind}-{item_index}"
     video_prompt_modal_id = f"video-prompt-modal-{item_kind}-{item_index}"
@@ -1708,6 +1716,8 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
     return f"""
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
         <h3>Selected {label} {_text(item_index)}</h3>
+        {quick_actions}
+        {image_choice_section}
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Preview</div>
           {media_html}
@@ -1723,11 +1733,9 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         </div>
         {image_prompt_modal}
         {video_prompt_modal}
-        {image_choice_section}
         <div class="segment-inspector-actions">
           {approval_html}
         </div>
-        {quick_actions}
       </aside>
 """
 
@@ -2298,19 +2306,30 @@ def _image_choice_html(project_id: int, item_kind: str, item_index: int, row) ->
     image_checked = " checked" if selected == "image" else ""
     avatar_checked = " checked" if selected != "image" else ""
     return f"""
-<form class="compact-form image-choice" action="/projects/{project_id}/{item_kind}/{item_index}/image-source" method="post">
+<form class="compact-form image-choice image-choice-inline" action="/projects/{project_id}/{item_kind}/{item_index}/image-source" method="post">
   <label><input type="radio" name="selected_image_source" value="image"{image_checked} onchange="rememberScrollPosition(); this.form.submit()"> Image</label>
   <label><input type="radio" name="selected_image_source" value="avatar"{avatar_checked} onchange="rememberScrollPosition(); this.form.submit()"> Avatar</label>
 </form>
 """
 
 
-def _approval_html(project_id: int, item_kind: str, item_index: int, row) -> str:
-    checked = " checked" if bool(_row_value(row, "video_approved", 0)) else ""
-    return f"""
+def _approval_html(project_id: int, item_kind: str, item_index: int, row, button: bool = False) -> str:
+    approved = bool(_row_value(row, "video_approved", 0))
+    if not button:
+        checked = " checked" if approved else ""
+        return f"""
 <form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post">
   <input type="hidden" name="video_approved" value="0">
   <label class="approval-label"><input type="checkbox" name="video_approved" value="1"{checked} onchange="rememberScrollPosition(); this.form.submit()"> OK</label>
+</form>
+"""
+    next_value = "0" if approved else "1"
+    button_class = "finish-toggle finish-toggle-active" if approved else "finish-toggle finish-toggle-inactive"
+    label = "Mark as unfinished" if approved else "Mark as finished"
+    return f"""
+<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" onsubmit="rememberScrollPosition()">
+  <input type="hidden" name="video_approved" value="{next_value}">
+  <button class="{button_class}" type="submit">{label}</button>
 </form>
 """
 
@@ -2318,31 +2337,38 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row) -> str
 def _prompt_preview_html(project, row, image_modal_id: str, video_modal_id: str) -> str:
     image_path = _row_value(row, "image_path", "")
     avatar_image_path = _row_value(row, "avatar_image_path", "")
-    preferred_path = avatar_image_path or image_path
-    if preferred_path:
-        preferred_url = _generated_asset_url(project, preferred_path)
-        preferred_url_attr = _url_for_html_attribute(preferred_url)
-        image_html = (
-            f'<button class="preview-button" type="button" onclick="openImageLightbox({_attr(_js_arg(preferred_url_attr))})">'
-            f'<img class="inspector-prompt-image" src="{_attr(preferred_url_attr)}" alt="Prompt reference image">'
-            "</button>"
-        )
+    media_html = ""
+    if image_path:
+        media_html += _inspector_prompt_media_html(project, image_path, "Image", "image", wide=False)
+    if avatar_image_path:
+        media_html += _inspector_prompt_media_html(project, avatar_image_path, "Avatar", "avatar", wide=True)
+    if media_html:
+        media_html = f'<div class="inspector-prompt-media-grid">{media_html}</div>'
     else:
-        image_html = '<div class="storyboard-card-media storyboard-card-media-empty"><span class="storyboard-empty-mark"><strong>No image yet</strong><span>Generate an image or avatar to preview this prompt.</span></span></div>'
-    show_image_button = ""
-    if avatar_image_path and image_path:
-        image_url = _generated_asset_url(project, image_path)
-        show_image_button = f'<button type="button" onclick="openImageLightbox({_attr(_js_arg(_url_for_html_attribute(image_url)))})">Show image</button>'
+        media_html = '<div class="storyboard-card-media storyboard-card-media-empty"><span class="storyboard-empty-mark"><strong>No image yet</strong><span>Generate an image or avatar to preview this prompt.</span></span></div>'
     return f"""
 <div class="inspector-prompt-preview">
-  {image_html}
+  {media_html}
   <div class="inspector-prompt-actions">
     <button type="button" onclick="openPromptModal({_attr(_js_arg(image_modal_id))})">Edit image prompt</button>
     <button type="button" onclick="openPromptModal({_attr(_js_arg(video_modal_id))})">Edit video prompt</button>
-    {show_image_button}
   </div>
 </div>
 """
+
+
+def _inspector_prompt_media_html(project, path: str, label: str, kind: str, wide: bool = False) -> str:
+    url = _generated_asset_url(project, path)
+    url_attr = _url_for_html_attribute(url)
+    wide_class = " inspector-prompt-media-wide" if wide else ""
+    return (
+        f'<div class="inspector-prompt-media inspector-prompt-media-{_attr(kind)}{wide_class}">'
+        f'<button class="preview-button" type="button" onclick="openImageLightbox({_attr(_js_arg(url_attr))})">'
+        f'<img class="inspector-prompt-image" src="{_attr(url_attr)}" alt="{_attr(label)} prompt reference">'
+        "</button>"
+        f"<span>{_text(label)}</span>"
+        "</div>"
+    )
 
 
 def _prompt_modal_html(modal_id: str, title: str, editor_html: str) -> str:
