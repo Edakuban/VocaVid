@@ -811,11 +811,12 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-storyboard {{ display: grid; gap: 12px; }}
     .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
-    .storyboard-card {{ display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
+    .storyboard-card {{ position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
     .storyboard-card-approved {{ background: #dff3e8; border-color: rgba(24,151,108,.5); }}
     .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
-    @keyframes storyboardActivePulse {{ 0%, 100% {{ box-shadow: 0 0 0 3px rgba(53,224,179,.3), 0 18px 48px rgba(53,224,179,.18); }} 50% {{ box-shadow: 0 0 0 6px rgba(53,224,179,.22), 0 22px 58px rgba(53,224,179,.28); }} }}
-    .storyboard-card-active {{ border-color: var(--studio-accent); box-shadow: 0 0 0 3px rgba(53,224,179,.3), 0 18px 48px rgba(53,224,179,.18); transform: translateY(-2px); animation: storyboardActivePulse 1.8s ease-in-out infinite; }}
+    @keyframes storyboardActiveRing {{ to {{ transform: rotate(360deg); }} }}
+    .storyboard-card-active {{ border-color: transparent; box-shadow: 0 0 0 3px rgba(53,224,179,.18), 0 18px 48px rgba(255,79,139,.16); transform: translateY(-2px); }}
+    .storyboard-card-active::before {{ content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: inherit; padding: 3px; background: conic-gradient(from 0deg, var(--studio-accent) 0 23%, transparent 23% 27%, var(--studio-pink) 27% 50%, transparent 50% 54%, var(--studio-accent) 54% 77%, transparent 77% 81%, var(--studio-pink) 81% 100%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; animation: storyboardActiveRing 2.2s linear infinite; }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
     .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
     .storyboard-card-image {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
