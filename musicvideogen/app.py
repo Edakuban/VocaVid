@@ -979,8 +979,11 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function projectStoryboardHasPlayingVideo(storyboard) {{
       return Array.from(storyboard.querySelectorAll('.storyboard-card-video')).some((video) => !video.paused && !video.ended);
     }}
+    function projectStoryboardHasOpenPromptModal(storyboard) {{
+      return !!storyboard.querySelector('.prompt-modal.open');
+    }}
     function shouldReplaceProjectStoryboard(storyboard) {{
-      return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard) && !projectStoryboardHasPlayingVideo(storyboard);
+      return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard) && !projectStoryboardHasPlayingVideo(storyboard) && !projectStoryboardHasOpenPromptModal(storyboard);
     }}
     function activeProjectStoryboardTemplateId(storyboard) {{
       const activeCard = storyboard.querySelector('.storyboard-card-active');
@@ -1116,12 +1119,12 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       if (!box) return;
       box.classList.remove('open');
     }}
-    function openImagePromptModal(id) {{
+    function openPromptModal(id) {{
       const box = document.getElementById(id);
       if (!box) return;
       box.classList.add('open');
     }}
-    function closeImagePromptModal(id) {{
+    function closePromptModal(id) {{
       const box = document.getElementById(id);
       if (!box) return;
       box.classList.remove('open');
@@ -1681,9 +1684,18 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
     approval_html = _approval_html(project["id"], item_kind, item_index, row)
     prompt_action = f"/projects/{project['id']}/{item_kind}/{item_index}/prompts"
     image_prompt_modal_id = f"image-prompt-modal-{item_kind}-{item_index}"
-    image_prompt_preview = _image_prompt_preview_html(project, row, image_prompt_modal_id)
-    image_prompt_modal = _image_prompt_modal_html(image_prompt_modal_id, prompt_action, prompt)
-    video_prompt_editor = _video_prompt_editor_html(prompt_action, video_prompt)
+    video_prompt_modal_id = f"video-prompt-modal-{item_kind}-{item_index}"
+    prompt_preview = _prompt_preview_html(project, row, image_prompt_modal_id, video_prompt_modal_id)
+    image_prompt_modal = _prompt_modal_html(
+        image_prompt_modal_id,
+        "Edit image prompt",
+        _image_prompt_editor_html(prompt_action, prompt),
+    )
+    video_prompt_modal = _prompt_modal_html(
+        video_prompt_modal_id,
+        "Edit video prompt",
+        _video_prompt_editor_html(prompt_action, video_prompt),
+    )
     media_html = _storyboard_card_media_html(project, row)
     text_html = _multiline_text_html(text) or _text(text)
     timing_html = f'<div class="storyboard-card-status">{_text(timing)}</div>' if timing else ""
@@ -1707,10 +1719,10 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         </div>
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Prompts</div>
-          {image_prompt_preview}
-          {video_prompt_editor}
+          {prompt_preview}
         </div>
         {image_prompt_modal}
+        {video_prompt_modal}
         {image_choice_section}
         <div class="segment-inspector-actions">
           {approval_html}
@@ -2303,39 +2315,45 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row) -> str
 """
 
 
-def _image_prompt_preview_html(project, row, modal_id: str) -> str:
+def _prompt_preview_html(project, row, image_modal_id: str, video_modal_id: str) -> str:
     image_path = _row_value(row, "image_path", "")
     avatar_image_path = _row_value(row, "avatar_image_path", "")
     preferred_path = avatar_image_path or image_path
     if preferred_path:
         preferred_url = _generated_asset_url(project, preferred_path)
-        image_html = f'<img class="inspector-prompt-image" src="{_attr(_url_for_html_attribute(preferred_url))}" alt="Prompt reference image">'
+        preferred_url_attr = _url_for_html_attribute(preferred_url)
+        image_html = (
+            f'<button class="preview-button" type="button" onclick="openImageLightbox({_attr(_js_arg(preferred_url_attr))})">'
+            f'<img class="inspector-prompt-image" src="{_attr(preferred_url_attr)}" alt="Prompt reference image">'
+            "</button>"
+        )
     else:
         image_html = '<div class="storyboard-card-media storyboard-card-media-empty"><span class="storyboard-empty-mark"><strong>No image yet</strong><span>Generate an image or avatar to preview this prompt.</span></span></div>'
     show_image_button = ""
     if avatar_image_path and image_path:
         image_url = _generated_asset_url(project, image_path)
-        show_image_button = f'<button type="button" onclick="openImageLightbox({_attr(_js_string_arg(_url_for_html_attribute(image_url)))})">Show image</button>'
+        show_image_button = f'<button type="button" onclick="openImageLightbox({_attr(_js_arg(_url_for_html_attribute(image_url)))})">Show image</button>'
     return f"""
 <div class="inspector-prompt-preview">
   {image_html}
   <div class="inspector-prompt-actions">
-    <button type="button" onclick="openImagePromptModal({_attr(_js_arg(modal_id))})">Edit image prompt</button>
+    <button type="button" onclick="openPromptModal({_attr(_js_arg(image_modal_id))})">Edit image prompt</button>
+    <button type="button" onclick="openPromptModal({_attr(_js_arg(video_modal_id))})">Edit video prompt</button>
     {show_image_button}
   </div>
 </div>
 """
 
 
-def _image_prompt_modal_html(modal_id: str, action: str, prompt: str) -> str:
+def _prompt_modal_html(modal_id: str, title: str, editor_html: str) -> str:
     return f"""
-<div id="{_attr(modal_id)}" class="modal lightbox" onclick="if (event.target === this) closeImagePromptModal({_attr(_js_arg(modal_id))})">
+<div id="{_attr(modal_id)}" class="modal lightbox prompt-modal" onclick="if (event.target === this) closePromptModal({_attr(_js_arg(modal_id))})">
   <div class="modal-content image-prompt-modal-content">
     <div class="studio-panel-head">
-      <h2>Edit image prompt</h2>
-      <button class="studio-button studio-button-secondary" type="button" onclick="closeImagePromptModal({_attr(_js_arg(modal_id))})">Close</button>
+      <h2>{_text(title)}</h2>
+      <button class="studio-button studio-button-secondary" type="button" onclick="closePromptModal({_attr(_js_arg(modal_id))})">Close</button>
     </div>
-    {_image_prompt_editor_html(action, prompt)}
+    {editor_html}
   </div>
 </div>
 """

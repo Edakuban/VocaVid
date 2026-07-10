@@ -502,7 +502,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/clips"', html)
         self.assertIn("<button>Gen Clips</button>", html)
 
-    def test_segment_inspector_uses_compact_image_prompt_lightbox_and_hides_noise(self):
+    def test_segment_inspector_uses_compact_prompt_lightboxes_and_hides_noise(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
         segment = {
             "segment_index": 3,
@@ -530,14 +530,28 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('src="/assets/outputs/project-7/images/avatar-segment-003.png', html)
         self.assertIn("Show image", html)
         self.assertIn("Edit image prompt", html)
+        self.assertIn("Edit video prompt", html)
+        self.assertIn('onclick="openImageLightbox(&#x27;/assets/outputs/project-7/images/avatar-segment-003.png&#x27;)"', html)
         self.assertIn('id="image-prompt-modal-segments-3"', html)
-        self.assertIn('onclick="openImagePromptModal(&#x27;image-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('id="video-prompt-modal-segments-3"', html)
+        self.assertIn('onclick="openPromptModal(&#x27;image-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('onclick="openPromptModal(&#x27;video-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('onclick="if (event.target === this) closePromptModal(&#x27;image-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('onclick="if (event.target === this) closePromptModal(&#x27;video-prompt-modal-segments-3&#x27;)"', html)
         self.assertIn('action="/projects/7/segments/3/prompts/image/save"', html)
         self.assertIn('name="prompt"', html)
         self.assertIn('action="/projects/7/segments/3/prompts/video/save"', html)
+        self.assertIn('name="video_prompt"', html)
         self.assertNotIn("<div class=\"segment-inspector-label\">Redo</div>", html)
         self.assertNotIn("<div class=\"segment-inspector-label\">Status</div>", html)
         self.assertNotIn('action="/projects/7/segments/3/redo"', html)
+
+    def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
+        html = _page("Demo", "body")
+
+        self.assertIn("function projectStoryboardHasOpenPromptModal(storyboard)", html)
+        self.assertIn("storyboard.querySelector('.prompt-modal.open')", html)
+        self.assertIn("!projectStoryboardHasOpenPromptModal(storyboard)", html)
 
     def test_storyboard_includes_line_inspector_when_segments_are_absent(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
