@@ -1808,14 +1808,9 @@ def _storyboard_card_media_html(project, row) -> str:
     clip_path = _row_value(row, "clip_path", "")
     if clip_path:
         url = _generated_asset_url(project, clip_path)
-        poster_path = _storyboard_image_path(row)
-        poster_attr = ""
-        if poster_path:
-            poster_url = _generated_asset_url(project, poster_path)
-            poster_attr = f' poster="{_attr(_url_for_media_attribute(poster_url))}"'
         return f"""
         <div class="storyboard-card-media storyboard-card-media-clip" onclick="toggleStoryboardVideo(event, this)">
-          <video class="storyboard-card-video" src="{_attr(_url_for_media_attribute(url))}"{poster_attr} preload="none" playsinline></video>
+          <video class="storyboard-card-video" src="{_attr(_url_for_media_attribute(url))}" preload="metadata" playsinline></video>
           <button class="storyboard-video-toggle" type="button" aria-label="Play clip" onclick="toggleStoryboardVideo(event, this)">
             <span class="storyboard-play-icon">▶</span>
           </button>
