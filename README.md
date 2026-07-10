@@ -84,18 +84,26 @@ start.bat
 
 ## How the Workflow Feels
 
+1. Follow the [ComfyUI Quick Start Guide](https://docs.comfy.org/get_started) to install and launch ComfyUI.
+2. Load the workflow JSON files from VocaVid's `workflows/` folder into ComfyUI.
+3. ComfyUI will likely show errors because some models or custom nodes are missing.
+4. Install the missing custom nodes and download the required models.
+5. Keep in mind that the required model files can take up several gigabytes of disk space.
+6. Once all dependencies are installed, ComfyUI is ready to run the workflows and use them with VocaVid.
+
+After the initial setup, the normal VocaVid workflow looks like this:
+
 1. Start ComfyUI.
-2. Put the required ComfyUI workflow JSON files into `workflows/`.
-3. Start VocaVid with `python -m musicvideogen serve`.
-4. Create a project with a WAV file, SUNO-style lyrics, genre/style text,
+2. Start VocaVid with `python -m musicvideogen serve`.
+3. Create a project with a WAV file, SUNO-style lyrics, genre/style text,
    reference images, resolution, FPS, and segment grouping settings.
-5. Click `Align` to align lyrics and build render segments.
-6. Review and adjust line or segment timing where needed.
-7. Click `Scene Plan`, then edit and save the plan if needed.
-8. Generate image prompts, images, avatar images, video prompts, and clips.
-9. Review clips row by row, switch between `Image` and `Avatar` sources, and
+4. Click `Align` to align lyrics and build render segments.
+5. Review and adjust line or segment timing where needed.
+6. Click `Scene Plan`, then edit and save the plan if needed.
+7. Generate image prompts, images, avatar images, video prompts, and clips.
+8. Review clips row by row, switch between `Image` and `Avatar` sources, and
    mark good clips with `OK`.
-10. Click `Assemble Final`.
+9. Click `Assemble Final`.
 
 Most actions can run on selected rows only. Failed or weak segments can be
 rerendered without losing the rest of the project, and rows marked `OK` are
