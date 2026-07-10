@@ -839,7 +839,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-progress-strip {{ display: flex; flex-wrap: wrap; gap: 5px; }}
     .progress-step {{ border-radius: 999px; border: 1px solid #d8d3c8; padding: 3px 7px; color: #6a7470; background: #f2f4ef; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
     .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
-    .segment-inspector {{ position: sticky; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
+    .segment-inspector {{ position: sticky; z-index: 70; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
     .segment-inspector h3 {{ margin: 0; color: #20302d; }}
     .segment-inspector-nav {{ display: flex; justify-content: space-between; align-items: center; margin: -2px 0 0; }}
     .segment-nav-button {{ border: 0; padding: 0; }}
@@ -863,6 +863,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .finish-toggle {{ display: block; width: 100%; border-radius: 8px; }}
     .finish-toggle-inactive {{ background: #eef1ed; color: #20302d; border: 1px solid #c7cdc9; }}
     .finish-toggle-active {{ background: #178a68; color: #fff; border: 1px solid #178a68; }}
+    .prompt-modal.lightbox {{ z-index: 120; }}
     .image-prompt-modal-content {{ width: min(760px, 94vw); }}
     .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
     .project-modal-content {{ width: min(860px, 94vw); }}

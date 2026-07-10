@@ -619,6 +619,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("background: #e53d91;", html)
         self.assertIn(".storyboard-ok-badge { position: absolute;", html)
         self.assertIn("pointer-events: none;", html)
+        self.assertIn(".segment-inspector { position: sticky; z-index: 70;", html)
+        self.assertIn(".prompt-modal.lightbox { z-index: 120;", html)
         self.assertIn(".segment-inspector-nav { display: flex; justify-content: space-between;", html)
         self.assertIn(".segment-nav-button { border: 0;", html)
 
