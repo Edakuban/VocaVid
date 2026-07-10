@@ -14,6 +14,18 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("if (!projectRowChanged(row, replacement)) return", app_source)
         self.assertIn("projectRowServerHtml.set(replacement.id, replacement.outerHTML)", app_source)
 
+    def test_status_polling_skips_unchanged_storyboard(self):
+        app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")
+
+        self.assertIn("let projectStoryboardServerHtml = ''", app_source)
+        self.assertIn("function rememberProjectStoryboard", app_source)
+        self.assertIn("function projectStoryboardChanged", app_source)
+        self.assertIn("projectStoryboardServerHtml || storyboard.outerHTML", app_source)
+        self.assertIn("return previousHtml !== replacement.outerHTML", app_source)
+        self.assertIn("if (!projectStoryboardChanged(storyboard, replacement)) return", app_source)
+        self.assertIn("projectStoryboardServerHtml = replacement.outerHTML", app_source)
+        self.assertLess(app_source.index("if (!projectStoryboardChanged(storyboard, replacement)) return"), app_source.index("storyboard.replaceWith(replacement)"))
+
     def test_project_actions_refresh_queue_estimate_after_submit_and_poll_callback(self):
         app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")
 

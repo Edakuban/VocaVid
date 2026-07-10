@@ -1276,8 +1276,14 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("function replaceProjectStoryboard", html)
         self.assertIn("data.storyboard_html", html)
         self.assertIn("const storyboard = document.getElementById('project-storyboard')", html)
+        self.assertIn("let projectStoryboardServerHtml = ''", html)
+        self.assertIn("function rememberProjectStoryboard", html)
+        self.assertIn("function projectStoryboardChanged", html)
+        self.assertIn("if (!projectStoryboardChanged(storyboard, replacement)) return", html)
+        self.assertIn("projectStoryboardServerHtml = replacement.outerHTML", html)
         self.assertIn("replacement.hidden = storyboard.hidden", html)
         self.assertIn("storyboard.replaceWith(replacement)", html)
+        self.assertLess(html.index("if (!projectStoryboardChanged(storyboard, replacement)) return"), html.index("storyboard.replaceWith(replacement)"))
 
     def test_project_status_polling_skips_storyboard_when_editor_is_active_or_dirty(self):
         html = _page("Demo", "")

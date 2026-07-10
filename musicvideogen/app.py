@@ -905,10 +905,16 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
   </style>
   <script>
     const projectRowServerHtml = new Map();
+    let projectStoryboardServerHtml = '';
     function rememberProjectRows() {{
       document.querySelectorAll('tr[id^="line-row-"], tr[id^="segment-row-"]').forEach((row) => {{
         projectRowServerHtml.set(row.id, row.outerHTML);
       }});
+    }}
+    function rememberProjectStoryboard() {{
+      const storyboard = document.getElementById('project-storyboard');
+      if (!storyboard) return;
+      projectStoryboardServerHtml = storyboard.outerHTML;
     }}
     function copySelectedLines(form) {{
       form.querySelectorAll('input[name="selected_lines"]').forEach((input) => input.remove());
@@ -993,6 +999,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function shouldReplaceProjectStoryboard(storyboard) {{
       return !projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard) && !projectStoryboardHasPlayingVideo(storyboard) && !projectStoryboardHasOpenPromptModal(storyboard);
     }}
+    function projectStoryboardChanged(storyboard, replacement) {{
+      const previousHtml = projectStoryboardServerHtml || storyboard.outerHTML;
+      return previousHtml !== replacement.outerHTML;
+    }}
     function activeProjectStoryboardTemplateId(storyboard) {{
       const activeCard = storyboard.querySelector('.storyboard-card-active');
       return activeCard ? activeCard.dataset.inspectorTemplate : '';
@@ -1012,6 +1022,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       template.innerHTML = html.trim();
       const replacement = template.content.firstElementChild;
       if (!replacement) return;
+      if (!projectStoryboardChanged(storyboard, replacement)) return;
+      projectStoryboardServerHtml = replacement.outerHTML;
       replacement.hidden = storyboard.hidden;
       storyboard.replaceWith(replacement);
       restoreProjectStoryboardSelection(replacement, activeTemplateId);
@@ -1205,6 +1217,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     document.addEventListener('submit', rememberScrollPosition);
     document.addEventListener('DOMContentLoaded', () => {{
       rememberProjectRows();
+      rememberProjectStoryboard();
       const storyboard = document.getElementById('project-storyboard');
       const storedStoryboardTemplate = sessionStorage.getItem(storyboardSelectionStorageKey());
       if (storyboard && storedStoryboardTemplate) {{
