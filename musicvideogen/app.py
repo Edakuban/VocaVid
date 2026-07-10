@@ -722,7 +722,9 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .wip-button:hover, .wip-button:focus {{ background: #c92878; }}
     .used-button {{ background: #555; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
     .used-button:hover, .used-button:focus {{ background: #444; }}
-    .danger-panel {{ border-color: #e2b1b1; background: #fff8f8; color: #1c2526; }}
+    .danger-panel {{ margin-top: 24px; border-color: rgba(255,79,139,.42); background: transparent; color: #ff4f8b; }}
+    .danger-panel[open] {{ background: transparent; }}
+    .danger-panel .compact-form {{ background: transparent; }}
     .danger-button {{ border: 1px solid rgba(255,79,139,.42); background: rgba(255,79,139,.12); color: #ffd7e5; }}
     .danger-button:hover, .danger-button:focus {{ background: rgba(255,79,139,.18); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
@@ -833,7 +835,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-progress-strip {{ display: flex; flex-wrap: wrap; gap: 5px; }}
     .progress-step {{ border-radius: 999px; border: 1px solid #d8d3c8; padding: 3px 7px; color: #6a7470; background: #f2f4ef; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
     .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
-    .segment-inspector {{ position: sticky; top: 132px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 148px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
+    .segment-inspector {{ position: sticky; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
     .segment-inspector h3 {{ margin: 0; color: #20302d; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
     .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}

@@ -42,7 +42,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("form, .panel { background: #fff; border: 1px solid #d8d3c8; color: #1c2526;", html)
         self.assertIn("table { width: 100%; border-collapse: collapse; background: white; color: #1c2526;", html)
         self.assertIn("button, .button { border: 0; border-radius: 12px; background: var(--studio-accent);", html)
-        self.assertIn(".danger-panel { border-color: #e2b1b1; background: #fff8f8; color: #1c2526;", html)
+        self.assertIn(".danger-panel { margin-top: 24px; border-color: rgba(255,79,139,.42); background: transparent; color: #ff4f8b;", html)
+        self.assertIn(".danger-panel[open] { background: transparent;", html)
         self.assertIn(".queue-estimate { margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d;", html)
 
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
@@ -1661,7 +1662,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("background: rgba(12,18,20,.94)", html)
         self.assertIn(".project-title-row h1 { color: var(--studio-text);", html)
         self.assertIn(".segment-inspector { position: sticky;", html)
-        self.assertIn("top: 132px", html)
+        self.assertIn("top: 156px", html)
         self.assertNotIn("<strong>Audio:</strong>", html)
         self.assertNotIn("<strong>Final:</strong>", html)
 
@@ -1677,6 +1678,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("return confirm('Projekt wirklich leeren?", html)
         self.assertIn("return confirm('Projekt wirklich loeschen?", html)
         self.assertIn('class="danger-button"', html)
+        self.assertIn(".danger-panel { margin-top: 24px;", _page("Demo", ""))
+        self.assertIn(".danger-panel[open] { background: transparent;", _page("Demo", ""))
+        self.assertIn(".danger-panel .compact-form { background: transparent;", _page("Demo", ""))
         self.assertGreater(html.index('action="/projects/7/clear"'), html.index('<table>'))
         self.assertGreater(html.index('action="/projects/7/delete"'), html.index('action="/projects/7/clear"'))
 
