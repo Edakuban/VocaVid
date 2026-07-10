@@ -315,6 +315,57 @@ class AppEndpointTests(unittest.TestCase):
             app_module.DB_PATH = old_db_path
             app_module.Pipeline = old_pipeline
 
+    def test_generate_prompts_endpoint_queues_image_then_video_prompt_per_line(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        calls = []
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\nTwo\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {"name": "Demo", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+
+                class RecordingPipeline:
+                    def __init__(self, store, workspace):
+                        self.store = store
+
+                    def generate_prompts(self, project_id, selected_line_indices=None):
+                        calls.append(("image", list(selected_line_indices or [])))
+
+                    def generate_video_prompts(self, project_id, selected_line_indices=None):
+                        calls.append(("video", list(selected_line_indices or [])))
+
+                app_module.Pipeline = RecordingPipeline
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.post(f"/projects/{project_id}/generate-prompts", follow_redirects=False)
+
+                self.assertEqual(response.status_code, 303)
+                for _ in range(30):
+                    if len(calls) >= 4:
+                        break
+                    time.sleep(0.05)
+                self.assertEqual(calls, [("image", [0]), ("video", [0]), ("image", [1]), ("video", [1])])
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
     def test_project_status_endpoint_returns_current_segment_row_html(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS

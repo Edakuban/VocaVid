@@ -153,6 +153,19 @@ def create_app() -> FastAPI:
         )
         return True
 
+    def submit_prompt_actions(project_id: int, selected_indices: list[int] | None = None) -> bool:
+        selected = list(selected_indices or [])
+        item_kind = _action_item_kind("prompts", bool(store.list_segments(project_id)))
+        indices = _selected_action_indices(project_id, item_kind, selected, store)
+        if not indices:
+            return False
+        submitted = False
+        for index in indices:
+            submitted_prompts = submit_project_action(project_id, "prompts", [index])
+            submitted_video_prompts = submit_project_action(project_id, "video-prompts", [index])
+            submitted = submitted or submitted_prompts or submitted_video_prompts
+        return submitted
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         active_jobs = jobs.active_jobs()
@@ -408,6 +421,13 @@ def create_app() -> FastAPI:
     def prompts(project_id: int, selected_lines: list[int] = Form(default=[])):
         if submit_project_action(project_id, "prompts", selected_lines):
             mark_used(project_id, "prompts")
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/generate-prompts")
+    def generate_prompts(project_id: int, selected_lines: list[int] = Form(default=[])):
+        if submit_prompt_actions(project_id, selected_lines):
+            mark_used(project_id, "prompts")
+            mark_used(project_id, "video-prompts")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/images")
@@ -793,10 +813,14 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       .stat-grid, .project-grid, .queue-summary-grid {{ grid-template-columns: 1fr; }}
       .project-card-link {{ grid-template-columns: 72px minmax(0, 1fr); }}
     }}
-    .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: var(--studio-text); white-space: nowrap; }}
+    .open-count-label {{ align-self: center; font-weight: 750; color: var(--studio-text); white-space: nowrap; }}
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(12,18,20,.94); border-bottom: 1px solid var(--studio-line); color: var(--studio-text); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.18); }}
     .project-title-row h1 {{ color: var(--studio-text); text-shadow: 0 1px 18px rgba(0,0,0,.35); }}
-    .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
+    .project-title-row {{ display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); gap: 12px; align-items: center; margin-bottom: 12px; }}
+    .project-title-left, .project-title-center, .project-title-right {{ display: flex; align-items: center; gap: 10px; min-width: 0; }}
+    .project-title-left {{ justify-content: flex-start; }}
+    .project-title-center {{ justify-content: center; }}
+    .project-title-right {{ justify-content: flex-end; }}
     .project-title-row .button {{ margin-left: 0; }}
     .project-icon-button {{ width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 12px; border: 1px solid var(--studio-line); background: rgba(255,255,255,.075); color: var(--studio-text); font-size: 18px; }}
     .project-icon-button:hover, .project-icon-button:focus {{ background: rgba(53,224,179,.16); border-color: rgba(53,224,179,.42); }}
@@ -873,8 +897,9 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
     @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} }}
     .project-table-view[hidden] {{ display: none; }}
-    .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
-    .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
+    .queue-estimate {{ padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
+    .danger-panel .actions {{ padding-top: 12px; }}
+    .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: white; color: #1c2526; border: 1px solid #d8d3c8; }}
     th, td {{ padding: 8px; border-bottom: 1px solid #e7e1d6; text-align: left; vertical-align: top; font-size: 13px; }}
     th {{ background: #e9efe9; }}
@@ -1594,14 +1619,13 @@ def _project_html(
     locked = _locked_indices(active_jobs, item_kind, work_items)
     assemble_enabled = _all_videos_approved(work_items)
     action_specs = [
-        ("align", "Analyze + Split", False),
-        ("scene-plan", "Scene Plan", False),
-        ("prompts", "Gen Image Prompts", False),
-        ("video-prompts", "Gen Video Prompts", False),
-        ("images", "Gen Images", False),
-        ("avatar-image", "Gen Avatar Image", False),
-        ("clips", "Gen Clips", False),
-        ("assemble", "Assemble Final", True),
+        ("align", "Analyze + Split", False, "align"),
+        ("scene-plan", "Scene Plan", False, "scene-plan"),
+        ("generate-prompts", "Gen Prompts", False, ("prompts", "video-prompts")),
+        ("images", "Gen Images", False, "images"),
+        ("avatar-image", "Gen Avatar Images", False, "avatar-image"),
+        ("clips", "Gen Clips", False, "clips"),
+        ("assemble", "Assemble Final", True, "assemble"),
     ]
     actions = "".join(
         _action_button(
@@ -1610,10 +1634,10 @@ def _project_html(
             action,
             label,
             is_wip,
-            action in used_actions,
+            any(used_action in used_actions for used_action in used_key) if isinstance(used_key, tuple) else used_key in used_actions,
             enabled=(action != "assemble" or not work_items or assemble_enabled),
         )
-        for number, (action, label, is_wip) in enumerate(action_specs, start=1)
+        for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
     open_filter = _open_filter_html(work_items)
     queue_estimate = _queue_estimate_html(queue_estimate_seconds)
@@ -1625,18 +1649,21 @@ def _project_html(
 <div class="project-studio">
   <div class="project-topbar">
     <div class="project-title-row">
-      {previous_project_nav}
-      <h1>{project['name']}</h1>
-      {next_project_nav}
-      {queue_estimate}
-      <button class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()">⚙</button>
-      <a class="button" href="/">Back</a>
+      <div class="project-title-left">
+        <a class="button project-icon-button" href="/" aria-label="Back to projects" title="Back to projects">←</a>
+        <button class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()">⚙</button>
+        {open_filter}
+      </div>
+      <div class="project-title-center">
+        {previous_project_nav}
+        <h1>{project['name']}</h1>
+        {next_project_nav}
+      </div>
+      <div class="project-title-right">
+        {queue_estimate}
+      </div>
     </div>
-    <div class="actions">{actions}{open_filter}</div>
-  </div>
-  <div class="view-switch" role="group" aria-label="Project view">
-    <button type="button" class="active" data-project-view="storyboard" aria-pressed="true" onclick="switchProjectView('storyboard')">Storyboard</button>
-    <button type="button" data-project-view="table" aria-pressed="false" onclick="switchProjectView('table')">Table</button>
+    <div class="actions">{actions}</div>
   </div>
   {storyboard}
   <section id="project-table-view" class="project-table-view" hidden>
@@ -1857,9 +1884,9 @@ def _inspector_generation_actions_html(project_id: int, item_kind: str, item_ind
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Next renders</div>
           <div class="inspector-generation-actions">
-            {_inspector_action_form_html(project_id, "images", item_index, "Gen Images")}
-            {_inspector_action_form_html(project_id, "avatar-image", item_index, "Gen Avatar Image")}
-            {_inspector_action_form_html(project_id, "clips", item_index, "Gen Clips")}
+            {_inspector_action_form_html(project_id, "images", item_index, "Generate Image")}
+            {_inspector_action_form_html(project_id, "avatar-image", item_index, "Generate Avatars")}
+            {_inspector_action_form_html(project_id, "clips", item_index, "Generate Clip")}
           </div>
         </div>
 """
@@ -2217,7 +2244,7 @@ def _action_button(project_id: int, number: int, action: str, label: str, is_wip
 def _open_filter_html(rows) -> str:
     total = len(rows)
     open_count = sum(1 for row in rows if not bool(_row_value(row, "video_approved", 0)))
-    return f"""<span class="open-count-label">{open_count}/{total} offen</span>"""
+    return f"""<span class="open-count-label">{open_count}/{total}</span>"""
 
 
 def _queue_estimate_html(seconds: float | None) -> str:
@@ -2227,7 +2254,7 @@ def _queue_estimate_html(seconds: float | None) -> str:
 
 
 def _scroll_top_button_html() -> str:
-    return '<button class="scroll-top-button" type="button" onclick="scrollToTop()" title="Nach oben">Top</button>'
+    return '<button class="scroll-top-button" type="button" onclick="scrollToTop()" title="Nach oben" aria-label="Nach oben">↑</button>'
 
 
 def _job_average_seconds(job, average_durations: dict[str, float]) -> float | None:

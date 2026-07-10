@@ -44,7 +44,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("button, .button { border: 0; border-radius: 12px; background: var(--studio-accent);", html)
         self.assertIn(".danger-panel { margin-top: 24px; border-color: rgba(255,79,139,.42); background: transparent; color: #ff4f8b;", html)
         self.assertIn(".danger-panel[open] { background: transparent;", html)
-        self.assertIn(".queue-estimate { margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d;", html)
+        self.assertIn(".project-title-right { justify-content: flex-end;", html)
+        self.assertIn(".queue-estimate { padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d;", html)
 
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
         html = _projects_html([], [])
@@ -217,11 +218,12 @@ class AppHtmlTests(unittest.TestCase):
         self.assertEqual(html.count('class="wip-button"'), 1)
         self.assertIn('<button>1. Analyze + Split</button>', html)
         self.assertNotIn("Segs + Audio", html)
-        self.assertIn('<button>3. Gen Image Prompts</button>', html)
-        self.assertIn('<button>4. Gen Video Prompts</button>', html)
-        self.assertIn('<button>5. Gen Images</button>', html)
-        self.assertIn('<button>6. Gen Avatar Image</button>', html)
-        self.assertIn('<button>7. Gen Clips</button>', html)
+        self.assertIn('<button>3. Gen Prompts</button>', html)
+        self.assertNotIn("Gen Image Prompts", html)
+        self.assertNotIn("Gen Video Prompts", html)
+        self.assertIn('<button>4. Gen Images</button>', html)
+        self.assertIn('<button>5. Gen Avatar Images</button>', html)
+        self.assertIn('<button>6. Gen Clips</button>', html)
         self.assertNotIn('class="button wip-button"', html)
 
     def test_project_header_has_previous_and_next_project_triangle_links(self):
@@ -257,12 +259,23 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines, previous_project_id=8, next_project_id=6)
 
         self.assertIn('class="project-studio"', html)
-        self.assertLess(html.index('class="project-topbar"'), html.index('title="Vorhergehendes Projekt"'))
-        self.assertLess(html.index('title="Nachfolgendes Projekt"'), html.index('class="actions"'))
-        self.assertIn('class="view-switch"', html)
-        self.assertIn('data-project-view="storyboard"', html)
-        self.assertIn('data-project-view="table"', html)
-        self.assertIn(">Table</button>", html)
+        self.assertIn('class="project-title-row"', html)
+        self.assertIn('class="project-title-left"', html)
+        self.assertIn('class="project-title-center"', html)
+        self.assertIn('class="project-title-right"', html)
+        self.assertLess(html.index('class="project-title-left"'), html.index('class="project-title-center"'))
+        self.assertLess(html.index('class="project-title-center"'), html.index('class="project-title-right"'))
+        self.assertIn('aria-label="Back to projects" title="Back to projects">←</a>', html)
+        self.assertLess(html.index('aria-label="Back to projects"'), html.index('title="Project Settings"'))
+        self.assertLess(html.index('title="Project Settings"'), html.index('class="open-count-label"'))
+        self.assertLess(html.index('class="open-count-label"'), html.index('title="Vorhergehendes Projekt"'))
+        self.assertLess(html.index('title="Vorhergehendes Projekt"'), html.index("<h1>Demo</h1>"))
+        self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
+        self.assertLess(html.index('title="Nachfolgendes Projekt"'), html.index('id="queue-estimate"'))
+        self.assertLess(html.index('id="queue-estimate"'), html.index('class="actions"'))
+        self.assertNotIn('class="view-switch"', html)
+        self.assertNotIn('data-project-view="storyboard"', html)
+        self.assertNotIn('data-project-view="table"', html)
         self.assertNotIn(">Advanced Table</button>", html)
         self.assertIn('id="project-storyboard"', html)
         self.assertIn('class="storyboard-rail"', html)
@@ -270,7 +283,6 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="project-table-view"', html)
         self.assertIn("Storyboard lyric", html)
         self.assertIn("<table>", html)
-        self.assertLess(html.index('class="view-switch"'), html.index('id="project-storyboard"'))
         self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
         self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
         self.assertLess(html.index('id="project-table-view"'), html.index("<h2>Project Settings</h2>"))
@@ -521,11 +533,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="inspector-generation-actions"', html)
         self.assertIn('action="/projects/7/images"', html)
         self.assertIn('<input type="hidden" name="selected_lines" value="3">', html)
-        self.assertIn("<button>Gen Images</button>", html)
+        self.assertIn("<button>Generate Image</button>", html)
         self.assertIn('action="/projects/7/avatar-image"', html)
-        self.assertIn("<button>Gen Avatar Image</button>", html)
+        self.assertIn("<button>Generate Avatars</button>", html)
         self.assertIn('action="/projects/7/clips"', html)
-        self.assertIn("<button>Gen Clips</button>", html)
+        self.assertIn("<button>Generate Clip</button>", html)
 
     def test_segment_inspector_uses_compact_prompt_lightboxes_and_hides_noise(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1611,19 +1623,19 @@ class AppHtmlTests(unittest.TestCase):
 
         align_index = html.index('<button>1. Analyze + Split</button>')
         scene_plan_index = html.index('<button>2. Scene Plan</button>')
-        prompts_index = html.index('<button>3. Gen Image Prompts</button>')
-        video_prompts_index = html.index('<button>4. Gen Video Prompts</button>')
-        images_index = html.index('<button>5. Gen Images</button>')
-        avatar_index = html.index('<button>6. Gen Avatar Image</button>')
-        clips_index = html.index('<button>7. Gen Clips</button>')
-        assemble_index = html.index('8. Assemble Final')
+        prompts_index = html.index('<button>3. Gen Prompts</button>')
+        images_index = html.index('<button>4. Gen Images</button>')
+        avatar_index = html.index('<button>5. Gen Avatar Images</button>')
+        clips_index = html.index('<button>6. Gen Clips</button>')
+        assemble_index = html.index('7. Assemble Final')
         settings_index = html.index('action="/projects/7/settings"')
         self.assertNotIn('<button>2. Segs + Audio</button>', html)
+        self.assertNotIn("Gen Image Prompts", html)
+        self.assertNotIn("Gen Video Prompts", html)
         self.assertNotIn('action="/projects/7/segments"', html[:settings_index])
         self.assertLess(align_index, scene_plan_index)
         self.assertLess(scene_plan_index, prompts_index)
-        self.assertLess(prompts_index, video_prompts_index)
-        self.assertLess(video_prompts_index, images_index)
+        self.assertLess(prompts_index, images_index)
         self.assertLess(images_index, avatar_index)
         self.assertLess(avatar_index, clips_index)
         self.assertLess(clips_index, assemble_index)
@@ -1632,12 +1644,12 @@ class AppHtmlTests(unittest.TestCase):
     def test_used_top_actions_are_numbered_and_dark_grey_but_clickable(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
-        html = _project_html(project, [], used_actions={"align", "prompts"})
+        html = _project_html(project, [], used_actions={"align", "prompts", "video-prompts"})
 
         self.assertIn('<button class="used-button" title="Already used; click to run again">1. Analyze + Split</button>', html)
-        self.assertIn('<button class="used-button" title="Already used; click to run again">3. Gen Image Prompts</button>', html)
+        self.assertIn('<button class="used-button" title="Already used; click to run again">3. Gen Prompts</button>', html)
         self.assertIn('action="/projects/7/align"', html)
-        self.assertIn('action="/projects/7/prompts"', html)
+        self.assertIn('action="/projects/7/generate-prompts"', html)
 
     def test_project_settings_are_visible_by_default_without_group_size_reset_warning(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1699,6 +1711,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('data-seconds="70"', html)
         self.assertIn("Queue ca. 1m 10s", html)
         self.assertIn('class="scroll-top-button"', html)
+        self.assertIn('aria-label="Nach oben">↑</button>', html)
+        self.assertNotIn(">Top</button>", html)
         self.assertIn("function scrollToTop", html)
         self.assertIn(".project-topbar", html)
         self.assertIn("position: sticky", html)
@@ -1724,6 +1738,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".danger-panel { margin-top: 24px;", _page("Demo", ""))
         self.assertIn(".danger-panel[open] { background: transparent;", _page("Demo", ""))
         self.assertIn(".danger-panel .compact-form { background: transparent;", _page("Demo", ""))
+        self.assertIn(".danger-panel .actions { padding-top: 12px;", _page("Demo", ""))
         self.assertGreater(html.index('action="/projects/7/clear"'), html.index('<table>'))
         self.assertGreater(html.index('action="/projects/7/delete"'), html.index('action="/projects/7/clear"'))
 
@@ -2060,8 +2075,9 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, [], segments))
 
-        self.assertIn('<span class="open-count-label">1/2 offen</span>', html)
-        self.assertIn(".open-count-label { margin-left: auto", html)
+        self.assertIn('<span class="open-count-label">1/2</span>', html)
+        self.assertNotIn("1/2 offen", html)
+        self.assertIn(".open-count-label { align-self: center;", html)
         self.assertNotIn("open-filter-button", html)
         self.assertNotIn("open-filter-info", html)
         self.assertIn('data-work-item="1" data-video-approved="0"', html)
@@ -2111,7 +2127,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('type="button"', html)
         self.assertIn("alert('Bitte erst alle Videos mit OK freigeben.')", html)
         self.assertIn('title="Alle Videos erst mit OK markieren"', html)
-        self.assertIn("8. Assemble Final", html)
+        self.assertIn("7. Assemble Final", html)
 
         lines[1]["video_approved"] = 1
         approved_html = _project_html(project, lines)
