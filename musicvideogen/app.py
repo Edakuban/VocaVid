@@ -770,7 +770,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .queue-admin-controls .compact-form {{ margin: 0; }}
     .queue-admin-controls .job-options {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
     .queue-admin-controls .job-options label {{ margin: 0; }}
-    .modal-content {{ position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: auto; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
+    .modal-content {{ position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
+    .modal-content > form {{ max-height: calc(88vh - 74px); overflow: auto; }}
     .modal-content .studio-panel-head {{ color: #1c2526; border-bottom: 1px solid #d8d3c8; }}
     .modal-content h2 {{ margin: 0; }}
     .new-project-form {{ margin: 0; border: 0; border-radius: 0; }}
