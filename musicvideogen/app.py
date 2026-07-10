@@ -841,6 +841,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .inspector-generation-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .inspector-generation-actions .compact-form {{ margin: 0; }}
     .segment-inspector .storyboard-card-media {{ border-radius: 6px; border: 1px solid #d8d3c8; }}
+    .inspector-prompt-preview {{ display: grid; gap: 8px; align-items: start; }}
+    .inspector-prompt-image {{ display: block; width: min(50%, 190px); max-height: 112px; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; background: #eef1ed; }}
+    .inspector-prompt-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .image-prompt-modal-content {{ width: min(760px, 94vw); }}
     .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
     .project-modal-content {{ width: min(860px, 94vw); }}
     .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
@@ -1109,6 +1113,16 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     }}
     function closeScenePlanModal() {{
       const box = document.getElementById('scene-plan-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
+    function openImagePromptModal(id) {{
+      const box = document.getElementById(id);
+      if (!box) return;
+      box.classList.add('open');
+    }}
+    function closeImagePromptModal(id) {{
+      const box = document.getElementById(id);
       if (!box) return;
       box.classList.remove('open');
     }}
@@ -1571,7 +1585,7 @@ def _project_html(
   </div>
   <div class="view-switch" role="group" aria-label="Project view">
     <button type="button" class="active" data-project-view="storyboard" aria-pressed="true" onclick="switchProjectView('storyboard')">Storyboard</button>
-    <button type="button" data-project-view="table" aria-pressed="false" onclick="switchProjectView('table')">Advanced Table</button>
+    <button type="button" data-project-view="table" aria-pressed="false" onclick="switchProjectView('table')">Table</button>
   </div>
   {storyboard}
   <section id="project-table-view" class="project-table-view" hidden>
@@ -1663,12 +1677,13 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
     timing = _timing_text(_row_value(row, "start_sec", None), _row_value(row, "end_sec", None))
     prompt = _row_value(row, "prompt", "") or ""
     video_prompt = _row_value(row, "video_prompt", "") or ""
-    last_action = _row_value(row, "last_action", "")
     image_choice_html = _image_choice_html(project["id"], item_kind, item_index, row)
-    redo_html = _redo_html(project["id"], item_kind, item_index, last_action)
     approval_html = _approval_html(project["id"], item_kind, item_index, row)
-    status_html = _status_html(_row_value(row, "status", "") or "pending", _row_value(row, "error", "") or "")
-    prompt_editor = _prompt_editor_html(f"/projects/{project['id']}/{item_kind}/{item_index}/prompts", prompt, video_prompt)
+    prompt_action = f"/projects/{project['id']}/{item_kind}/{item_index}/prompts"
+    image_prompt_modal_id = f"image-prompt-modal-{item_kind}-{item_index}"
+    image_prompt_preview = _image_prompt_preview_html(project, row, image_prompt_modal_id)
+    image_prompt_modal = _image_prompt_modal_html(image_prompt_modal_id, prompt_action, prompt)
+    video_prompt_editor = _video_prompt_editor_html(prompt_action, video_prompt)
     media_html = _storyboard_card_media_html(project, row)
     text_html = _multiline_text_html(text) or _text(text)
     timing_html = f'<div class="storyboard-card-status">{_text(timing)}</div>' if timing else ""
@@ -1677,11 +1692,6 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         <div class="segment-inspector-label">Image source</div>
         {image_choice_html}
       </div>""" if image_choice_html else ""
-    redo_section = f"""
-      <div class="segment-inspector-section">
-        <div class="segment-inspector-label">Redo</div>
-        {redo_html}
-      </div>""" if redo_html else ""
     quick_actions = _inspector_generation_actions_html(project["id"], item_kind, item_index, row)
     return f"""
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
@@ -1697,18 +1707,15 @@ def _segment_inspector_html(project, item_kind: str, row) -> str:
         </div>
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Prompts</div>
-          {prompt_editor}
+          {image_prompt_preview}
+          {video_prompt_editor}
         </div>
+        {image_prompt_modal}
         {image_choice_section}
         <div class="segment-inspector-actions">
           {approval_html}
         </div>
         {quick_actions}
-        {redo_section}
-        <div class="segment-inspector-section">
-          <div class="segment-inspector-label">Status</div>
-          {status_html}
-        </div>
       </aside>
 """
 
@@ -2296,17 +2303,64 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row) -> str
 """
 
 
-def _prompt_editor_html(action: str, prompt: str, video_prompt: str) -> str:
+def _image_prompt_preview_html(project, row, modal_id: str) -> str:
+    image_path = _row_value(row, "image_path", "")
+    avatar_image_path = _row_value(row, "avatar_image_path", "")
+    preferred_path = avatar_image_path or image_path
+    if preferred_path:
+        preferred_url = _generated_asset_url(project, preferred_path)
+        image_html = f'<img class="inspector-prompt-image" src="{_attr(_url_for_html_attribute(preferred_url))}" alt="Prompt reference image">'
+    else:
+        image_html = '<div class="storyboard-card-media storyboard-card-media-empty"><span class="storyboard-empty-mark"><strong>No image yet</strong><span>Generate an image or avatar to preview this prompt.</span></span></div>'
+    show_image_button = ""
+    if avatar_image_path and image_path:
+        image_url = _generated_asset_url(project, image_path)
+        show_image_button = f'<button type="button" onclick="openImageLightbox({_attr(_js_string_arg(_url_for_html_attribute(image_url)))})">Show image</button>'
+    return f"""
+<div class="inspector-prompt-preview">
+  {image_html}
+  <div class="inspector-prompt-actions">
+    <button type="button" onclick="openImagePromptModal({_attr(_js_arg(modal_id))})">Edit image prompt</button>
+    {show_image_button}
+  </div>
+</div>
+"""
+
+
+def _image_prompt_modal_html(modal_id: str, action: str, prompt: str) -> str:
+    return f"""
+<div id="{_attr(modal_id)}" class="modal lightbox" onclick="if (event.target === this) closeImagePromptModal({_attr(_js_arg(modal_id))})">
+  <div class="modal-content image-prompt-modal-content">
+    <div class="studio-panel-head">
+      <h2>Edit image prompt</h2>
+      <button class="studio-button studio-button-secondary" type="button" onclick="closeImagePromptModal({_attr(_js_arg(modal_id))})">Close</button>
+    </div>
+    {_image_prompt_editor_html(action, prompt)}
+  </div>
+</div>
+"""
+
+
+def _image_prompt_editor_html(action: str, prompt: str) -> str:
     return f"""
 <form class="compact-form" action="{action}/image/save" method="post">
   <label>Image</label><textarea class="prompt-textarea" name="prompt">{_text(prompt)}</textarea>
   <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/image/ai-fill">AI fill</button></p>
 </form>
+"""
+
+
+def _video_prompt_editor_html(action: str, video_prompt: str) -> str:
+    return f"""
 <form class="compact-form" action="{action}/video/save" method="post">
   <label>Video</label><textarea class="prompt-textarea" name="video_prompt">{_text(video_prompt)}</textarea>
   <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/video/ai-fill">AI fill</button></p>
 </form>
 """
+
+
+def _prompt_editor_html(action: str, prompt: str, video_prompt: str) -> str:
+    return _image_prompt_editor_html(action, prompt) + _video_prompt_editor_html(action, video_prompt)
 
 
 def _segment_section_editor_html(project_id: int, segment) -> str:
