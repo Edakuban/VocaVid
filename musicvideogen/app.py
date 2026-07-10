@@ -813,7 +813,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-card {{ display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
     .storyboard-card-approved {{ background: #dff3e8; border-color: rgba(24,151,108,.5); }}
     .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
-    .storyboard-card-active {{ border-color: var(--studio-accent); box-shadow: 0 0 0 3px rgba(53,224,179,.22), 0 18px 48px rgba(53,224,179,.16); transform: translateY(-1px); }}
+    @keyframes storyboardActivePulse {{ 0%, 100% {{ box-shadow: 0 0 0 3px rgba(53,224,179,.3), 0 18px 48px rgba(53,224,179,.18); }} 50% {{ box-shadow: 0 0 0 6px rgba(53,224,179,.22), 0 22px 58px rgba(53,224,179,.28); }} }}
+    .storyboard-card-active {{ border-color: var(--studio-accent); box-shadow: 0 0 0 3px rgba(53,224,179,.3), 0 18px 48px rgba(53,224,179,.18); transform: translateY(-2px); animation: storyboardActivePulse 1.8s ease-in-out infinite; }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
     .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
     .storyboard-card-image {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
@@ -821,6 +822,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-card-video {{ display: block; width: 100%; height: 100%; object-fit: cover; background: #111; }}
     .storyboard-video-toggle {{ position: absolute; left: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.78) !important; color: #fff; box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
     .storyboard-video-toggle:hover, .storyboard-video-toggle:focus {{ background: rgba(53,224,179,.88) !important; color: #10201c; outline: none; }}
+    .storyboard-video-expand {{ position: absolute; right: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.78) !important; color: #fff; font-size: 15px; box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
+    .storyboard-video-expand:hover, .storyboard-video-expand:focus {{ background: rgba(255,79,139,.9) !important; color: #fff; outline: none; }}
     .storyboard-play-icon {{ font-size: 0; line-height: 1; }}
     .storyboard-video-toggle[aria-label="Play clip"] .storyboard-play-icon::before {{ content: "\\25b6"; font-size: 13px; }}
     .storyboard-video-toggle[aria-label="Pause clip"] .storyboard-play-icon::before {{ content: "II"; font-size: 12px; letter-spacing: -1px; }}
@@ -908,9 +911,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .inline-player {{ width: 180px; max-width: 100%; margin-left: 8px; vertical-align: middle; }}
     .lightbox {{ position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.78); padding: 24px; }}
     .lightbox.open {{ display: flex; }}
-    .lightbox-content {{ width: min(960px, 94vw); }}
+    .lightbox-content {{ position: relative; width: min(960px, 94vw); }}
     .lightbox video, .lightbox img {{ width: 100%; max-height: 82vh; object-fit: contain; background: #000; border-radius: 8px; }}
-    .lightbox-close {{ float: right; margin-bottom: 8px; }}
+    .lightbox-close {{ position: absolute; top: -14px; right: -14px; z-index: 3; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border-radius: 999px; background: #e53d91; color: #fff; font-size: 18px; font-weight: 950; line-height: 1; box-shadow: 0 10px 24px rgba(0,0,0,.32); }}
+    .lightbox-close:hover, .lightbox-close:focus {{ background: #c92878; outline: none; }}
   </style>
   <script>
     const projectRowServerHtml = new Map();
@@ -1390,7 +1394,7 @@ def _new_project_modal_html() -> str:
   <div class="modal-content">
     <div class="studio-panel-head">
       <h2>New Project</h2>
-      <button class="studio-button studio-button-secondary" type="button" onclick="closeNewProjectModal()">Close</button>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeNewProjectModal()">X</button>
     </div>
     <form class="new-project-form" action="/projects" method="post" enctype="multipart/form-data">
       <label>Name</label><input name="name" required>
@@ -1648,7 +1652,7 @@ def _project_settings_modal_html(project) -> str:
   <div class="modal-content project-modal-content">
     <div class="studio-panel-head">
       <h2>Project Settings</h2>
-      <button class="studio-button studio-button-secondary" type="button" onclick="closeProjectSettingsModal()">Close</button>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeProjectSettingsModal()">X</button>
     </div>
     {_segment_settings_html(project, show_heading=False)}
   </div>
@@ -1662,7 +1666,7 @@ def _scene_plan_modal_html(project) -> str:
   <div class="modal-content project-modal-content">
     <div class="studio-panel-head">
       <h2>Scene Plan</h2>
-      <button class="studio-button studio-button-secondary" type="button" onclick="closeScenePlanModal()">Close</button>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeScenePlanModal()">X</button>
     </div>
     {_scene_plan_editor_html(project, show_heading=False)}
   </div>
@@ -1889,6 +1893,7 @@ def _storyboard_card_media_html(project, row) -> str:
           <button class="storyboard-video-toggle" type="button" aria-label="Play clip" onclick="toggleStoryboardVideo(event, this)">
             <span class="storyboard-play-icon">▶</span>
           </button>
+          <button class="storyboard-video-expand" type="button" aria-label="Open clip in lightbox" onclick="event.stopPropagation(); openClipLightbox({_attr(_js_string_arg(_url_for_html_attribute(url)))})">⛶</button>
           {ok_badge}
         </div>"""
         return f"""
@@ -2455,7 +2460,7 @@ def _prompt_modal_html(modal_id: str, title: str, editor_html: str) -> str:
   <div class="modal-content image-prompt-modal-content">
     <div class="studio-panel-head">
       <h2>{_text(title)}</h2>
-      <button class="studio-button studio-button-secondary" type="button" onclick="closePromptModal({_attr(_js_arg(modal_id))})">Close</button>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closePromptModal({_attr(_js_arg(modal_id))})">X</button>
     </div>
     {editor_html}
   </div>
@@ -2607,7 +2612,7 @@ def _clip_lightbox_html() -> str:
     return """
 <div id="clip-lightbox" class="lightbox" onclick="if (event.target === this) closeClipLightbox()">
   <div class="lightbox-content">
-    <button class="lightbox-close" type="button" onclick="closeClipLightbox()">Close</button>
+    <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeClipLightbox()">X</button>
     <video id="clip-lightbox-video" controls></video>
   </div>
 </div>
@@ -2618,7 +2623,7 @@ def _image_lightbox_html() -> str:
     return """
 <div id="image-lightbox" class="lightbox" onclick="if (event.target === this) closeImageLightbox()">
   <div class="lightbox-content">
-    <button class="lightbox-close" type="button" onclick="closeImageLightbox()">Close</button>
+    <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeImageLightbox()">X</button>
     <img id="image-lightbox-image" alt="Generated image">
   </div>
 </div>

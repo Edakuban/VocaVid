@@ -311,8 +311,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn(" muted", html)
         self.assertIn('onclick="toggleStoryboardVideo(event, this)"', html)
         self.assertIn('class="storyboard-video-toggle"', html)
+        self.assertIn('class="storyboard-video-expand"', html)
+        self.assertIn('aria-label="Open clip in lightbox"', html)
+        self.assertIn("openClipLightbox(&quot;/assets/outputs/project-7/clips/line-000.mp4", html)
         self.assertIn("function toggleStoryboardVideo", _page("Demo", ""))
-        self.assertNotIn("openClipLightbox", html)
         self.assertNotIn('class="storyboard-card-image"', html)
 
     def test_storyboard_card_media_prefers_avatar_over_image(self):
@@ -606,8 +608,14 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
         self.assertIn(".finish-toggle { display: block; width: 100%;", html)
         self.assertIn(".storyboard-card-approved { background: #dff3e8;", html)
+        self.assertIn("@keyframes storyboardActivePulse", html)
+        self.assertIn(".storyboard-card-active { border-color: var(--studio-accent); box-shadow:", html)
+        self.assertIn("animation: storyboardActivePulse", html)
         self.assertIn(".storyboard-card-body { display: grid; grid-template-rows: auto auto 1fr auto;", html)
         self.assertIn(".storyboard-card-status { align-self: end;", html)
+        self.assertIn(".storyboard-video-expand { position: absolute; right: 8px; bottom: 8px;", html)
+        self.assertIn(".lightbox-close { position: absolute;", html)
+        self.assertIn("background: #e53d91;", html)
         self.assertIn(".storyboard-ok-badge { position: absolute;", html)
         self.assertIn("pointer-events: none;", html)
         self.assertIn(".segment-inspector-nav { display: flex; justify-content: space-between;", html)
@@ -1572,6 +1580,8 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('id="clip-lightbox"', html)
         self.assertIn('id="clip-lightbox-video"', html)
+        self.assertIn('class="lightbox-close" type="button" aria-label="Close window"', html)
+        self.assertIn(">X</button>", html)
         self.assertIn("function openClipLightbox", html)
         self.assertIn("function closeClipLightbox", html)
 
