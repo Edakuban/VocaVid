@@ -34,7 +34,8 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("window.setTimeout(() => refreshProjectStatus(projectId), 150)", app_source)
         self.assertIn("async function refreshProjectStatus(projectId)", app_source)
         self.assertIn("updateProjectStatus(data)", app_source)
-        self.assertIn("updateQueueEstimate(data.queue_estimate_seconds)", app_source)
+        self.assertIn("updateQueueEstimate(data.queue_estimate_seconds, data.queue_count)", app_source)
+        self.assertIn("function queueEstimateLabel(seconds, queueCount)", app_source)
         self.assertIn("updateBrowserTitle(data.queue_count)", app_source)
         self.assertIn("function updateBrowserTitle(queueCount)", app_source)
         self.assertIn('onsubmit="return projectActionSubmitted(this)"', app_source)
@@ -56,6 +57,17 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("selectStoryboardCard(storyboard, card)", app_source)
         self.assertLess(app_source.index("const activeTemplateId = activeProjectStoryboardTemplateId(storyboard)"), app_source.index("storyboard.replaceWith(replacement)"))
         self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreProjectStoryboardSelection(replacement, activeTemplateId)"))
+
+    def test_storyboard_polling_preserves_checked_card_checkboxes(self):
+        app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")
+
+        self.assertIn("const projectStoryboardFieldSelector = 'input:not(.storyboard-select), textarea, select'", app_source)
+        self.assertIn("function checkedProjectStoryboardValues(storyboard)", app_source)
+        self.assertIn("storyboard.querySelectorAll('.storyboard-select:checked')", app_source)
+        self.assertIn("function restoreProjectStoryboardCheckedValues(storyboard, values)", app_source)
+        self.assertIn("checkbox.checked = values.has(checkbox.value)", app_source)
+        self.assertLess(app_source.index("const checkedValues = checkedProjectStoryboardValues(storyboard)"), app_source.index("storyboard.replaceWith(replacement)"))
+        self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreProjectStoryboardCheckedValues(replacement, checkedValues)"))
 
     def test_storyboard_polling_skips_replacement_while_video_is_playing(self):
         app_source = Path("musicvideogen/app.py").read_text(encoding="utf-8")

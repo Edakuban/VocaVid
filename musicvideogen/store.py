@@ -339,6 +339,26 @@ class Store:
                 values,
             )
 
+    def mark_interrupted_running_items(self, error: str = "Job interrupted by app restart or queue reset") -> int:
+        with self._connect() as conn:
+            line_result = conn.execute(
+                """
+                UPDATE lyric_lines
+                SET status = 'failed', error = ?
+                WHERE status = 'running'
+                """,
+                (error,),
+            )
+            segment_result = conn.execute(
+                """
+                UPDATE render_segments
+                SET status = 'failed', error = ?
+                WHERE status = 'running'
+                """,
+                (error,),
+            )
+            return int(line_result.rowcount or 0) + int(segment_result.rowcount or 0)
+
     def update_project(self, project_id: int, **fields: Any) -> None:
         if not fields:
             return

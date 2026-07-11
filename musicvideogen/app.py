@@ -68,6 +68,9 @@ class ShutdownController:
 def create_app() -> FastAPI:
     UPLOADS.mkdir(parents=True, exist_ok=True)
     store = Store(DB_PATH)
+    interrupted_items = store.mark_interrupted_running_items()
+    if interrupted_items:
+        logger.warning("marked %s interrupted running project items as failed", interrupted_items)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
     job_options = JobOptions()
     shutdown_controller = ShutdownController()
@@ -282,6 +285,7 @@ def create_app() -> FastAPI:
         used_actions = store.list_used_project_actions(project_id)
         active_jobs = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
+        listed_jobs = jobs.list_jobs()
         averages = store.average_job_durations()
         return _page(
             project["name"],
@@ -292,6 +296,10 @@ def create_app() -> FastAPI:
                 used_actions=used_actions,
                 active_jobs=active_jobs,
                 queue_estimate_seconds=_queue_estimate_seconds(queue_jobs, averages),
+                queue_count=len(queue_jobs),
+                queue_jobs=listed_jobs,
+                average_durations=averages,
+                job_options=job_options,
                 previous_project_id=previous_project_id,
                 next_project_id=next_project_id,
             ),
@@ -722,7 +730,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     label {{ display: block; font-size: 13px; font-weight: 650; margin-top: 10px; }}
     input, textarea, select {{ box-sizing: border-box; width: 100%; border: 1px solid #b9c0bd; border-radius: 6px; padding: 8px; font: inherit; }}
     textarea {{ min-height: 80px; }}
-    .prompt-textarea {{ min-width: 260px; min-height: 72px; resize: vertical; }}
+    .prompt-textarea {{ min-width: 260px; min-height: 250px; resize: vertical; }}
     .prompt-actions {{ display: flex; gap: 8px; margin: 6px 0 10px; }}
     .hidden-action-form {{ display: none; }}
     .compact-form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
@@ -747,7 +755,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .danger-panel .compact-form {{ background: transparent; }}
     .danger-button {{ border: 1px solid rgba(255,79,139,.42); background: rgba(255,79,139,.12); color: #ffd7e5; }}
     .danger-button:hover, .danger-button:focus {{ background: rgba(255,79,139,.18); }}
-    .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
+    .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; justify-content: center; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
     .start-dashboard {{ display: grid; gap: 18px; }}
     .start-hero {{ display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 18px; align-items: stretch; }}
@@ -837,6 +845,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
     .storyboard-card-approved {{ background: #dff3e8; border-color: rgba(24,151,108,.5); }}
+    .storyboard-card-locked {{ cursor: not-allowed; background: #dfe4e2; }}
+    .storyboard-card-locked > *:not(.storyboard-lock-overlay) {{ pointer-events: none; filter: grayscale(1); opacity: .52; }}
+    .storyboard-lock-overlay {{ position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(214,220,218,.68); color: #fff; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: grayscale(1) blur(1px); }}
+    .storyboard-lock-overlay span {{ border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(8,9,13,.7); padding: 7px 11px; }}
     .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
     @property --storyboard-ring-angle {{ syntax: "<angle>"; inherits: false; initial-value: 0deg; }}
     @keyframes storyboardActiveRing {{ to {{ --storyboard-ring-angle: 360deg; }} }}
@@ -858,17 +870,19 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .storyboard-empty-mark {{ display: grid; gap: 4px; }}
     .storyboard-empty-mark strong {{ color: #20302d; }}
     .storyboard-empty-mark span {{ color: #69736f; font-size: 12px; font-weight: 650; }}
-    .storyboard-ok-badge {{ position: absolute; top: 8px; right: 8px; z-index: 3; pointer-events: none; border: 1px solid rgba(24,151,108,.42); border-radius: 999px; background: rgba(239,255,247,.94); color: #0b6d51; padding: 5px 9px; font-size: 11px; font-weight: 950; letter-spacing: .02em; box-shadow: 0 8px 18px rgba(0,0,0,.16); }}
-    .storyboard-card-body {{ display: grid; grid-template-rows: auto auto 1fr auto; gap: 8px; padding: 12px; }}
+    .storyboard-select-wrap {{ position: absolute; top: 8px; left: 8px; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: 0; border: 1px solid rgba(11,18,20,.14); border-radius: 999px; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,.16); cursor: pointer; }}
+    .storyboard-select {{ width: 18px; height: 18px; margin: 0; accent-color: var(--studio-accent); cursor: pointer; }}
+    .storyboard-ok-badge {{ position: absolute; top: 8px; right: 8px; z-index: 3; pointer-events: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid rgba(24,151,108,.42); border-radius: 999px; background: rgba(239,255,247,.94); color: #0b6d51; font-size: 23px; font-weight: 950; line-height: 1; box-shadow: 0 8px 18px rgba(0,0,0,.16); }}
+    .storyboard-card-body {{ display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 12px; }}
     .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
     .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
-    .storyboard-card-status {{ align-self: end; color: #5b6462; font-size: 12px; }}
     .storyboard-progress-strip {{ display: flex; flex-wrap: wrap; gap: 5px; }}
     .progress-step {{ border-radius: 999px; border: 1px solid #d8d3c8; padding: 3px 7px; color: #6a7470; background: #f2f4ef; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
     .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
     .segment-inspector {{ position: sticky; z-index: 70; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
     .segment-inspector h3 {{ margin: 0; color: #20302d; }}
-    .segment-inspector-nav {{ display: flex; justify-content: space-between; align-items: center; margin: -2px 0 0; }}
+    .segment-inspector-nav {{ display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 10px; align-items: center; margin: -2px 0 0; }}
+    .segment-inspector-title {{ color: #44504d; font-size: 24px; font-weight: 900; letter-spacing: .02em; line-height: 1; text-align: center; text-transform: uppercase; }}
     .segment-nav-button {{ border: 0; padding: 0; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
     .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}
@@ -887,17 +901,27 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .inspector-prompt-media .preview-button {{ display: block; width: 100%; padding: 0; border: 0; background: transparent; }}
     .inspector-prompt-image {{ display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; background: #eef1ed; }}
     .inspector-prompt-actions {{ display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: center; }}
-    .finish-toggle {{ display: block; width: 100%; border-radius: 8px; }}
+    .finish-toggle {{ display: flex; width: 100%; align-items: center; justify-content: center; gap: 10px; border-radius: 8px; }}
+    .finish-toggle-check {{ margin-left: auto; font-size: 23px; font-weight: 950; line-height: 1; }}
     .finish-toggle-inactive {{ background: #eef1ed; color: #20302d; border: 1px solid #c7cdc9; }}
     .finish-toggle-active {{ background: #178a68; color: #fff; border: 1px solid #178a68; }}
     .prompt-modal.lightbox {{ z-index: 120; }}
     .image-prompt-modal-content {{ width: min(760px, 94vw); }}
+    .image-prompt-modal-content .prompt-textarea {{ min-height: 144px; }}
     .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
     .project-modal-content {{ width: min(860px, 94vw); }}
     .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
+    .project-settings-body {{ max-height: calc(88vh - 74px); overflow: auto; }}
+    .project-settings-body > form {{ max-height: none; overflow: visible; }}
     @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} }}
     .project-table-view[hidden] {{ display: none; }}
-    .queue-estimate {{ padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; }}
+    .queue-control {{ display: inline-flex; }}
+    .queue-estimate {{ padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; cursor: pointer; }}
+    .queue-modal {{ z-index: 180; }}
+    .queue-modal-content {{ width: min(1120px, 96vw); height: 75vh; max-height: 75vh; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: visible; }}
+    .queue-modal-body {{ min-height: 0; overflow: auto; padding-bottom: 16px; }}
+    .queue-modal-content .queue-summary-grid {{ padding: 16px 16px 0; }}
+    .queue-modal-content .jobs-table-wrap {{ padding-top: 16px; }}
     .danger-panel .actions {{ padding-top: 12px; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: white; color: #1c2526; border: 1px solid #d8d3c8; }}
@@ -960,8 +984,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     }}
     function copySelectedLines(form) {{
       form.querySelectorAll('input[name="selected_lines"]').forEach((input) => input.remove());
-      const selectedSegments = document.querySelectorAll('.segment-select:checked');
-      const selectedLines = selectedSegments.length ? selectedSegments : document.querySelectorAll('.line-select:checked');
+      const selectedSegments = document.querySelectorAll('.segment-select:checked:not(:disabled)');
+      const selectedLines = selectedSegments.length ? selectedSegments : document.querySelectorAll('.line-select:checked:not(:disabled)');
       if (!selectedLines.length) {{
         const hasSegments = document.querySelectorAll('.segment-select').length > 0;
         const itemLabel = hasSegments ? 'Segmente' : 'Zeilen';
@@ -1015,7 +1039,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       row.replaceWith(replacement);
       projectRowServerHtml.set(replacement.id, replacement.outerHTML);
     }}
-    const projectStoryboardFieldSelector = 'input, textarea, select';
+    const projectStoryboardFieldSelector = 'input:not(.storyboard-select), textarea, select';
     function projectStoryboardHasActiveEdit(storyboard) {{
       const active = document.activeElement;
       return !!(active && active.closest && storyboard.contains(active) && active.matches(projectStoryboardFieldSelector));
@@ -1049,6 +1073,14 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       const activeCard = storyboard.querySelector('.storyboard-card-active');
       return activeCard ? activeCard.dataset.inspectorTemplate : '';
     }}
+    function checkedProjectStoryboardValues(storyboard) {{
+      return new Set(Array.from(storyboard.querySelectorAll('.storyboard-select:checked')).map((checkbox) => checkbox.value));
+    }}
+    function restoreProjectStoryboardCheckedValues(storyboard, values) {{
+      storyboard.querySelectorAll('.storyboard-select').forEach((checkbox) => {{
+        checkbox.checked = values.has(checkbox.value);
+      }});
+    }}
     function restoreProjectStoryboardSelection(storyboard, templateId) {{
       if (!templateId) return;
       const card = storyboard.querySelector('[data-inspector-template="' + templateId + '"]');
@@ -1060,6 +1092,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       if (!storyboard || html === undefined) return;
       if (!shouldReplaceProjectStoryboard(storyboard)) return;
       const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
+      const checkedValues = checkedProjectStoryboardValues(storyboard);
       const template = document.createElement('template');
       template.innerHTML = html.trim();
       const replacement = template.content.firstElementChild;
@@ -1068,6 +1101,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       projectStoryboardServerHtml = replacement.outerHTML;
       replacement.hidden = storyboard.hidden;
       storyboard.replaceWith(replacement);
+      restoreProjectStoryboardCheckedValues(replacement, checkedValues);
       restoreProjectStoryboardSelection(replacement, activeTemplateId);
     }}
     const baseDocumentTitle = document.title.replace(/^\\(\\d+\\)\\s+/, '');
@@ -1077,7 +1111,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       document.title = count > 0 ? '(' + count + ') ' + baseDocumentTitle : baseDocumentTitle;
     }}
     function updateProjectStatus(data) {{
-      updateQueueEstimate(data.queue_estimate_seconds);
+      updateQueueEstimate(data.queue_estimate_seconds, data.queue_count);
       updateBrowserTitle(data.queue_count);
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
         const row = document.getElementById(rowId);
@@ -1102,7 +1136,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       }}
     }}
     function updateJobsStatus(data) {{
-      updateQueueEstimate(data.queue_estimate_seconds);
+      updateQueueEstimate(data.queue_estimate_seconds, data.queue_count);
       updateBrowserTitle(data.queue_count);
       const queueSummary = document.getElementById('queue-summary');
       if (queueSummary && data.queue_summary_html !== undefined) queueSummary.innerHTML = data.queue_summary_html;
@@ -1136,20 +1170,39 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       if (minutes) return minutes + 'm ' + remaining + 's';
       return remaining + 's';
     }}
-    function updateQueueEstimate(seconds) {{
+    function queueEstimateLabel(seconds, queueCount) {{
+      const count = Math.max(0, Number(queueCount) || 0);
+      if (count <= 0) return 'Queue 0';
+      const value = Math.max(0, Number(seconds) || 0);
+      return value > 0 ? count + ' ~' + formatDuration(value) : count + ' ~?s';
+    }}
+    function updateQueueEstimate(seconds, queueCount) {{
       const element = document.getElementById('queue-estimate');
       if (!element || seconds === undefined || seconds === null) return;
       const value = Math.max(0, Number(seconds) || 0);
+      const count = queueCount === undefined || queueCount === null ? Number(element.dataset.count || 0) : Math.max(0, Number(queueCount) || 0);
       element.dataset.seconds = String(Math.round(value));
-      element.textContent = value > 0 ? 'Queue ca. ' + formatDuration(value) : 'Queue frei';
+      element.dataset.count = String(Math.round(count));
+      element.textContent = queueEstimateLabel(value, count);
     }}
     function setupQueueEstimateCountdown() {{
       window.setInterval(() => {{
         const element = document.getElementById('queue-estimate');
         if (!element) return;
         const value = Math.max(0, Number(element.dataset.seconds || 0) - 1);
-        updateQueueEstimate(value);
+        updateQueueEstimate(value, Number(element.dataset.count || 0));
       }}, 1000);
+    }}
+    function openQueueModal() {{
+      const box = document.getElementById('queue-modal');
+      if (!box) return;
+      box.classList.add('open');
+      refreshJobsStatus();
+    }}
+    function closeQueueModal() {{
+      const box = document.getElementById('queue-modal');
+      if (!box) return;
+      box.classList.remove('open');
     }}
     function openNewProjectModal() {{
       const box = document.getElementById('new-project-modal');
@@ -1228,6 +1281,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function selectStoryboardItem(event, card) {{
       const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
       if (event && event.target && event.target.closest(interactiveSelector)) return;
+      if (card.dataset.locked === '1') return;
       const storyboard = card.closest('#project-storyboard');
       if (!storyboard) return;
       selectStoryboardCard(storyboard, card);
@@ -1392,9 +1446,10 @@ def _projects_html(
     average_durations = average_durations or {}
     job_options = job_options or JobOptions()
     rows = "".join(_project_list_item_html(p) for p in projects)
+    active_count = len([job for job in jobs if job.status in {"queued", "running"}])
     return f"""
 <div class="start-dashboard">
-{_start_topbar_html(queue_estimate_seconds)}
+{_start_topbar_html(queue_estimate_seconds, active_count)}
 {_start_hero_html(projects, jobs, queue_estimate_seconds)}
 <div class="start-layout">
 <section class="studio-panel">
@@ -1409,13 +1464,13 @@ def _projects_html(
 """
 
 
-def _start_topbar_html(queue_estimate_seconds: float | None) -> str:
+def _start_topbar_html(queue_estimate_seconds: float | None, queue_count: int = 0) -> str:
     return f"""
 <div class="studio-topbar">
   <div class="studio-brand">VocaVid</div>
   <div class="studio-tagline">Local AI music-video studio</div>
   <div class="studio-spacer"></div>
-  {_queue_estimate_html(queue_estimate_seconds)}
+  {_queue_estimate_html(queue_estimate_seconds, queue_count, open_modal=False)}
   <button class="studio-button" type="button" onclick="openNewProjectModal()">New Project</button>
   <a class="studio-button studio-button-secondary" href="#jobs-panel">Jobs</a>
 </div>
@@ -1471,21 +1526,73 @@ def _queue_section_html(
     queue_estimate_seconds: float | None,
     job_options: JobOptions,
 ) -> str:
-    job_rows = _jobs_table_body_html(jobs, average_durations)
     return f"""
 <section id="jobs-panel" class="panel studio-panel queue-panel">
-  <div class="queue-panel-head">
-    <div>
-      <h2 class="jobs-heading">Jobs</h2>
-      <p>Live queue, recent results, and cleanup controls.</p>
+{_queue_control_body_html(jobs, average_durations, queue_estimate_seconds, job_options, heading="Jobs", description="Live queue, recent results, and cleanup controls.")}
+</section>
+"""
+
+
+def _queue_control_html(
+    jobs,
+    average_durations: dict[str, float],
+    queue_estimate_seconds: float | None,
+    queue_count: int,
+    job_options: JobOptions,
+) -> str:
+    return f"""
+<div class="queue-control">
+  {_queue_estimate_html(queue_estimate_seconds, queue_count)}
+</div>
+"""
+
+
+def _queue_modal_html(
+    jobs,
+    average_durations: dict[str, float],
+    queue_estimate_seconds: float | None,
+    job_options: JobOptions,
+) -> str:
+    return f"""
+<div id="queue-modal" class="modal lightbox queue-modal" onclick="if (event.target === this) closeQueueModal()">
+  <div class="modal-content queue-modal-content">
+    <div class="studio-panel-head">
+      <h2>Queue</h2>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeQueueModal()">X</button>
+    </div>
+    <div class="queue-modal-body">
+{_queue_control_body_html(jobs, average_durations, queue_estimate_seconds, job_options, heading="", description="")}
     </div>
   </div>
+</div>
+"""
+
+
+def _queue_control_body_html(
+    jobs,
+    average_durations: dict[str, float],
+    queue_estimate_seconds: float | None,
+    job_options: JobOptions,
+    heading: str = "Jobs",
+    description: str = "",
+) -> str:
+    job_rows = _jobs_table_body_html(jobs, average_durations)
+    heading_html = ""
+    if heading or description:
+        heading_html = f"""
+  <div class="queue-panel-head">
+    <div>
+      {f'<h2 class="jobs-heading">{_text(heading)}</h2>' if heading else ''}
+      {f'<p>{_text(description)}</p>' if description else ''}
+    </div>
+  </div>"""
+    return f"""
+  {heading_html}
   {_queue_summary_html(jobs, queue_estimate_seconds)}
   <div class="jobs-table-wrap">
     <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody id="jobs-table-body">{job_rows}</tbody></table>
   </div>
   {_queue_admin_html(job_options)}
-</section>
 """
 
 
@@ -1608,12 +1715,19 @@ def _project_html(
     used_actions=None,
     active_jobs=None,
     queue_estimate_seconds: float | None = None,
+    queue_count: int = 0,
+    queue_jobs=None,
+    average_durations: dict[str, float] | None = None,
+    job_options: JobOptions | None = None,
     previous_project_id: int | None = None,
     next_project_id: int | None = None,
 ) -> str:
     segments = segments or []
     used_actions = used_actions or set()
     active_jobs = active_jobs or []
+    queue_jobs = queue_jobs or []
+    average_durations = average_durations or {}
+    job_options = job_options or JobOptions()
     work_items = segments or lines
     item_kind = "segments" if segments else "lines"
     locked = _locked_indices(active_jobs, item_kind, work_items)
@@ -1640,10 +1754,11 @@ def _project_html(
         for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
     open_filter = _open_filter_html(work_items)
-    queue_estimate = _queue_estimate_html(queue_estimate_seconds)
+    queue_control = _queue_control_html(queue_jobs, average_durations, queue_estimate_seconds, queue_count, job_options)
+    queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
     previous_project_nav = _project_nav_html(previous_project_id, "previous")
     next_project_nav = _project_nav_html(next_project_id, "next")
-    storyboard = _storyboard_html(project, work_items, item_kind)
+    storyboard = _storyboard_html(project, work_items, item_kind, locked)
     table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
 <div class="project-studio">
@@ -1660,11 +1775,12 @@ def _project_html(
         {next_project_nav}
       </div>
       <div class="project-title-right">
-        {queue_estimate}
+        {queue_control}
       </div>
     </div>
     <div class="actions">{actions}</div>
   </div>
+  {queue_modal}
   {storyboard}
   <section id="project-table-view" class="project-table-view" hidden>
     {table}
@@ -1673,9 +1789,8 @@ def _project_html(
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
-{_clear_project_html(project)}
 {_scroll_top_button_html()}
-<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]});</script>
+<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus();</script>
 """
 
 
@@ -1687,17 +1802,20 @@ def _project_settings_modal_html(project) -> str:
       <h2>Project Settings</h2>
       <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeProjectSettingsModal()">X</button>
     </div>
-    {_segment_settings_html(project, show_heading=False)}
+    <div class="project-settings-body">
+      {_segment_settings_html(project, show_heading=False)}
+      {_clear_project_html(project)}
+    </div>
   </div>
 </div>
 """
 
 
-def _storyboard_html(project, work_items, item_kind: str) -> str:
+def _storyboard_html(project, work_items, item_kind: str, locked=None) -> str:
+    locked = locked or {}
     if not work_items:
         return """
   <section id="project-storyboard" class="project-storyboard">
-    <h2>Storyboard</h2>
     <div class="storyboard-rail">
       <article class="storyboard-card storyboard-card-empty">
         <div class="storyboard-card-media">No items yet</div>
@@ -1708,7 +1826,10 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
     </div>
   </section>
 """
-    cards = "".join(_storyboard_card_html(project, row, item_kind, active=index == 0) for index, row in enumerate(work_items))
+    cards = "".join(
+        _storyboard_card_html(project, row, item_kind, active=index == 0, locked_status=locked.get(_row_index(row, item_kind)))
+        for index, row in enumerate(work_items)
+    )
     templates = "".join(
         _storyboard_inspector_template_html(
             project,
@@ -1728,7 +1849,6 @@ def _storyboard_html(project, work_items, item_kind: str) -> str:
     )
     return f"""
   <section id="project-storyboard" class="project-storyboard">
-    <h2>Storyboard</h2>
     <div class="storyboard-workspace">
       <div class="storyboard-rail">{cards}</div>
       {inspector}
@@ -1758,6 +1878,7 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
     index_key = "segment_index" if item_kind == "segments" else "line_index"
     label = "Segment" if item_kind == "segments" else "Line"
     item_index = int(_row_value(row, index_key, 0))
+    display_label = _storyboard_item_display_label(item_kind, item_index)
     text = _row_value(row, "clean_text", "") or "(empty)"
     timing = _timing_text(_row_value(row, "start_sec", None), _row_value(row, "end_sec", None))
     prompt = _row_value(row, "prompt", "") or ""
@@ -1787,10 +1908,9 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
         {image_choice_html}
       </div>""" if image_choice_html else ""
     quick_actions = _inspector_generation_actions_html(project["id"], item_kind, item_index, row)
-    navigation = _segment_inspector_navigation_html(item_kind, label, previous_index, next_index)
+    navigation = _segment_inspector_navigation_html(item_kind, label, display_label, previous_index, next_index)
     return f"""
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
-        <h3>Selected {label} {_text(item_index)}</h3>
         {navigation}
         {quick_actions}
         {image_choice_section}
@@ -1815,10 +1935,11 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
 """
 
 
-def _segment_inspector_navigation_html(item_kind: str, label: str, previous_index, next_index) -> str:
+def _segment_inspector_navigation_html(item_kind: str, label: str, display_label: str, previous_index, next_index) -> str:
     return f"""
         <div class="segment-inspector-nav">
           {_segment_inspector_nav_button(item_kind, label, previous_index, "previous")}
+          <h3 class="segment-inspector-title">{_text(display_label)}</h3>
           {_segment_inspector_nav_button(item_kind, label, next_index, "next")}
         </div>
 """
@@ -1837,30 +1958,44 @@ def _segment_inspector_nav_button(item_kind: str, label: str, item_index, direct
     )
 
 
-def _storyboard_card_html(project, row, item_kind: str, active: bool = False) -> str:
+def _storyboard_card_html(project, row, item_kind: str, active: bool = False, locked_status: str | None = None) -> str:
     index_key = "segment_index" if item_kind == "segments" else "line_index"
-    label = "Segment" if item_kind == "segments" else "Line"
     index = _row_value(row, index_key, 0)
+    display_label = _storyboard_item_display_label(item_kind, int(index))
+    checkbox_class = "segment-select" if item_kind == "segments" else "line-select"
+    checkbox_label = "Segment markieren" if item_kind == "segments" else "Zeile markieren"
     text = _row_value(row, "clean_text", "") or "(empty)"
     timing = _timing_text(_row_value(row, "start_sec", None), _row_value(row, "end_sec", None))
     status = _row_value(row, "status", "") or "pending"
     timing_html = f'<span>{_text(timing)}</span>' if timing else ""
     text_html = _multiline_text_html(text) or _text(text)
     media_html = _storyboard_card_media_html(project, row)
+    effective_locked_status = locked_status
     active_class = " storyboard-card-active" if active else ""
     approved_class = " storyboard-card-approved" if bool(_row_value(row, "video_approved", 0)) else ""
+    locked_class = " storyboard-card-locked" if effective_locked_status else ""
+    locked_attr = "1" if effective_locked_status else "0"
+    disabled_attr = " disabled" if effective_locked_status else ""
+    lock_overlay = f'<div class="storyboard-lock-overlay"><span>{_text(effective_locked_status)}</span></div>' if effective_locked_status else ""
     progress = _storyboard_progress_strip_html(row)
     return f"""
-      <article class="storyboard-card{active_class}{approved_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" onclick="selectStoryboardItem(event, this)" onkeydown="if (event.key === 'Enter' || event.key === ' ') selectStoryboardItem(event, this)">
+      <article class="storyboard-card{active_class}{approved_class}{locked_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" data-locked="{locked_attr}" onclick="selectStoryboardItem(event, this)" onkeydown="if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.storyboard-select-wrap')) selectStoryboardItem(event, this)">
+        <label class="storyboard-select-wrap" title="{_attr(checkbox_label)}" onclick="event.stopPropagation()">
+          <input type="checkbox" class="{checkbox_class} storyboard-select" name="selected_lines" value="{_attr(index)}" aria-label="{_attr(checkbox_label)}"{disabled_attr}>
+        </label>
         {media_html}
         <div class="storyboard-card-body">
-          <div class="storyboard-card-title"><span>{label} {_text(index)}</span>{timing_html}</div>
+          <div class="storyboard-card-title"><span>{_text(display_label)}</span>{timing_html}</div>
           {progress}
           <div class="storyboard-card-text">{text_html}</div>
-          <div class="storyboard-card-status">{_text(status)}</div>
         </div>
+        {lock_overlay}
       </article>
 """
+
+
+def _storyboard_item_display_label(item_kind: str, item_index: int) -> str:
+    return f"# {item_index:02d}"
 
 
 def _storyboard_progress_strip_html(row) -> str:
@@ -1943,7 +2078,7 @@ def _storyboard_card_media_html(project, row) -> str:
 def _storyboard_ok_badge_html(row) -> str:
     if not bool(_row_value(row, "video_approved", 0)):
         return ""
-    return '<span class="storyboard-ok-badge">OK</span>'
+    return '<span class="storyboard-ok-badge" aria-label="Finished">&#10003;</span>'
 
 
 def _storyboard_image_path(row) -> str:
@@ -2067,7 +2202,7 @@ def _project_status_payload(
         "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
         "queue_count": len(counted_jobs),
         "rows": _extract_row_snippets(html),
-        "storyboard_html": _storyboard_html(project, rows, item_kind),
+        "storyboard_html": _storyboard_html(project, rows, item_kind, locked),
     }
 
 
@@ -2247,10 +2382,25 @@ def _open_filter_html(rows) -> str:
     return f"""<span class="open-count-label">{open_count}/{total}</span>"""
 
 
-def _queue_estimate_html(seconds: float | None) -> str:
+def _queue_estimate_html(seconds: float | None, queue_count: int = 0, open_modal: bool = True) -> str:
     value = max(0.0, float(seconds or 0.0))
-    label = "Queue frei" if value <= 0 else f"Queue ca. {_format_duration(value)}"
-    return f'<span id="queue-estimate" class="queue-estimate" data-seconds="{int(round(value))}">{_text(label)}</span>'
+    count = max(0, int(queue_count or 0))
+    label = _queue_estimate_label(value, count)
+    onclick = ' onclick="openQueueModal()"' if open_modal else ""
+    return (
+        f'<button id="queue-estimate" class="queue-estimate" type="button" data-seconds="{int(round(value))}" '
+        f'data-count="{count}"{onclick}>{_text(label)}</button>'
+    )
+
+
+def _queue_estimate_label(seconds: float | None, queue_count: int) -> str:
+    count = max(0, int(queue_count or 0))
+    if count <= 0:
+        return "Queue 0"
+    value = max(0.0, float(seconds or 0.0))
+    if value <= 0:
+        return f"{count} ~?s"
+    return f"{count} ~{_format_duration(value)}"
 
 
 def _scroll_top_button_html() -> str:
@@ -2421,10 +2571,11 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row, button
     next_value = "0" if approved else "1"
     button_class = "finish-toggle finish-toggle-active" if approved else "finish-toggle finish-toggle-inactive"
     label = "Mark as unfinished" if approved else "Mark as finished"
+    check_icon = '<span class="finish-toggle-check" aria-hidden="true">&#10003;</span>' if approved else ""
     return f"""
 <form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" onsubmit="rememberScrollPosition()">
   <input type="hidden" name="video_approved" value="{next_value}">
-  <button class="{button_class}" type="submit">{label}</button>
+  <button class="{button_class}" type="submit"><span>{label}</span>{check_icon}</button>
 </form>
 """
 

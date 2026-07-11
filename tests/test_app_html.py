@@ -9,6 +9,7 @@ import musicvideogen.app as app_module
 from musicvideogen.app import (
     APP_ROOT,
     _job_name,
+    _queue_estimate_label,
     _local_asset_url,
     _page,
     _project_html,
@@ -46,6 +47,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".danger-panel[open] { background: transparent;", html)
         self.assertIn(".project-title-right { justify-content: flex-end;", html)
         self.assertIn(".queue-estimate { padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d;", html)
+        self.assertIn(".queue-modal { z-index: 180;", html)
+        self.assertIn(".queue-modal-content { width: min(1120px, 96vw); height: 75vh; max-height: 75vh;", html)
+        self.assertIn(".queue-modal-body { min-height: 0; overflow: auto; padding-bottom: 16px;", html)
 
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
         html = _projects_html([], [])
@@ -157,11 +161,21 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<strong>1</strong><span>failed</span>", html)
         self.assertIn("<strong>1m 10s</strong><span>estimate</span>", html)
 
+    def test_queue_estimate_label_shows_count_and_unknown_when_time_runs_out(self):
+        self.assertEqual(_queue_estimate_label(126, 3), "3 ~2m 6s")
+        self.assertEqual(_queue_estimate_label(0, 1), "1 ~?s")
+        self.assertEqual(_queue_estimate_label(0, 0), "Queue 0")
+
     def test_start_page_has_queue_polling_and_queue_options(self):
-        html = _page("Projects", _projects_html([], [], queue_estimate_seconds=70.0), queue_count=2)
+        jobs = [
+            Job(id=4, name="queued", status="queued", created_at="2026-06-27T19:15:24"),
+            Job(id=3, name="running", status="running", created_at="2026-06-27T19:03:22"),
+        ]
+        html = _page("Projects", _projects_html([], jobs, queue_estimate_seconds=70.0), queue_count=2)
 
         self.assertIn('id="queue-estimate"', html)
-        self.assertIn("Queue ca. 1m 10s", html)
+        self.assertIn('data-count="2"', html)
+        self.assertIn(">2 ~1m 10s</button>", html)
         self.assertIn('id="queue-summary"', html)
         self.assertIn('id="jobs-table-body"', html)
         self.assertIn('name="autodelete_finished"', html)
@@ -284,11 +298,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("Storyboard lyric", html)
         self.assertIn("<table>", html)
         self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
-        self.assertLess(html.index('id="project-table-view"'), html.index("<table>"))
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
+        self.assertIn("<table>", table_html)
         self.assertLess(html.index('id="project-table-view"'), html.index("<h2>Project Settings</h2>"))
         self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
         self.assertLess(html.index('name="global_style_prompt"'), html.index('name="scene_plan" form="scene-plan-form-7"'))
-        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
         self.assertIn('<tr id="line-row-3"', table_html)
         self.assertIn('action="/projects/7/lines/3/timing"', table_html)
         self.assertIn('action="/projects/7/lines/3/insert-after"', table_html)
@@ -421,7 +435,7 @@ class AppHtmlTests(unittest.TestCase):
         inspector_html = html[html.index('<aside id="segment-inspector"') : html.index("</aside>", html.index('<aside id="segment-inspector"'))]
 
         self.assertIn('class="segment-inspector"', html)
-        self.assertIn("Selected Segment 2", html)
+        self.assertIn('<h3 class="segment-inspector-title"># 02</h3>', html)
         self.assertIn("Inspector lyric", html)
         self.assertIn('action="/projects/7/segments/2/prompts/image/save"', html)
         self.assertIn('formaction="/projects/7/segments/2/prompts/image/ai-fill"', html)
@@ -435,6 +449,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('name="video_approved" value="0"', html)
         self.assertIn('class="finish-toggle finish-toggle-active"', html)
         self.assertIn("Mark as unfinished", html)
+        self.assertIn('<span class="finish-toggle-check" aria-hidden="true">&#10003;</span>', html)
         self.assertIn('class="segment-inspector-label-row"', html)
         self.assertIn('<div class="segment-inspector-label">Text</div><div class="segment-inspector-meta">1.0 - 2.0</div>', html)
         self.assertNotIn('<div class="segment-inspector-label">Status</div>', inspector_html)
@@ -488,10 +503,17 @@ class AppHtmlTests(unittest.TestCase):
         html = _page("Demo", _project_html(project, [], segments))
 
         self.assertIn('class="storyboard-card storyboard-card-active storyboard-card-approved"', html)
+        self.assertNotIn("<h2>Storyboard</h2>", html)
         self.assertIn('data-inspector-template="segment-inspector-template-segments-0"', html)
+        self.assertIn('class="segment-select storyboard-select" name="selected_lines" value="0"', html)
+        self.assertIn('title="Segment markieren"', html)
+        self.assertIn("!event.target.closest('.storyboard-select-wrap')", html)
+        self.assertIn('<div class="storyboard-card-title"><span># 00</span>', html)
+        self.assertNotIn("Segment 0", html)
         self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
         self.assertIn('<template id="segment-inspector-template-segments-1">', html)
         self.assertIn('class="segment-inspector-nav"', html)
+        self.assertIn('<h3 class="segment-inspector-title"># 00</h3>', html)
         self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein vorhergehendes Segment">◀</span>', html)
         self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Nachfolgendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-1&#x27;)">▶</button>', html)
         self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Vorhergehendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-0&#x27;)">◀</button>', html)
@@ -502,7 +524,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<span class="progress-step progress-step-done">Avatar</span>', html)
         self.assertIn('<span class="progress-step progress-step-done">Clip</span>', html)
         self.assertNotIn('<span class="progress-step progress-step-done">OK</span>', html)
-        self.assertIn('<span class="storyboard-ok-badge">OK</span>', html)
+        self.assertIn('<span class="storyboard-ok-badge" aria-label="Finished">&#10003;</span>', html)
         self.assertIn("function selectStoryboardItem", html)
         self.assertIn("function selectStoryboardTemplate", html)
         self.assertIn("storyboard-card-active", html)
@@ -625,8 +647,12 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".inspector-prompt-media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));", html)
         self.assertIn(".inspector-prompt-actions { display: flex; justify-content: space-between;", html)
         self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
-        self.assertIn(".finish-toggle { display: block; width: 100%;", html)
+        self.assertIn(".finish-toggle { display: flex; width: 100%;", html)
         self.assertIn(".storyboard-card-approved { background: #dff3e8;", html)
+        self.assertIn(".storyboard-card-locked { cursor: not-allowed; background: #dfe4e2;", html)
+        self.assertIn(".storyboard-card-locked > *:not(.storyboard-lock-overlay) { pointer-events: none; filter: grayscale(1); opacity: .52;", html)
+        self.assertIn(".storyboard-lock-overlay { position: absolute; inset: 0; z-index: 20;", html)
+        self.assertIn("background: rgba(214,220,218,.68);", html)
         self.assertIn("@keyframes storyboardActiveRing", html)
         self.assertIn("--storyboard-ring-angle: 0deg;", html)
         self.assertIn("to { --storyboard-ring-angle: 360deg;", html)
@@ -634,8 +660,12 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("background: conic-gradient(from var(--storyboard-ring-angle), var(--studio-accent) 0 23%, transparent 23% 27%, var(--studio-pink) 27% 50%, transparent 50% 54%, var(--studio-accent) 54% 77%, transparent 77% 81%, var(--studio-pink) 81% 100%);", html)
         self.assertIn("animation: storyboardActiveRing 2.2s linear infinite;", html)
         self.assertNotIn("storyboardActiveRing { to { transform: rotate", html)
-        self.assertIn(".storyboard-card-body { display: grid; grid-template-rows: auto auto 1fr auto;", html)
-        self.assertIn(".storyboard-card-status { align-self: end;", html)
+        self.assertIn(".storyboard-card-body { display: grid; grid-template-rows: auto auto 1fr;", html)
+        self.assertNotIn(".storyboard-card-status", html)
+        self.assertIn(".storyboard-select-wrap { position: absolute; top: 8px; left: 8px;", html)
+        self.assertIn("width: 32px; height: 32px; margin: 0;", html)
+        self.assertIn("background: #fff;", html)
+        self.assertIn(".storyboard-select { width: 18px; height: 18px;", html)
         self.assertIn(".storyboard-video-expand { position: absolute; right: 8px; bottom: 8px;", html)
         self.assertIn(".modal-content { position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible;", html)
         self.assertIn(".modal-content > form { max-height: calc(88vh - 74px); overflow: auto;", html)
@@ -643,10 +673,16 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".lightbox-close { position: absolute;", html)
         self.assertIn("background: #e53d91;", html)
         self.assertIn(".storyboard-ok-badge { position: absolute;", html)
+        self.assertIn("width: 32px; height: 32px;", html)
+        self.assertIn(".finish-toggle-check { margin-left: auto; font-size: 23px;", html)
         self.assertIn("pointer-events: none;", html)
         self.assertIn(".segment-inspector { position: sticky; z-index: 70;", html)
         self.assertIn(".prompt-modal.lightbox { z-index: 120;", html)
-        self.assertIn(".segment-inspector-nav { display: flex; justify-content: space-between;", html)
+        self.assertIn(".image-prompt-modal-content .prompt-textarea { min-height: 144px;", html)
+        self.assertIn(".project-settings-body { max-height: calc(88vh - 74px); overflow: auto;", html)
+        self.assertIn(".project-settings-body > form { max-height: none; overflow: visible;", html)
+        self.assertIn(".segment-inspector-nav { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px;", html)
+        self.assertIn(".segment-inspector-title { color: #44504d; font-size: 24px;", html)
         self.assertIn(".segment-nav-button { border: 0;", html)
 
     def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
@@ -681,7 +717,7 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, lines)
 
-        self.assertIn("Selected Line 3", html)
+        self.assertIn('<h3 class="segment-inspector-title"># 03</h3>', html)
         self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
         self.assertIn('action="/projects/7/lines/3/approval"', html)
         self.assertIn("Line inspector lyric", html)
@@ -1245,11 +1281,45 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="section-verse locked-row"', html)
         self.assertIn('data-locked="1"', html)
         self.assertIn('<div class="row-lock-overlay">running</div>', html)
+        self.assertIn('class="storyboard-card storyboard-card-active storyboard-card-locked"', html)
+        self.assertIn('data-locked="1"', html)
+        self.assertIn('class="segment-select storyboard-select" name="selected_lines" value="0" aria-label="Segment markieren" disabled', html)
+        self.assertIn('<div class="storyboard-lock-overlay"><span>running</span></div>', html)
+        self.assertIn("card.dataset.locked === '1'", html)
+        self.assertIn("'.segment-select:checked:not(:disabled)'", html)
         self.assertIn("pollProjectStatus(7)", html)
         self.assertIn("fetch('/projects/' + projectId + '/status')", html)
         self.assertIn("function replaceProjectRow", html)
         self.assertIn("replacementCheckbox.checked = checkbox.checked", html)
         self.assertIn("replaceProjectRow(row, html)", html)
+
+    def test_storyboard_card_does_not_lock_from_stale_row_status_without_active_job(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Running line",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "clip_path": None,
+                "audio_path": None,
+                "status": "running",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('class="storyboard-card storyboard-card-active"', html)
+        self.assertIn('data-locked="0"', html)
+        self.assertIn('class="line-select storyboard-select" name="selected_lines" value="0" aria-label="Zeile markieren"', html)
+        self.assertNotIn('storyboard-card-locked', html)
+        self.assertNotIn('storyboard-lock-overlay', html)
 
     def test_project_status_polling_skips_unchanged_rows(self):
         html = _page("Demo", "")
@@ -1289,7 +1359,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("storyboard_html", payload)
         self.assertIn('id="project-storyboard"', payload["storyboard_html"])
         self.assertIn("Fresh storyboard text", payload["storyboard_html"])
-        self.assertIn("done", payload["storyboard_html"])
+        self.assertNotIn("storyboard-card-status", payload["storyboard_html"])
         self.assertIn('class="segment-inspector"', payload["storyboard_html"])
         self.assertIn('action="/projects/7/segments/0/approval"', payload["storyboard_html"])
         self.assertIn("rows", payload)
@@ -1299,6 +1369,53 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/segments/0/timing"', payload["rows"]["segment-row-0"])
         self.assertIn('<div class="status">done</div>', payload["rows"]["segment-row-0"])
         self.assertNotIn('id="project-storyboard"', payload["rows"]["segment-row-0"])
+
+    def test_project_status_payload_locks_storyboard_cards_for_queued_jobs(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Running line",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "status": "running",
+                "error": "",
+            },
+            {
+                "line_index": 1,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Queued line",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "status": "pending",
+                "error": "",
+            },
+        ]
+        active_jobs = [
+            Job(1, "avatar line 1", "running", "now", project_id=7, item_kind="lines", selected_indices=[0]),
+            Job(2, "avatar line 2", "queued", "now", project_id=7, item_kind="lines", selected_indices=[1]),
+        ]
+
+        payload = _project_status_payload(project, lines, [], active_jobs=active_jobs)
+
+        self.assertEqual(payload["locked"], {"segments": [], "lines": [0, 1]})
+        self.assertEqual(payload["storyboard_html"].count("storyboard-card-locked"), 2)
+        self.assertIn('<div class="storyboard-lock-overlay"><span>running</span></div>', payload["storyboard_html"])
+        self.assertIn('<div class="storyboard-lock-overlay"><span>queued</span></div>', payload["storyboard_html"])
+        self.assertEqual(payload["storyboard_html"].count('disabled>'), 2)
 
     def test_project_status_payload_includes_line_rows_when_storyboard_exists(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1353,7 +1470,7 @@ class AppHtmlTests(unittest.TestCase):
     def test_project_status_polling_skips_storyboard_when_editor_is_active_or_dirty(self):
         html = _page("Demo", "")
 
-        self.assertIn("const projectStoryboardFieldSelector = 'input, textarea, select'", html)
+        self.assertIn("const projectStoryboardFieldSelector = 'input:not(.storyboard-select), textarea, select'", html)
         self.assertIn("function projectStoryboardHasActiveEdit", html)
         self.assertIn("const active = document.activeElement", html)
         self.assertIn("storyboard.contains(active)", html)
@@ -1593,14 +1710,15 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines, used_actions={"scene-plan"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('class="section-verse"', html)
         self.assertIn('class="section-chorus"', html)
         self.assertIn("1.0 - 2.1", html)
         self.assertIn("2.1 - 5.4", html)
-        self.assertNotIn("<th>#</th>", html)
-        self.assertNotIn("<th>Section</th>", html)
-        self.assertNotIn("<th>Chorus</th>", html)
+        self.assertNotIn("<th>#</th>", table_html)
+        self.assertNotIn("<th>Section</th>", table_html)
+        self.assertNotIn("<th>Chorus</th>", table_html)
         self.assertIn('<span class="legend-swatch section-verse"></span>Verse', html)
         self.assertIn('<span class="legend-swatch section-chorus"></span>Refrain', html)
 
@@ -1702,14 +1820,23 @@ class AppHtmlTests(unittest.TestCase):
     def test_project_page_has_sticky_header_and_no_audio_final_info_panel(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "final.mp4"}
 
-        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0), queue_count=4)
+        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0, queue_count=4), queue_count=4)
 
         self.assertIn("<title>(4) Demo</title>", html)
         self.assertIn('class="project-topbar"', html)
         self.assertIn('class="project-title-row"', html)
         self.assertIn('id="queue-estimate"', html)
         self.assertIn('data-seconds="70"', html)
-        self.assertIn("Queue ca. 1m 10s", html)
+        self.assertIn('data-count="4"', html)
+        self.assertIn(">4 ~1m 10s</button>", html)
+        self.assertIn('id="queue-modal"', html)
+        self.assertIn('class="modal lightbox queue-modal"', html)
+        self.assertIn('class="queue-modal-body"', html)
+        self.assertGreater(html.index('id="queue-modal"'), html.index('class="actions"'))
+        self.assertLess(html.index('id="queue-modal"'), html.index('id="project-storyboard"'))
+        self.assertIn("openQueueModal()", html)
+        self.assertIn("closeQueueModal()", html)
+        self.assertIn("pollProjectStatus(7); pollJobsStatus();", html)
         self.assertIn('class="scroll-top-button"', html)
         self.assertIn('aria-label="Nach oben">↑</button>', html)
         self.assertNotIn(">Top</button>", html)
@@ -1723,24 +1850,27 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("<strong>Audio:</strong>", html)
         self.assertNotIn("<strong>Final:</strong>", html)
 
-    def test_project_page_has_bottom_clear_button_with_confirmation(self):
+    def test_project_settings_modal_has_danger_zone_with_confirmation(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
         html = _project_html(project, [])
+        settings_html = html[html.index('id="project-settings-modal"') : html.index("</div>\n  </div>\n</div>", html.index('id="project-settings-modal"'))]
 
-        self.assertIn('<details class="danger-panel">', html)
-        self.assertIn("<summary>Danger Zone</summary>", html)
-        self.assertIn('action="/projects/7/clear"', html)
-        self.assertIn('action="/projects/7/delete"', html)
-        self.assertIn("return confirm('Projekt wirklich leeren?", html)
-        self.assertIn("return confirm('Projekt wirklich loeschen?", html)
-        self.assertIn('class="danger-button"', html)
+        self.assertIn('<div class="project-settings-body">', settings_html)
+        self.assertIn('<details class="danger-panel">', settings_html)
+        self.assertIn("<summary>Danger Zone</summary>", settings_html)
+        self.assertIn('action="/projects/7/clear"', settings_html)
+        self.assertIn('action="/projects/7/delete"', settings_html)
+        self.assertIn("return confirm('Projekt wirklich leeren?", settings_html)
+        self.assertIn("return confirm('Projekt wirklich loeschen?", settings_html)
+        self.assertIn('class="danger-button"', settings_html)
         self.assertIn(".danger-panel { margin-top: 24px;", _page("Demo", ""))
         self.assertIn(".danger-panel[open] { background: transparent;", _page("Demo", ""))
         self.assertIn(".danger-panel .compact-form { background: transparent;", _page("Demo", ""))
         self.assertIn(".danger-panel .actions { padding-top: 12px;", _page("Demo", ""))
-        self.assertGreater(html.index('action="/projects/7/clear"'), html.index('<table>'))
-        self.assertGreater(html.index('action="/projects/7/delete"'), html.index('action="/projects/7/clear"'))
+        self.assertLess(settings_html.index("<button>Save Project Settings</button>"), settings_html.index("<summary>Danger Zone</summary>"))
+        self.assertGreater(settings_html.index('action="/projects/7/clear"'), settings_html.index('name="whisper_model_size"'))
+        self.assertGreater(settings_html.index('action="/projects/7/delete"'), settings_html.index('action="/projects/7/clear"'))
 
     def test_project_page_renders_editable_project_settings(self):
         project = {
@@ -1927,6 +2057,7 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines, used_actions={"scene-plan"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
         self.assertIn('action="/projects/7/lines/3/prompts/image/ai-fill"', html)
@@ -1937,8 +2068,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<button>Save</button>", html)
         self.assertIn('formaction="/projects/7/lines/3/prompts/image/ai-fill">AI fill</button>', html)
         self.assertIn('formaction="/projects/7/lines/3/prompts/video/ai-fill">AI fill</button>', html)
-        self.assertIn("<th>Status</th>", html)
-        self.assertNotIn("<th>Error</th>", html)
+        self.assertIn("<th>Status</th>", table_html)
+        self.assertNotIn("<th>Error</th>", table_html)
         self.assertIn("failed", html)
         self.assertIn("bad node", html)
 

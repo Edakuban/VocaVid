@@ -303,9 +303,11 @@ class AppEndpointTests(unittest.TestCase):
                 page = client.get(f"/projects/{project_2}").text
 
                 self.assertIn("<title>(1) Two</title>", page)
-                self.assertIn('id="queue-estimate" class="queue-estimate" data-seconds=', page)
-                self.assertIn(">Queue ca.", page)
-                self.assertNotIn('id="queue-estimate" class="queue-estimate" data-seconds="0">Queue frei</span>', page)
+                self.assertIn('id="queue-estimate" class="queue-estimate" type="button" data-seconds=', page)
+                self.assertIn('data-count="1"', page)
+                self.assertIn(">1 ~", page)
+                self.assertIn('id="queue-modal"', page)
+                self.assertNotIn(">Queue 0</button>", page)
                 release.set()
                 time.sleep(0.1)
         finally:
