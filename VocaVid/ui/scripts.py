@@ -371,10 +371,10 @@ SCRIPTS = f"""
       selectStoryboardCard(storyboard, card);
     }}
     function scrollStorageKey() {{
-      return 'musicvideogen-scroll:' + window.location.pathname;
+      return 'VocaVid-scroll:' + window.location.pathname;
     }}
     function storyboardSelectionStorageKey() {{
-      return 'musicvideogen-storyboard-selection:' + window.location.pathname;
+      return 'VocaVid-storyboard-selection:' + window.location.pathname;
     }}
     function rememberProjectStoryboardSelection() {{
       const storyboard = document.getElementById('project-storyboard');
@@ -392,7 +392,7 @@ SCRIPTS = f"""
       if (!href) return;
       const templateId = row.dataset.templateId || '';
       if (templateId) {{
-        sessionStorage.setItem('musicvideogen-storyboard-selection:' + href, templateId);
+        sessionStorage.setItem('VocaVid-storyboard-selection:' + href, templateId);
       }}
       window.location.href = href;
     }}

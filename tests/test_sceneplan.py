@@ -1,6 +1,6 @@
 import unittest
 
-from musicvideogen.sceneplan import fallback_scene_plans, make_sceneplan_concept_prompt, make_sceneplan_prompt, parse_scene_plan_text
+from VocaVid.sceneplan import fallback_scene_plans, make_sceneplan_concept_prompt, make_sceneplan_prompt, parse_scene_plan_text
 
 
 class ScenePlanTests(unittest.TestCase):

@@ -6,7 +6,7 @@ import wave
 from unittest.mock import patch
 from pathlib import Path
 
-from musicvideogen.assembly import assemble_kdenlive_project, assemble_video, split_audio_segment
+from VocaVid.assembly import assemble_kdenlive_project, assemble_video, split_audio_segment
 
 
 class AssemblyTests(unittest.TestCase):

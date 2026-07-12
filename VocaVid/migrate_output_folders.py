@@ -18,7 +18,7 @@ PATH_COLUMNS = {
 
 def migrate(app_root: Path, apply: bool = False) -> list[str]:
     app_root = app_root.resolve()
-    db_path = app_root / "musicvideogen.sqlite3"
+    db_path = app_root / "VocaVid.sqlite3"
     outputs = app_root / "outputs"
     messages: list[str] = []
     if not db_path.exists():
@@ -97,8 +97,8 @@ def _replace_output_refs(value: str, app_root: Path, mappings: list[dict[str, ob
         replacements = [
             (str(old_abs), str(new_abs)),
             (old_abs.as_posix(), new_abs.as_posix()),
-            (f".musicvideogen\\outputs\\{old_name}", f".musicvideogen\\outputs\\{new_name}"),
-            (f".musicvideogen/outputs/{old_name}", f".musicvideogen/outputs/{new_name}"),
+            (f".VocaVid\\outputs\\{old_name}", f".VocaVid\\outputs\\{new_name}"),
+            (f".VocaVid/outputs/{old_name}", f".VocaVid/outputs/{new_name}"),
             (f"outputs\\{old_name}", f"outputs\\{new_name}"),
             (f"outputs/{old_name}", f"outputs/{new_name}"),
         ]
@@ -167,7 +167,7 @@ def _format_plan(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--app-root", type=Path, default=Path.cwd() / ".musicvideogen")
+    parser.add_argument("--app-root", type=Path, default=Path.cwd() / ".VocaVid")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     for message in migrate(args.app_root, apply=args.apply):

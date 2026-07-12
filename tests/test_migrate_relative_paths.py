@@ -4,17 +4,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from musicvideogen.migrate_relative_paths import migrate
-from musicvideogen.store import Store
+from VocaVid.migrate_relative_paths import migrate
+from VocaVid.store import Store
 
 
 class RelativePathMigrationTests(unittest.TestCase):
     def test_migrate_converts_internal_database_paths_to_relative_values(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
-            app_root = Path(directory) / ".musicvideogen"
-            db_path = app_root / "musicvideogen.sqlite3"
+            app_root = Path(directory) / ".VocaVid"
+            db_path = app_root / "VocaVid.sqlite3"
             Store(db_path)
-            legacy_root = Path(directory) / "old" / ".musicvideogen"
+            legacy_root = Path(directory) / "old" / ".VocaVid"
             external = r"D:\media\reference.png"
             con = sqlite3.connect(db_path)
             try:

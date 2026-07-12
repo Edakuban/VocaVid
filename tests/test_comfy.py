@@ -1,6 +1,6 @@
 import unittest
 
-from musicvideogen.comfy import ComfyClient
+from VocaVid.comfy import ComfyClient
 
 
 class FakeTransport:

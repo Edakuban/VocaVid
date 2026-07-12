@@ -1,6 +1,6 @@
 import unittest
 
-from musicvideogen.comfy import load_workflow_from_data, with_output_prefix
+from VocaVid.comfy import load_workflow_from_data, with_output_prefix
 
 
 class ComfyWorkflowConversionTests(unittest.TestCase):
@@ -143,7 +143,7 @@ class ComfyWorkflowConversionTests(unittest.TestCase):
             "8": {"class_type": "VAEDecode", "inputs": {}},
         }
 
-        updated = with_output_prefix(workflow, "musicvideogen/project-1/line-0-123")
+        updated = with_output_prefix(workflow, "VocaVid/project-1/line-0-123")
 
-        self.assertEqual(updated["9"]["inputs"]["filename_prefix"], "musicvideogen/project-1/line-0-123")
+        self.assertEqual(updated["9"]["inputs"]["filename_prefix"], "VocaVid/project-1/line-0-123")
         self.assertEqual(workflow["9"]["inputs"]["filename_prefix"], "old")

@@ -5,12 +5,12 @@ import wave
 from pathlib import Path
 from unittest.mock import patch
 
-from musicvideogen.lyrics import parse_suno_lyrics
-from musicvideogen.models import LineTiming
-from musicvideogen.alignment import TranscriptWord
-from musicvideogen.pipeline import Pipeline
-from musicvideogen.store import Store
-from musicvideogen.workflows import WorkflowPaths
+from VocaVid.lyrics import parse_suno_lyrics
+from VocaVid.models import LineTiming
+from VocaVid.alignment import TranscriptWord
+from VocaVid.pipeline import Pipeline
+from VocaVid.store import Store
+from VocaVid.workflows import WorkflowPaths
 
 
 class PipelineSegmentTests(unittest.TestCase):
@@ -47,7 +47,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     captured["prompt"] = workflow["1"]["inputs"]["prompt"]
                     return type("Result", (), {"ok": True, "output_files": [], "text_outputs": ["noir cathedral performance, rain, 35mm"], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -91,7 +91,7 @@ class PipelineSegmentTests(unittest.TestCase):
             pipeline = Pipeline(store, root / "outputs")
             pipeline.workflows = WorkflowPaths.defaults(root)
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             captured = {}
 
@@ -216,7 +216,7 @@ class PipelineSegmentTests(unittest.TestCase):
     def test_build_segments_stores_internal_audio_paths_relative_to_app_root(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
-            app_root = root / ".musicvideogen"
+            app_root = root / ".VocaVid"
             store = Store(root / "test.sqlite3")
             audio = root / "song.wav"
             lyrics = root / "lyrics.txt"
@@ -278,7 +278,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 TranscriptWord("tail", 31.5, 32.0),
             ]
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", return_value=transcript):
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", return_value=transcript):
                 pipeline.align_with_whisper(project_id)
 
             lines = store.list_lines(project_id)
@@ -316,7 +316,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 TranscriptWord("tail", 75.0, 76.0),
             ]
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", return_value=transcript):
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", return_value=transcript):
                 pipeline.align_with_whisper(project_id)
 
             lines = store.list_lines(project_id)
@@ -354,7 +354,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 TranscriptWord("two", 2.4, 2.7),
             ]
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", return_value=transcript) as transcribe:
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", return_value=transcript) as transcribe:
                 pipeline.align_with_whisper(project_id)
 
             self.assertEqual(transcribe.call_args.kwargs["model_size"], "medium")
@@ -399,7 +399,7 @@ class PipelineSegmentTests(unittest.TestCase):
 
             pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")) as transcribe:
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")) as transcribe:
                 with self.assertRaises(RuntimeError):
                     pipeline.regroup_project(project_id)
 
@@ -442,7 +442,7 @@ class PipelineSegmentTests(unittest.TestCase):
 
             pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")):
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")):
                 with self.assertRaises(RuntimeError):
                     pipeline.regroup_project(project_id)
 
@@ -604,7 +604,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     self.variables = variables
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -666,7 +666,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     captured["workflow"] = workflow
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             original_new_seed = pipeline_module._new_seed
@@ -734,7 +734,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     captured["workflow"] = workflow
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             original_new_seed = pipeline_module._new_seed
@@ -825,7 +825,7 @@ class PipelineSegmentTests(unittest.TestCase):
             "fullbody_reference_image_path": "fullbody.png",
         }
 
-        import musicvideogen.pipeline as pipeline_module
+        import VocaVid.pipeline as pipeline_module
 
         injected = pipeline_module._inject_avatar_load_images(workflow, variables)
 
@@ -848,7 +848,7 @@ class PipelineSegmentTests(unittest.TestCase):
             "avatar_identity_context": "female avatar; oval face, dark eyes",
         }
 
-        import musicvideogen.pipeline as pipeline_module
+        import VocaVid.pipeline as pipeline_module
 
         injected = pipeline_module._inject_avatar_prompt(workflow, variables)
 
@@ -870,7 +870,7 @@ class PipelineSegmentTests(unittest.TestCase):
             "fullbody_reference_image_path": "fullbody.png",
         }
 
-        import musicvideogen.pipeline as pipeline_module
+        import VocaVid.pipeline as pipeline_module
 
         injected = pipeline_module._inject_avatar_load_images(workflow, variables)
 
@@ -920,7 +920,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     captured["variables"] = variables
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -979,7 +979,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     captured["workflow"] = workflow
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             original_new_seed = pipeline_module._new_seed
@@ -1036,7 +1036,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 def run_workflow(self, workflow, variables):
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -1130,7 +1130,7 @@ class PipelineSegmentTests(unittest.TestCase):
                     captured["variables"] = variables
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -1182,7 +1182,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 def run_workflow(self, workflow, variables):
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -1285,7 +1285,7 @@ class PipelineSegmentTests(unittest.TestCase):
                         return type("Result", (), {"ok": True, "output_files": [], "text_outputs": ["Core concept: lone fire becomes collective ritual.\nChorus escalation plan: first close, then wide and massive."], "error": ""})()
                     return type("Result", (), {"ok": True, "output_files": [], "text_outputs": ["0: memory shot, low dolly through ash\n1: large-scale chorus shot, silhouettes rise behind singer"], "error": ""})()
 
-            import musicvideogen.pipeline as pipeline_module
+            import VocaVid.pipeline as pipeline_module
 
             original_client = pipeline_module.ComfyClient
             try:
@@ -1658,7 +1658,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 TranscriptWord("Three", 12.0, 12.4),
                 TranscriptWord("four", 12.45, 12.9),
             ]
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", return_value=transcript) as transcribe:
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", return_value=transcript) as transcribe:
                 pipeline.regroup_project(project_id)
 
             transcribe.assert_called_once()
@@ -1707,8 +1707,8 @@ class PipelineSegmentTests(unittest.TestCase):
                 TranscriptWord("four", 12.45, 12.9),
             ]
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", return_value=transcript):
-                with self.assertLogs("musicvideogen.pipeline", level="INFO") as logs:
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", return_value=transcript):
+                with self.assertLogs("VocaVid.pipeline", level="INFO") as logs:
                     pipeline.regroup_project(project_id)
 
             output = "\n".join(logs.output)
@@ -1721,12 +1721,12 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertIn("split audio done", output)
             self.assertIn("regroup done", output)
 
-    def test_regroup_project_resolves_legacy_musicvideogen_upload_paths(self):
+    def test_regroup_project_resolves_legacy_VocaVid_upload_paths(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
-            app_root = root / ".musicvideogen"
+            app_root = root / ".VocaVid"
             current_audio = app_root / "uploads" / "demo" / "song.wav"
-            legacy_audio = root / "old-location" / ".musicvideogen" / "uploads" / "demo" / "song.wav"
+            legacy_audio = root / "old-location" / ".VocaVid" / "uploads" / "demo" / "song.wav"
             lyrics = root / "lyrics.txt"
             current_audio.parent.mkdir(parents=True)
             _write_wav(current_audio, duration_sec=6.0)
@@ -1783,7 +1783,7 @@ class PipelineSegmentTests(unittest.TestCase):
 
             pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")):
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")):
                 with self.assertRaises(RuntimeError):
                     pipeline.regroup_project(project_id)
 
@@ -1818,7 +1818,7 @@ class PipelineSegmentTests(unittest.TestCase):
 
             pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
 
-            with patch("musicvideogen.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")) as transcribe:
+            with patch("VocaVid.pipeline.transcribe_words_with_fallback", side_effect=RuntimeError("offline")) as transcribe:
                 with self.assertRaises(RuntimeError):
                     pipeline.regroup_project(project_id)
 
@@ -1831,7 +1831,7 @@ class PipelineSegmentTests(unittest.TestCase):
     def test_localize_comfy_output_copies_generated_files_into_project_folder(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
-            source = root / "comfy-output" / "musicvideogen" / "project-1" / "segment-0.png"
+            source = root / "comfy-output" / "VocaVid" / "project-1" / "segment-0.png"
             source.parent.mkdir(parents=True)
             source.write_bytes(b"png-data")
             store = Store(root / "test.sqlite3")
@@ -1868,14 +1868,14 @@ class PipelineSegmentTests(unittest.TestCase):
                 item_kind="segment",
                 item_index=3,
                 output_field="clip_path",
-                output_path="musicvideogen/project-7/raw-clip.mp4",
+                output_path="VocaVid/project-7/raw-clip.mp4",
             )
 
             self.assertEqual(copied, root / "outputs" / "project-7" / "clips" / "segment-003.mp4")
             self.assertEqual(copied.read_bytes(), b"movie")
             self.assertEqual(len(downloads), 1)
             self.assertIn("filename=raw-clip.mp4", downloads[0][0])
-            self.assertIn("subfolder=musicvideogen%2Fproject-7", downloads[0][0])
+            self.assertIn("subfolder=VocaVid%2Fproject-7", downloads[0][0])
 
 
 def _write_wav(path: Path, duration_sec: float) -> None:

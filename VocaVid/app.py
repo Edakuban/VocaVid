@@ -22,9 +22,9 @@ from .pipeline import Pipeline
 from .store import Store
 from .worker import JobQueue
 
-APP_ROOT = Path.cwd() / ".musicvideogen"
+APP_ROOT = Path.cwd() / ".VocaVid"
 UPLOADS = APP_ROOT / "uploads"
-DB_PATH = APP_ROOT / "musicvideogen.sqlite3"
+DB_PATH = APP_ROOT / "VocaVid.sqlite3"
 ICON_ROOT = Path.cwd() / "icon"
 logger = logging.getLogger(__name__)
 _SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
@@ -673,8 +673,8 @@ from .ui import rendering as _ui_rendering
 
 
 # Compatibility bridge for older tests and callers that import private UI
-# helpers from musicvideogen.app. New UI code should import from
-# musicvideogen.ui.* modules directly.
+# helpers from VocaVid.app. New UI code should import from
+# VocaVid.ui.* modules directly.
 def _sync_ui_rendering_roots() -> None:
     _ui_rendering.set_app_root(APP_ROOT)
 

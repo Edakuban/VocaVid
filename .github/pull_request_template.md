@@ -13,7 +13,7 @@
 ## Testing
 
 - [ ] Ran `pytest`
-- [ ] Tested locally with `python -m musicvideogen serve`
+- [ ] Tested locally with `python -m VocaVid serve`
 - [ ] Tested with ComfyUI running
 - [ ] Not tested, because:
 

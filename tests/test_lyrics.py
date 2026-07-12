@@ -1,6 +1,6 @@
 import unittest
 
-from musicvideogen.lyrics import parse_suno_lyrics
+from VocaVid.lyrics import parse_suno_lyrics
 
 
 class LyricsTests(unittest.TestCase):

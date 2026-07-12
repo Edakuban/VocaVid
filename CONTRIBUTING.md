@@ -25,7 +25,7 @@ pip install -r requirements.txt
 Run the app locally with:
 
 ```powershell
-python -m musicvideogen serve
+python -m VocaVid serve
 ```
 
 Then open:

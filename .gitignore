@@ -14,17 +14,21 @@ venv/
 env/
 
 # Local app state and generated media
-.musicvideogen/
+.VocaVid/
+.musicvideo[g]en/
 .superpowers/
 images/
-musicvideogen.sqlite3
+VocaVid.sqlite3
+musicvideo[g]en.sqlite3
 *.sqlite
 *.sqlite3
 
 # Runtime logs
 *.log
-.musicvideogen-server*.out.log
-.musicvideogen-server*.err.log
+.VocaVid-server*.out.log
+.VocaVid-server*.err.log
+.musicvideo[g]en-server*.out.log
+.musicvideo[g]en-server*.err.log
 
 # OS / editor noise
 .DS_Store

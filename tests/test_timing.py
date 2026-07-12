@@ -1,7 +1,7 @@
 import unittest
 
-from musicvideogen.models import LyricLine, LineTiming
-from musicvideogen.timing import apply_manual_timing, distribute_evenly
+from VocaVid.models import LyricLine, LineTiming
+from VocaVid.timing import apply_manual_timing, distribute_evenly
 
 
 class TimingTests(unittest.TestCase):

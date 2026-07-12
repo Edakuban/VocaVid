@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from musicvideogen.workflows import WorkflowPaths
+from VocaVid.workflows import WorkflowPaths
 
 
 class WorkflowPathTests(unittest.TestCase):

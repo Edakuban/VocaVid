@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from musicvideogen.prompt_templates import load_named_prompt_template, load_prompt_template, render_prompt_template
+from VocaVid.prompt_templates import load_named_prompt_template, load_prompt_template, render_prompt_template
 
 
 class PromptTemplateTests(unittest.TestCase):

@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from musicvideogen.worker import JobQueue
+from VocaVid.worker import JobQueue
 
 
 class WorkerTests(unittest.TestCase):

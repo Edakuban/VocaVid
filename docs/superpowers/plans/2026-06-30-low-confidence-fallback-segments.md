@@ -6,7 +6,7 @@
 
 **Architecture:** Keep alignment data visible on lyric rows, but make render segment construction skip unreliable fallback rows. Segment generation continues to derive instrumental gaps from time ranges not covered by trusted lyric rows.
 
-**Tech Stack:** Python, unittest, existing `musicvideogen.segments` and pipeline tests.
+**Tech Stack:** Python, unittest, existing `VocaVid.segments` and pipeline tests.
 
 ---
 
@@ -14,7 +14,7 @@
 
 **Files:**
 - Modify: `tests/test_segments.py`
-- Modify: `musicvideogen/segments.py`
+- Modify: `VocaVid/segments.py`
 
 - [ ] **Step 1: Write the failing test**
 

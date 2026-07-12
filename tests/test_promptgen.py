@@ -1,6 +1,6 @@
 import unittest
 
-from musicvideogen.promptgen import inject_promptgen_context, make_global_style_prompt, make_promptgen_prompt, make_videoprompt_prompt
+from VocaVid.promptgen import inject_promptgen_context, make_global_style_prompt, make_promptgen_prompt, make_videoprompt_prompt
 
 
 class PromptgenTests(unittest.TestCase):

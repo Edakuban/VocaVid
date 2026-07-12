@@ -4,10 +4,10 @@ import unittest
 import wave
 from pathlib import Path
 
-from musicvideogen.lyrics import parse_suno_lyrics
-from musicvideogen.pipeline import Pipeline
-from musicvideogen.store import Store
-from musicvideogen.workflows import WorkflowPaths
+from VocaVid.lyrics import parse_suno_lyrics
+from VocaVid.pipeline import Pipeline
+from VocaVid.store import Store
+from VocaVid.workflows import WorkflowPaths
 
 
 class PipelineSelectionTests(unittest.TestCase):

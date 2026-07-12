@@ -809,7 +809,7 @@ class Pipeline:
         workflow = load_workflow(workflow_path)
         client = ComfyClient(project["comfy_base_url"])
         variables = self._variables(project, row, prefer_avatar=prefer_avatar)
-        prefix = f"musicvideogen/{self._project_folder_name(project)}/line-{row['line_index']}-{int(time.time() * 1000)}"
+        prefix = f"VocaVid/{self._project_folder_name(project)}/line-{row['line_index']}-{int(time.time() * 1000)}"
         if output_field == "clip_path":
             variables = _with_transition_handle_duration(project, variables)
             workflow = _inject_image_audio_video_inputs(workflow, variables)
@@ -851,7 +851,7 @@ class Pipeline:
         workflow = load_workflow(workflow_path)
         client = ComfyClient(project["comfy_base_url"])
         variables = self._variables(project, row, prefer_avatar=prefer_avatar)
-        prefix = f"musicvideogen/{self._project_folder_name(project)}/segment-{row['segment_index']}-{int(time.time() * 1000)}"
+        prefix = f"VocaVid/{self._project_folder_name(project)}/segment-{row['segment_index']}-{int(time.time() * 1000)}"
         if output_field == "clip_path":
             variables = _with_transition_handle_duration(project, variables)
             workflow = _inject_image_audio_video_inputs(workflow, variables)
@@ -886,7 +886,7 @@ class Pipeline:
         workflow = _inject_avatar_load_images(workflow, variables)
         workflow = _inject_avatar_prompt(workflow, variables)
         workflow = _randomize_workflow_seeds(workflow)
-        prefix = f"musicvideogen/{self._project_folder_name(project)}/avatar-line-{row['line_index']}-{int(time.time() * 1000)}"
+        prefix = f"VocaVid/{self._project_folder_name(project)}/avatar-line-{row['line_index']}-{int(time.time() * 1000)}"
         workflow = with_output_prefix(workflow, prefix)
         self.store.update_line(project_id, row["line_index"], status="running", error="", last_action="avatar-image")
         result = client.run_workflow(workflow, variables)
@@ -911,7 +911,7 @@ class Pipeline:
         workflow = _inject_avatar_load_images(workflow, variables)
         workflow = _inject_avatar_prompt(workflow, variables)
         workflow = _randomize_workflow_seeds(workflow)
-        prefix = f"musicvideogen/{self._project_folder_name(project)}/avatar-segment-{row['segment_index']}-{int(time.time() * 1000)}"
+        prefix = f"VocaVid/{self._project_folder_name(project)}/avatar-segment-{row['segment_index']}-{int(time.time() * 1000)}"
         workflow = with_output_prefix(workflow, prefix)
         self.store.update_segment(project_id, row["segment_index"], status="running", error="", last_action="avatar-image")
         result = client.run_workflow(workflow, variables)

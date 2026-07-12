@@ -1,13 +1,13 @@
 import unittest
 
-from musicvideogen.alignment import (
+from VocaVid.alignment import (
     TranscriptWord,
     align_lyrics_to_words,
     infer_language_from_lyrics,
     normalize_word,
     transcribe_words_with_fallback,
 )
-from musicvideogen.models import LyricLine
+from VocaVid.models import LyricLine
 
 
 class AlignmentTests(unittest.TestCase):

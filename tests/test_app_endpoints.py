@@ -9,12 +9,12 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-import musicvideogen.app as app_module
-from musicvideogen.alignment import TranscriptWord
-from musicvideogen.lyrics import parse_suno_lyrics
-from musicvideogen.models import RenderSegment
-from musicvideogen.pipeline import Pipeline
-from musicvideogen.store import Store
+import VocaVid.app as app_module
+from VocaVid.alignment import TranscriptWord
+from VocaVid.lyrics import parse_suno_lyrics
+from VocaVid.models import RenderSegment
+from VocaVid.pipeline import Pipeline
+from VocaVid.store import Store
 
 
 class AppEndpointTests(unittest.TestCase):
@@ -25,9 +25,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
 
                 app = app_module.create_app()
                 client = TestClient(app)
@@ -49,9 +49,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
 
                 app = app_module.create_app()
                 app.state.jobs.submit("queued job", lambda: "ok", action="prompts")
@@ -82,9 +82,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
 
                 app = app_module.create_app()
                 client = TestClient(app)
@@ -133,9 +133,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -181,9 +181,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
 
                 client = TestClient(app_module.create_app())
                 response = client.post("/jobs/delete-finished", follow_redirects=False)
@@ -222,9 +222,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 app_module.Pipeline = FakePipeline
                 audio = root / "song.wav"
                 _write_wav(audio)
@@ -311,9 +311,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 app_module.Pipeline = FakePipeline
                 audio = root / "song.wav"
                 _write_wav(audio)
@@ -367,9 +367,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -414,9 +414,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -469,9 +469,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -527,9 +527,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -576,9 +576,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -618,9 +618,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -674,9 +674,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -731,9 +731,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -777,9 +777,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -823,9 +823,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
 
                 def fake_run(command, check, capture_output, text):
                     Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
@@ -857,7 +857,7 @@ class AppEndpointTests(unittest.TestCase):
                 store.mark_project_action_used(project_id, "align")
 
                 client = TestClient(app_module.create_app())
-                with patch("musicvideogen.pipeline.transcribe_words_with_fallback", return_value=[TranscriptWord("Hello", 1.0, 2.0)]) as transcribe:
+                with patch("VocaVid.pipeline.transcribe_words_with_fallback", return_value=[TranscriptWord("Hello", 1.0, 2.0)]) as transcribe:
                     response = client.post(
                         f"/projects/{project_id}/settings",
                         data={
@@ -912,9 +912,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -985,9 +985,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"
@@ -1042,9 +1042,9 @@ class AppEndpointTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
                 audio = root / "song.wav"

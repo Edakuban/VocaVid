@@ -5,7 +5,7 @@ import logging
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="musicvideogen")
+    parser = argparse.ArgumentParser(prog="VocaVid")
     sub = parser.add_subparsers(dest="command", required=True)
     serve = sub.add_parser("serve")
     serve.add_argument("--host", default="127.0.0.1")
@@ -18,7 +18,7 @@ def main() -> None:
     if args.command == "serve":
         import uvicorn
 
-        uvicorn.run("musicvideogen.app:app", host=args.host, port=args.port, reload=False)
+        uvicorn.run("VocaVid.app:app", host=args.host, port=args.port, reload=False)
     elif args.command == "run":
         from pathlib import Path
 

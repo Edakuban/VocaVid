@@ -5,25 +5,25 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-import musicvideogen.app as app_module
-import musicvideogen.ui.context as ui_context
-from musicvideogen.app import APP_ROOT
-from musicvideogen.ui.assets import _page
-from musicvideogen.ui.formatting import (
+import VocaVid.app as app_module
+import VocaVid.ui.context as ui_context
+from VocaVid.app import APP_ROOT
+from VocaVid.ui.assets import _page
+from VocaVid.ui.formatting import (
     _job_name,
     _local_asset_url,
     _reference_paths_from_text,
 )
-from musicvideogen.ui.projects import (
+from VocaVid.ui.projects import (
     _project_html,
     _project_status_payload,
     _projects_html,
 )
-from musicvideogen.ui.queue import _queue_estimate_label
-from musicvideogen.ui.storyboard import (
+from VocaVid.ui.queue import _queue_estimate_label
+from VocaVid.ui.storyboard import (
     _segment_inspector_html,
 )
-from musicvideogen.worker import Job
+from VocaVid.worker import Job
 
 
 class RowLike:
@@ -298,9 +298,9 @@ class AppHtmlTests(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
                 root = Path(directory)
-                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.APP_ROOT = root / ".VocaVid"
                 app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
 
                 app = app_module.create_app()
                 app.state.jobs.submit("queued job", lambda: "ok", action="prompts")
@@ -857,7 +857,7 @@ class AppHtmlTests(unittest.TestCase):
                 "end_sec": None,
                 "confidence": None,
                 "prompt": None,
-                "image_path": "musicvideogen/project-7/line-000.png",
+                "image_path": "VocaVid/project-7/line-000.png",
                 "avatar_image_path": None,
                 "clip_path": None,
                 "status": "done",
@@ -867,8 +867,8 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, lines)
 
-        self.assertIn('src="http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output"', html)
-        self.assertIn('onclick="openImageLightbox(&quot;http://example.test/\\&quot;quoted\\&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output&quot;)"', html)
+        self.assertIn('src="http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=VocaVid%2Fproject-7&amp;type=output"', html)
+        self.assertIn('onclick="openImageLightbox(&quot;http://example.test/\\&quot;quoted\\&quot;/view?filename=line-000.png&amp;subfolder=VocaVid%2Fproject-7&amp;type=output&quot;)"', html)
         self.assertNotIn('src="http://example.test/"quoted"', html)
         self.assertNotIn('onclick="openImageLightbox(\'http://example.test/"quoted"', html)
 
@@ -890,7 +890,7 @@ class AppHtmlTests(unittest.TestCase):
                 "end_sec": None,
                 "confidence": None,
                 "prompt": None,
-                "image_path": "musicvideogen/project-7/line-000.png",
+                "image_path": "VocaVid/project-7/line-000.png",
                 "avatar_image_path": None,
                 "clip_path": None,
                 "status": "done",
@@ -907,7 +907,7 @@ class AppHtmlTests(unittest.TestCase):
                 "prompt": None,
                 "image_path": None,
                 "avatar_image_path": None,
-                "clip_path": "musicvideogen/project-7/clip-001.mp4",
+                "clip_path": "VocaVid/project-7/clip-001.mp4",
                 "status": "done",
                 "error": "",
             },
@@ -1070,7 +1070,7 @@ class AppHtmlTests(unittest.TestCase):
     def test_page_restores_scroll_position_after_form_redirects(self):
         html = _page("Demo", "")
 
-        self.assertIn("musicvideogen-scroll:", html)
+        self.assertIn("VocaVid-scroll:", html)
         self.assertIn("function rememberScrollPosition", html)
         self.assertIn("document.addEventListener('submit'", html)
         self.assertIn("window.scrollTo(0, scrollY)", html)
@@ -1097,7 +1097,7 @@ class AppHtmlTests(unittest.TestCase):
                 "end_sec": 8.0,
                 "prompt": None,
                 "image_path": None,
-                "clip_path": "musicvideogen/project-1/clip-000.mp4",
+                "clip_path": "VocaVid/project-1/clip-000.mp4",
                 "audio_path": "outputs/segment-000.wav",
                 "scene_plan": "Slow establishing shot",
                 "video_approved": 0,
@@ -2052,7 +2052,7 @@ class AppHtmlTests(unittest.TestCase):
 
     def test_local_asset_url_maps_absolute_project_output_path_to_assets_url(self):
         url = _local_asset_url(
-            "D:\\data\\Projekte\\ComfyUI\\MusicvideoGen\\.musicvideogen\\outputs\\project-1\\audio-segments\\segment-000.wav"
+            "D:\\data\\Projekte\\ComfyUI\\VocaVid\\.VocaVid\\outputs\\project-1\\audio-segments\\segment-000.wav"
         )
 
         self.assertTrue(url.startswith("/assets/outputs/project-1/audio-segments/segment-000.wav"))
@@ -2088,7 +2088,7 @@ class AppHtmlTests(unittest.TestCase):
                 "end_sec": None,
                 "confidence": None,
                 "prompt": None,
-                "image_path": "musicvideogen/project-1/line-0-1782236016441_00001_.png",
+                "image_path": "VocaVid/project-1/line-0-1782236016441_00001_.png",
                 "clip_path": None,
                 "status": "done",
                 "error": "",
@@ -2098,9 +2098,9 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn('<img class="preview-image"', html)
-        self.assertIn("openImageLightbox('http://127.0.0.1:8188/view?filename=line-0-1782236016441_00001_.png&amp;subfolder=musicvideogen%2Fproject-1&amp;type=output')", html)
+        self.assertIn("openImageLightbox('http://127.0.0.1:8188/view?filename=line-0-1782236016441_00001_.png&amp;subfolder=VocaVid%2Fproject-1&amp;type=output')", html)
         self.assertIn(
-            'src="http://127.0.0.1:8188/view?filename=line-0-1782236016441_00001_.png&amp;subfolder=musicvideogen%2Fproject-1&amp;type=output"',
+            'src="http://127.0.0.1:8188/view?filename=line-0-1782236016441_00001_.png&amp;subfolder=VocaVid%2Fproject-1&amp;type=output"',
             html,
         )
         self.assertNotIn('target="_blank"', html)
@@ -2123,9 +2123,9 @@ class AppHtmlTests(unittest.TestCase):
                 "start_sec": 0.0,
                 "end_sec": 3.0,
                 "prompt": None,
-                "image_path": "D:\\data\\Projekte\\ComfyUI\\MusicvideoGen\\.musicvideogen\\outputs\\project-1\\images\\segment-000.png",
-                "avatar_image_path": "D:\\data\\Projekte\\ComfyUI\\MusicvideoGen\\.musicvideogen\\outputs\\project-1\\images\\avatar-segment-000.png",
-                "clip_path": "D:\\data\\Projekte\\ComfyUI\\MusicvideoGen\\.musicvideogen\\outputs\\project-1\\clips\\segment-000.mp4",
+                "image_path": "D:\\data\\Projekte\\ComfyUI\\VocaVid\\.VocaVid\\outputs\\project-1\\images\\segment-000.png",
+                "avatar_image_path": "D:\\data\\Projekte\\ComfyUI\\VocaVid\\.VocaVid\\outputs\\project-1\\images\\avatar-segment-000.png",
+                "clip_path": "D:\\data\\Projekte\\ComfyUI\\VocaVid\\.VocaVid\\outputs\\project-1\\clips\\segment-000.mp4",
                 "audio_path": None,
                 "scene_plan": "",
                 "status": "done",

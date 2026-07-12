@@ -17,7 +17,7 @@ PATH_COLUMNS = {
 
 def migrate(app_root: Path) -> int:
     app_root = app_root.resolve()
-    db_path = app_root / "musicvideogen.sqlite3"
+    db_path = app_root / "VocaVid.sqlite3"
     if not db_path.exists():
         raise FileNotFoundError(db_path)
     changed = 0
@@ -69,7 +69,7 @@ def _normalize_reference_image_paths(con: sqlite3.Connection, app_root: Path) ->
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--app-root", type=Path, default=Path.cwd() / ".musicvideogen")
+    parser.add_argument("--app-root", type=Path, default=Path.cwd() / ".VocaVid")
     args = parser.parse_args()
     changed = migrate(args.app_root)
     print(f"Updated DB values: {changed}")

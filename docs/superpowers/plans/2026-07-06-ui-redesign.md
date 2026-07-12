@@ -4,15 +4,15 @@
 
 **Goal:** Build the approved VocaVid studio-dashboard and storyboard-review redesign while preserving all existing render, queue, prompt, rerun, approval, and table workflows.
 
-**Architecture:** Keep the current FastAPI server-rendered HTML architecture. Refactor `musicvideogen/app.py` just enough to introduce shared UI helpers, a modern start dashboard, a storyboard-first project view, and a retained advanced table view. Existing endpoints stay intact; view choice is controlled by a query parameter on the project detail route.
+**Architecture:** Keep the current FastAPI server-rendered HTML architecture. Refactor `VocaVid/app.py` just enough to introduce shared UI helpers, a modern start dashboard, a storyboard-first project view, and a retained advanced table view. Existing endpoints stay intact; view choice is controlled by a query parameter on the project detail route.
 
-**Tech Stack:** Python 3.11+, FastAPI, server-rendered HTML/CSS/JavaScript in `musicvideogen/app.py`, SQLite-backed project/job data via `musicvideogen/store.py`, `unittest` test suite.
+**Tech Stack:** Python 3.11+, FastAPI, server-rendered HTML/CSS/JavaScript in `VocaVid/app.py`, SQLite-backed project/job data via `VocaVid/store.py`, `unittest` test suite.
 
 ---
 
 ## File Structure
 
-- Modify `musicvideogen/app.py`
+- Modify `VocaVid/app.py`
   - Shared CSS in `_page`.
   - Start dashboard helpers.
   - New Project modal helper.
@@ -27,8 +27,8 @@
   - Keep existing endpoint/action coverage expectations.
 - Modify `tests/test_app_endpoints.py`
   - Add a small endpoint/view-mode smoke test for the new `view` query parameter.
-- Do not modify `musicvideogen/store.py` unless a test proves helper data cannot be derived from existing rows.
-- Do not modify runtime data under `.musicvideogen/`.
+- Do not modify `VocaVid/store.py` unless a test proves helper data cannot be derived from existing rows.
+- Do not modify runtime data under `.VocaVid/`.
 
 ## Scope
 
@@ -49,7 +49,7 @@ Video first-frame generation is out of scope for this first pass. The first pass
 ### Task 1: Add Shared Studio UI Shell Styles
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Test: `tests/test_app_html.py`
 
 - [ ] **Step 1: Add a failing test for the dark studio shell CSS**
@@ -81,7 +81,7 @@ Expected: FAIL because the CSS variables and classes do not exist yet.
 
 - [ ] **Step 3: Replace the top of `_page` CSS with studio tokens and shared classes**
 
-In `musicvideogen/app.py`, update the `<style>` block inside `_page`. Keep existing functional classes such as `.compact-form`, `.project-topbar`, table classes, lightboxes, polling scripts, and selection scripts. Add these shared tokens/classes near the top of the style block:
+In `VocaVid/app.py`, update the `<style>` block inside `_page`. Keep existing functional classes such as `.compact-form`, `.project-topbar`, table classes, lightboxes, polling scripts, and selection scripts. Add these shared tokens/classes near the top of the style block:
 
 ```css
 :root {
@@ -203,7 +203,7 @@ Expected: Some existing tests may fail because they assert old beige/list CSS. U
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py
+git add VocaVid/app.py tests/test_app_html.py
 git commit -m "Add studio UI shell styles"
 ```
 
@@ -212,7 +212,7 @@ git commit -m "Add studio UI shell styles"
 ### Task 2: Redesign Start Page With New Project Modal
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Modify: `tests/test_app_html.py`
 
 - [ ] **Step 1: Replace old start-form tests with modal/dashboard tests**
@@ -278,7 +278,7 @@ Expected: FAIL because `_projects_html` still renders the old form and list.
 
 - [ ] **Step 4: Add start page helper functions**
 
-In `musicvideogen/app.py`, add these helpers before `_projects_html`:
+In `VocaVid/app.py`, add these helpers before `_projects_html`:
 
 ```python
 def _start_topbar_html(queue_estimate_seconds: float | None) -> str:
@@ -476,7 +476,7 @@ Expected: PASS.
 - [ ] **Step 10: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py
+git add VocaVid/app.py tests/test_app_html.py
 git commit -m "Redesign start page dashboard"
 ```
 
@@ -485,7 +485,7 @@ git commit -m "Redesign start page dashboard"
 ### Task 3: Redesign Queue Summary And Admin Sections
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Modify: `tests/test_app_html.py`
 
 - [ ] **Step 1: Update queue tests**
@@ -530,7 +530,7 @@ Expected: FAIL until helpers exist.
 
 - [ ] **Step 3: Add `_queue_summary_html`**
 
-In `musicvideogen/app.py`, add:
+In `VocaVid/app.py`, add:
 
 ```python
 def _queue_summary_html(jobs, average_durations: dict[str, float]) -> str:
@@ -551,7 +551,7 @@ def _queue_summary_html(jobs, average_durations: dict[str, float]) -> str:
 
 - [ ] **Step 4: Add `_queue_admin_html`**
 
-In `musicvideogen/app.py`, add:
+In `VocaVid/app.py`, add:
 
 ```python
 def _queue_admin_html(job_options: JobOptions) -> str:
@@ -644,7 +644,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py
+git add VocaVid/app.py tests/test_app_html.py
 git commit -m "Redesign queue dashboard sections"
 ```
 
@@ -653,7 +653,7 @@ git commit -m "Redesign queue dashboard sections"
 ### Task 4: Add Project View Mode And Storyboard Default
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Modify: `tests/test_app_html.py`
 - Modify: `tests/test_app_endpoints.py`
 
@@ -731,7 +731,7 @@ def test_project_page_table_view_keeps_advanced_table(self):
 
 - [ ] **Step 2: Update endpoint to accept `view` query parameter**
 
-In `musicvideogen/app.py`, change project detail route signature:
+In `VocaVid/app.py`, change project detail route signature:
 
 ```python
 @app.get("/projects/{project_id}", response_class=HTMLResponse)
@@ -863,9 +863,9 @@ def test_project_detail_table_view_query_renders_advanced_table(self):
     try:
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
-            app_module.APP_ROOT = root / ".musicvideogen"
+            app_module.APP_ROOT = root / ".VocaVid"
             app_module.UPLOADS = app_module.APP_ROOT / "uploads"
-            app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+            app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
             store = Store(app_module.DB_PATH)
             lyrics = root / "lyrics.txt"
             audio = root / "song.wav"
@@ -901,7 +901,7 @@ Expected: PASS.
 - [ ] **Step 10: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py tests/test_app_endpoints.py
+git add VocaVid/app.py tests/test_app_html.py tests/test_app_endpoints.py
 git commit -m "Add storyboard project view mode"
 ```
 
@@ -910,7 +910,7 @@ git commit -m "Add storyboard project view mode"
 ### Task 5: Implement Smart Segment Cards
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Modify: `tests/test_app_html.py`
 
 - [ ] **Step 1: Add media priority tests**
@@ -974,7 +974,7 @@ Expected: FAIL because `_segment_card_html` is still a placeholder.
 
 - [ ] **Step 3: Add segment card media helpers**
 
-In `musicvideogen/app.py`, add:
+In `VocaVid/app.py`, add:
 
 ```python
 def _segment_card_media(project, row) -> tuple[str, str, str]:
@@ -1112,7 +1112,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py
+git add VocaVid/app.py tests/test_app_html.py
 git commit -m "Add smart storyboard segment cards"
 ```
 
@@ -1121,7 +1121,7 @@ git commit -m "Add smart storyboard segment cards"
 ### Task 6: Implement Segment Inspector With Existing Actions
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Modify: `tests/test_app_html.py`
 
 - [ ] **Step 1: Add inspector action test**
@@ -1261,7 +1261,7 @@ Expected: PASS. If old table expectations fail because default view is storyboar
 - [ ] **Step 7: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py
+git add VocaVid/app.py tests/test_app_html.py
 git commit -m "Add storyboard segment inspector"
 ```
 
@@ -1270,7 +1270,7 @@ git commit -m "Add storyboard segment inspector"
 ### Task 7: Preserve Table Mode And Polling Behavior
 
 **Files:**
-- Modify: `musicvideogen/app.py`
+- Modify: `VocaVid/app.py`
 - Modify: `tests/test_app_html.py`
 - Modify: `tests/test_app_endpoints.py`
 
@@ -1357,7 +1357,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py tests/test_app_endpoints.py
+git add VocaVid/app.py tests/test_app_html.py tests/test_app_endpoints.py
 git commit -m "Preserve advanced table mode"
 ```
 
@@ -1367,7 +1367,7 @@ git commit -m "Preserve advanced table mode"
 
 **Files:**
 - Modify only if verification exposes defects:
-  - `musicvideogen/app.py`
+  - `VocaVid/app.py`
   - `tests/test_app_html.py`
   - `tests/test_app_endpoints.py`
 
@@ -1386,7 +1386,7 @@ Expected: PASS.
 Use an approved local server command if available, or run:
 
 ```powershell
-python -m musicvideogen serve --host 127.0.0.1 --port 8001
+python -m VocaVid serve --host 127.0.0.1 --port 8001
 ```
 
 Expected: app serves at `http://127.0.0.1:8001`.
@@ -1457,7 +1457,7 @@ Expected: only intentional files are modified. The existing local note file may 
 If any fixes were needed:
 
 ```powershell
-git add musicvideogen/app.py tests/test_app_html.py tests/test_app_endpoints.py
+git add VocaVid/app.py tests/test_app_html.py tests/test_app_endpoints.py
 git commit -m "Polish UI redesign verification"
 ```
 

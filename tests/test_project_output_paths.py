@@ -2,10 +2,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from musicvideogen.lyrics import parse_suno_lyrics
-from musicvideogen.models import RenderSegment
-from musicvideogen.pipeline import Pipeline
-from musicvideogen.store import Store
+from VocaVid.lyrics import parse_suno_lyrics
+from VocaVid.models import RenderSegment
+from VocaVid.pipeline import Pipeline
+from VocaVid.store import Store
 
 
 class ProjectOutputPathTests(unittest.TestCase):

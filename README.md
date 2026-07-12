@@ -9,11 +9,12 @@ VocaVid is a local orchestration app for turning a WAV file, SUNO-style lyrics,
 a genre/style idea, ComfyUI workflow templates, and reference images into a
 resumable music-video render.
 
-It runs as a small local FastAPI web app. Project state lives in SQLite,
-generated assets stay under `.musicvideogen/`, generation jobs are sent to a
-local ComfyUI server, and the final video can be assembled from approved clips.
+It runs as a small local FastAPI web app with a storyboard-first review UI.
+Project state lives in SQLite, generated assets stay under `.VocaVid/`,
+generation jobs are sent to a local ComfyUI server, and the final video can be
+assembled from approved clips.
 
-![VocaVid project detail with generated images and clip controls](docs/screenshots/vocavid-project-detail.png)
+![VocaVid storyboard review with segment cards and inspector](docs/screenshots/vocavid-project-detail.png)
 
 ## Highlights
 
@@ -23,19 +24,23 @@ local ComfyUI server, and the final video can be assembled from approved clips.
   transcription is unavailable or uncertain.
 - Generate scene plans, image prompts, still images, avatar/reference-person
   variants, image-to-video prompts, video clips, and final assemblies.
-- Inspect and edit every intermediate prompt before spending render time on the
-  next stage.
-- Rerun individual lines or segments instead of regenerating an entire video.
-- Mark approved clips with `OK`; locked rows are skipped by later batch and redo
-  actions.
-- Track the global render queue in the project header and browser tab title.
+- Review projects from a visual dashboard with searchable project cards and
+  progress badges.
+- Work in a storyboard-first project view with segment cards, media previews,
+  status chips, and a focused inspector for prompts and approvals.
+- Switch to the advanced table view when dense timing, line, and diagnostic
+  editing is useful.
+- Rerun individual lines or segments instead of regenerating an entire video,
+  while approved clips stay protected from later batch actions.
+- Track the global render queue from the top bar, queue modal, and browser tab
+  title.
 - Keep uploads, generated media, databases, logs, and caches out of Git.
 
 ## Screenshots
 
-| Project setup and project list | Queue view |
+| Project dashboard | Queue modal |
 | --- | --- |
-| ![VocaVid create project form and project list](docs/screenshots/vocavid-projects.png) | ![VocaVid render queue view](docs/screenshots/vocavid-jobs.png) |
+| ![VocaVid dashboard with project cards and production status](docs/screenshots/vocavid-projects.png) | ![VocaVid queue modal with job controls](docs/screenshots/vocavid-jobs.png) |
 
 ## Sample generated Video
 
@@ -61,7 +66,7 @@ pip install -r requirements.txt
 Run VocaVid:
 
 ```powershell
-python -m musicvideogen serve
+python -m VocaVid serve
 ```
 
 Then open:
@@ -73,7 +78,7 @@ http://127.0.0.1:8000
 The server also accepts custom host and port values:
 
 ```powershell
-python -m musicvideogen serve --host 127.0.0.1 --port 8001
+python -m VocaVid serve --host 127.0.0.1 --port 8001
 ```
 
 There is also a batch file for this local machine:
@@ -94,20 +99,23 @@ start.bat
 After the initial setup, the normal VocaVid workflow looks like this:
 
 1. Start ComfyUI.
-2. Start VocaVid with `python -m musicvideogen serve`.
-3. Create a project with a WAV file, SUNO-style lyrics, genre/style text,
-   reference images, resolution, FPS, and segment grouping settings.
-4. Click `Align` to align lyrics and build render segments.
-5. Review and adjust line or segment timing where needed.
+2. Start VocaVid with `python -m VocaVid serve`.
+3. Create a project from the dashboard with `New Project`. The modal asks for a
+   WAV file, SUNO-style lyrics, Whisper model, and segment grouping settings.
+4. Click `Analyze + Split` to align lyrics and build render segments.
+5. Review the storyboard cards and open the inspector for the segment that needs
+   attention.
 6. Click `Scene Plan`, then edit and save the plan if needed.
-7. Generate image prompts, images, avatar images, video prompts, and clips.
-8. Review clips row by row, switch between `Image` and `Avatar` sources, and
-   mark good clips with `OK`.
-9. Click `Assemble Final`.
+7. Generate prompts, images, avatar images, and clips.
+8. Review clips in the storyboard, switch between `Image` and `Avatar` sources,
+   and mark good clips with `OK`.
+9. Use the advanced table view when you need compact timing or line-level
+   editing.
+10. Click `Assemble Final`.
 
-Most actions can run on selected rows only. Failed or weak segments can be
-rerendered without losing the rest of the project, and rows marked `OK` are
-treated as locked even when selected.
+Most actions can run on selected storyboard cards or advanced-table rows only.
+Failed or weak segments can be rerendered without losing the rest of the
+project, and items marked `OK` are treated as locked even when selected.
 
 ## Why This Exists
 
@@ -129,12 +137,15 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 
 ## Feature Overview
 
-### Project Setup
+### Dashboard and Project Setup
 
-- Create projects from WAV audio, lyrics files, genre/style prompts, and one or
-  more reference images.
+- Browse projects as visual cards with progress counts, status media, search,
+  completion filtering, and newest/oldest sorting.
+- Create projects from a focused `New Project` modal using WAV audio and lyrics
+  files.
 - Configure resolution, FPS, transition handles, Whisper model, normal segment
-  size, and chorus/refrain segment size.
+  size, chorus/refrain segment size, genre/style prompts, and reference images
+  from the project settings panel.
 - Keep each project resumable through local SQLite state.
 
 ### Lyrics and Segments
@@ -161,16 +172,20 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 
 - Generate still images, avatar/reference-person image variants, video clips,
   and final assembled outputs.
+- Review segments as storyboard cards with image/video previews, timing, section
+  labels, generation status, and locked/running overlays.
+- Use the inspector to edit prompts, compare selected media, approve clips, and
+  navigate between segments without losing context.
 - Choose whether each clip uses the base image or avatar image source.
-- Retry selected rows without restarting the whole render.
+- Retry selected segments without restarting the whole render.
 - Mark generated videos as approved with `OK`; approved rows are protected and
   skipped by later batch, selected-row, and redo generation actions.
-- Track queued/running jobs in the project header, browser tab title, and jobs
-  view.
+- Track queued/running jobs in the project header, browser tab title, and queue
+  modal.
 
 ## Workflow Files
 
-Default workflow lookup is handled by `musicvideogen/workflows.py`.
+Default workflow lookup is handled by `VocaVid/workflows.py`.
 
 | Purpose | Preferred file | Fallback/alias | Required |
 | --- | --- | --- | --- |
@@ -276,9 +291,9 @@ images under `images/` are used when no project reference image is available.
 
 Runtime files are intentionally local-only:
 
-- `.musicvideogen/` contains uploads, generated outputs, and per-project assets.
-- `musicvideogen.sqlite3` contains project state.
-- `.musicvideogen-server*.log` files contain local server logs.
+- `.VocaVid/` contains uploads, generated outputs, and per-project assets.
+- `VocaVid.sqlite3` contains project state.
+- `.VocaVid-server*.log` files contain local server logs.
 - `__pycache__/` contains Python bytecode.
 
 These paths are ignored by Git. Do not commit generated media or local databases
@@ -289,7 +304,7 @@ unless you explicitly intend to publish them.
 After a project exists, this command runs the full pipeline for that project ID:
 
 ```powershell
-python -m musicvideogen run --project 1
+python -m VocaVid run --project 1
 ```
 
 It performs even alignment, builds segments, generates a scene plan, prompts,
@@ -337,7 +352,7 @@ manually.
 
 Make sure `ffmpeg` is available on `PATH` and that
 `templates/kdenlivetemplate.kdenlive` exists. Generated project media is stored
-under `.musicvideogen/outputs/`.
+under `.VocaVid/outputs/`.
 
 ### Push/commit hygiene
 

@@ -1,7 +1,7 @@
 import unittest
 
-from musicvideogen.models import RenderSegment
-from musicvideogen.segments import build_render_segments
+from VocaVid.models import RenderSegment
+from VocaVid.segments import build_render_segments
 
 
 class SegmentTests(unittest.TestCase):
