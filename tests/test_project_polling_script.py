@@ -4,11 +4,7 @@ import unittest
 
 class ProjectPollingScriptTests(unittest.TestCase):
     def app_source(self) -> str:
-        return (
-            Path("musicvideogen/ui/assets.py").read_text(encoding="utf-8")
-            + "\n"
-            + Path("musicvideogen/ui/rendering.py").read_text(encoding="utf-8")
-        )
+        return "\n".join(path.read_text(encoding="utf-8") for path in Path("musicvideogen/ui").glob("*.py"))
 
     def test_status_polling_skips_unchanged_rows(self):
         app_source = self.app_source()

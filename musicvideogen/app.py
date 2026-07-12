@@ -673,7 +673,7 @@ from .ui import rendering as _ui_rendering
 
 
 def _sync_ui_rendering_roots() -> None:
-    _ui_rendering.APP_ROOT = APP_ROOT
+    _ui_rendering.set_app_root(APP_ROOT)
 
 
 def _wrap_ui_rendering_function(name: str):
