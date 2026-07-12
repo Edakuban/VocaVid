@@ -4,7 +4,27 @@ import json
 import re
 
 from ..alignment import WHISPER_MODEL_SIZES, normalize_whisper_model_size
-from .formatting import *
+from .formatting import (
+    _attr,
+    _display_confidence,
+    _generated_asset_url,
+    _js_arg,
+    _line_confidence_by_index,
+    _local_asset_url,
+    _merge_row_class,
+    _multiline_text_html,
+    _reference_paths_from_json,
+    _row_class,
+    _row_value,
+    _section_legend_html,
+    _section_type,
+    _segment_confidence_html,
+    _status_html,
+    _text,
+    _time_value,
+    _timing_text,
+    _url_for_html_attribute,
+)
 
 
 def _segment_settings_html(project, show_heading: bool = True) -> str:

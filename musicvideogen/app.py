@@ -672,6 +672,9 @@ from .ui import assets as _ui_assets
 from .ui import rendering as _ui_rendering
 
 
+# Compatibility bridge for older tests and callers that import private UI
+# helpers from musicvideogen.app. New UI code should import from
+# musicvideogen.ui.* modules directly.
 def _sync_ui_rendering_roots() -> None:
     _ui_rendering.set_app_root(APP_ROOT)
 

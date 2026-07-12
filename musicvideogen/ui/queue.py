@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 
 from .context import JobOptions
-from .formatting import *
+from .formatting import (
+    _attr,
+    _duration_html,
+    _format_duration,
+    _job_average_seconds,
+    _text,
+)
 
 
 def _queue_section_html(

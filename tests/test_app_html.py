@@ -6,16 +6,21 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 import musicvideogen.app as app_module
-from musicvideogen.app import (
-    APP_ROOT,
+import musicvideogen.ui.context as ui_context
+from musicvideogen.app import APP_ROOT
+from musicvideogen.ui.assets import _page
+from musicvideogen.ui.formatting import (
     _job_name,
-    _queue_estimate_label,
     _local_asset_url,
-    _page,
+    _reference_paths_from_text,
+)
+from musicvideogen.ui.projects import (
     _project_html,
     _project_status_payload,
     _projects_html,
-    _reference_paths_from_text,
+)
+from musicvideogen.ui.queue import _queue_estimate_label
+from musicvideogen.ui.storyboard import (
     _segment_inspector_html,
 )
 from musicvideogen.worker import Job
@@ -30,6 +35,9 @@ class RowLike:
 
 
 class AppHtmlTests(unittest.TestCase):
+    def setUp(self):
+        ui_context.APP_ROOT = app_module.APP_ROOT
+
     def test_page_uses_dark_studio_shell_styles(self):
         html = _page("Projects", "")
 
