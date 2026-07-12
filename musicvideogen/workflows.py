@@ -7,6 +7,7 @@ from pathlib import Path
 @dataclass(frozen=True)
 class WorkflowPaths:
     promptgen: Path
+    avatar_description: Path
     image: Path
     image_aliases: tuple[Path, ...]
     image_reference: Path
@@ -21,6 +22,7 @@ class WorkflowPaths:
         directory = root / "workflows"
         return cls(
             promptgen=directory / "promptgen.json",
+            avatar_description=directory / "avatar_description.json",
             image=directory / "image.json",
             image_aliases=(directory / "image_z_image_turbo.json",),
             image_reference=directory / "image_reference.json",
@@ -32,6 +34,9 @@ class WorkflowPaths:
 
     def optional_promptgen(self) -> Path | None:
         return self.promptgen if self.promptgen.exists() else None
+
+    def optional_avatar_description(self) -> Path | None:
+        return self.avatar_description if self.avatar_description.exists() else None
 
     def require_image(self) -> Path:
         if self.image.exists():

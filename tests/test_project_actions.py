@@ -70,6 +70,42 @@ class ProjectActionTests(unittest.TestCase):
 
             self.assertEqual(store.average_job_durations(), {"clips": 120.0, "images": 15.0})
 
+    def test_interrupted_running_items_are_marked_failed(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            root = Path(directory)
+            store = Store(root / "test.sqlite3")
+            lyrics = root / "lyrics.txt"
+            audio = root / "song.wav"
+            lyrics.write_text("[Verse]\nOne\nTwo\n", encoding="utf-8")
+            audio.write_text("wav", encoding="utf-8")
+            project_id = store.create_project(
+                {
+                    "name": "Demo",
+                    "audio_path": str(audio),
+                    "lyrics_path": str(lyrics),
+                    "global_style_prompt": "cinematic",
+                },
+                parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+            )
+            store.update_line(project_id, 0, status="running", error="")
+            store.update_line(project_id, 1, status="pending", error="")
+            store.replace_segments(
+                project_id,
+                [RenderSegment(0, "lyrics", "Verse", False, False, [0], "One", 1.0, 2.0)],
+            )
+            store.update_segment(project_id, 0, status="running", error="")
+
+            changed = store.mark_interrupted_running_items("interrupted")
+
+            lines = store.list_lines(project_id)
+            segments = store.list_segments(project_id)
+            self.assertEqual(changed, 2)
+            self.assertEqual(lines[0]["status"], "failed")
+            self.assertEqual(lines[0]["error"], "interrupted")
+            self.assertEqual(lines[1]["status"], "pending")
+            self.assertEqual(segments[0]["status"], "failed")
+            self.assertEqual(segments[0]["error"], "interrupted")
+
     def test_video_approval_is_persisted_for_lines(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)

@@ -127,6 +127,8 @@ class PipelineSelectionTests(unittest.TestCase):
                 "fps": 24,
                 "output_resolution": "1280x720",
                 "genre": "",
+                "avatar_gender": "female",
+                "avatar_face_description": "sharp cheekbones, silver hair",
             }
             row = {
                 "clean_text": "Line",
@@ -148,6 +150,9 @@ class PipelineSelectionTests(unittest.TestCase):
 
             self.assertEqual(variables["image_path"], "base.png")
             self.assertEqual(variables["source_image_path"], "base.png")
+            self.assertEqual(variables["avatar_gender"], "female")
+            self.assertEqual(variables["avatar_face_description"], "sharp cheekbones, silver hair")
+            self.assertEqual(variables["avatar_identity_context"], "female avatar; sharp cheekbones, silver hair")
 
     def test_delete_project_removes_output_and_upload_directories(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:

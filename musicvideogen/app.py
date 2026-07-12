@@ -2,15 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
 import subprocess
 from dataclasses import dataclass
-from datetime import datetime
-from html import escape
 from pathlib import Path
 from typing import Callable
-from urllib.parse import quote
 
 try:
     from fastapi import FastAPI, File, Form, UploadFile
@@ -20,8 +16,8 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("FastAPI is required. Install with: pip install -r requirements.txt") from exc
 
 from .lyrics import parse_suno_lyrics
-from .alignment import WHISPER_MODEL_SIZES, normalize_whisper_model_size
-from .paths import is_internal_storage_path, resolve_storage_path, slug_folder_name, storage_relative_path
+from .alignment import normalize_whisper_model_size
+from .paths import slug_folder_name, storage_relative_path
 from .pipeline import Pipeline
 from .store import Store
 from .worker import JobQueue
@@ -29,6 +25,7 @@ from .worker import JobQueue
 APP_ROOT = Path.cwd() / ".musicvideogen"
 UPLOADS = APP_ROOT / "uploads"
 DB_PATH = APP_ROOT / "musicvideogen.sqlite3"
+ICON_ROOT = Path.cwd() / "icon"
 logger = logging.getLogger(__name__)
 _SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
 
@@ -68,6 +65,9 @@ class ShutdownController:
 def create_app() -> FastAPI:
     UPLOADS.mkdir(parents=True, exist_ok=True)
     store = Store(DB_PATH)
+    interrupted_items = store.mark_interrupted_running_items()
+    if interrupted_items:
+        logger.warning("marked %s interrupted running project items as failed", interrupted_items)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
     job_options = JobOptions()
     shutdown_controller = ShutdownController()
@@ -92,6 +92,7 @@ def create_app() -> FastAPI:
     app.state.job_options = job_options
     app.state.shutdown_controller = shutdown_controller
     app.mount("/assets", StaticFiles(directory=str(APP_ROOT)), name="assets")
+    app.mount("/icon", StaticFiles(directory=str(ICON_ROOT)), name="icon")
 
     def mark_used(project_id: int, action: str) -> None:
         store.mark_project_action_used(project_id, action)
@@ -153,18 +154,61 @@ def create_app() -> FastAPI:
         )
         return True
 
+    def submit_prompt_actions(project_id: int, selected_indices: list[int] | None = None) -> bool:
+        selected = list(selected_indices or [])
+        item_kind = _action_item_kind("prompts", bool(store.list_segments(project_id)))
+        indices = _selected_action_indices(project_id, item_kind, selected, store)
+        if not indices:
+            return False
+        submitted = False
+        for index in indices:
+            submitted_prompts = submit_project_action(project_id, "prompts", [index])
+            submitted_video_prompts = submit_project_action(project_id, "video-prompts", [index])
+            submitted = submitted or submitted_prompts or submitted_video_prompts
+        return submitted
+
+    def submit_global_style_prompt(project_id: int) -> None:
+        project = store.get_project(project_id)
+        shutdown_controller.cancel_pending()
+        jobs.submit(
+            f"generate global style prompt: {project['name']}",
+            lambda: pipeline.generate_global_style_prompt(project_id),
+            project_id=project_id,
+            action="global-style-prompt",
+        )
+
+    def submit_initial_project_jobs(project_id: int, *, describe_avatar: bool = False) -> None:
+        if describe_avatar:
+            project = store.get_project(project_id)
+            jobs.submit(
+                _job_name("describe avatar", project["name"], []),
+                lambda: pipeline.describe_avatar_face(project_id),
+                project_id=project_id,
+                action="avatar-description",
+            )
+        submit_global_style_prompt(project_id)
+        if submit_project_action(project_id, "align"):
+            mark_used(project_id, "align")
+        if submit_project_action(project_id, "segments"):
+            mark_used(project_id, "segments")
+        if submit_project_action(project_id, "scene-plan"):
+            mark_used(project_id, "scene-plan")
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         active_jobs = jobs.active_jobs()
         average_durations = store.average_job_durations()
+        projects = store.list_projects()
+        project_previews = {int(project["id"]): store.list_segments(int(project["id"])) for project in projects}
         return _page(
             "Projects",
             _projects_html(
-                store.list_projects(),
+                projects,
                 jobs.list_jobs(),
                 average_durations,
                 queue_estimate_seconds=_queue_estimate_seconds(active_jobs, average_durations),
                 job_options=job_options,
+                project_previews=project_previews,
             ),
             queue_count=len(active_jobs),
         )
@@ -173,9 +217,12 @@ def create_app() -> FastAPI:
     def jobs_status():
         active_jobs = jobs.active_jobs()
         average_durations = store.average_job_durations()
+        queue_estimate_seconds = _queue_estimate_seconds(active_jobs, average_durations)
+        listed_jobs = jobs.list_jobs()
         return {
-            "jobs_html": _jobs_table_body_html(jobs.list_jobs(), average_durations),
-            "queue_estimate_seconds": _queue_estimate_seconds(active_jobs, average_durations),
+            "jobs_html": _jobs_table_body_html(listed_jobs, average_durations),
+            "queue_summary_html": _queue_summary_cards_html(listed_jobs, queue_estimate_seconds),
+            "queue_estimate_seconds": queue_estimate_seconds,
             "queue_count": len(active_jobs),
             "autodelete_finished": job_options.autodelete_finished,
             "shutdown_after_queue": job_options.shutdown_after_queue,
@@ -214,6 +261,9 @@ def create_app() -> FastAPI:
     @app.post("/projects")
     async def create_project(
         name: str = Form(...),
+        genre: str = Form(...),
+        avatar_gender: str = Form(""),
+        avatar_face_description: str = Form(""),
         global_style_prompt: str = Form(""),
         comfy_base_url: str = Form("http://127.0.0.1:8188"),
         output_resolution: str = Form("1280x720"),
@@ -221,20 +271,22 @@ def create_app() -> FastAPI:
         lyric_group_size: int = Form(2),
         chorus_group_size: int = Form(1),
         transition_handle_seconds: float = Form(0.5),
-        whisper_model_size: str = Form("small"),
+        whisper_model_size: str = Form("large-v3"),
         audio: UploadFile = File(...),
         lyrics: UploadFile = File(...),
+        avatar: UploadFile | None = File(None),
         references: list[UploadFile] = File(default=[]),
     ):
         project_dir = UPLOADS / _slug(name)
         project_dir.mkdir(parents=True, exist_ok=True)
         audio_path = await _save_upload(audio, project_dir)
         lyrics_path = await _save_upload(lyrics, project_dir)
-        reference_paths = [
-            _storage_path(await _save_upload(item, project_dir / "references"))
-            for item in references
-            if item.filename
-        ]
+        reference_paths = []
+        if avatar is not None and avatar.filename:
+            reference_paths.append(_storage_path(await _save_upload(avatar, project_dir / "references")))
+        for item in references:
+            if item.filename:
+                reference_paths.append(_storage_path(await _save_upload(item, project_dir / "references")))
         lines = parse_suno_lyrics(lyrics_path.read_text(encoding="utf-8"))
         project_id = store.create_project(
             {
@@ -242,7 +294,9 @@ def create_app() -> FastAPI:
                 "audio_path": _storage_path(audio_path),
                 "lyrics_path": _storage_path(lyrics_path),
                 "global_style_prompt": global_style_prompt,
-                "genre": "",
+                "genre": genre.strip(),
+                "avatar_gender": _normalize_avatar_gender(avatar_gender),
+                "avatar_face_description": avatar_face_description.strip(),
                 "reference_image_paths": reference_paths,
                 "comfy_base_url": comfy_base_url,
                 "output_resolution": output_resolution,
@@ -254,6 +308,7 @@ def create_app() -> FastAPI:
             },
             lines,
         )
+        submit_initial_project_jobs(project_id, describe_avatar=not avatar_face_description.strip())
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
@@ -266,6 +321,7 @@ def create_app() -> FastAPI:
         used_actions = store.list_used_project_actions(project_id)
         active_jobs = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
+        listed_jobs = jobs.list_jobs()
         averages = store.average_job_durations()
         return _page(
             project["name"],
@@ -276,6 +332,10 @@ def create_app() -> FastAPI:
                 used_actions=used_actions,
                 active_jobs=active_jobs,
                 queue_estimate_seconds=_queue_estimate_seconds(queue_jobs, averages),
+                queue_count=len(queue_jobs),
+                queue_jobs=listed_jobs,
+                average_durations=averages,
+                job_options=job_options,
                 previous_project_id=previous_project_id,
                 next_project_id=next_project_id,
             ),
@@ -300,12 +360,17 @@ def create_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/global-style-prompt")
     def generate_global_style_prompt(project_id: int):
+        submit_global_style_prompt(project_id)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/avatar-description")
+    def describe_avatar(project_id: int):
         project = store.get_project(project_id)
         jobs.submit(
-            f"generate global style prompt: {project['name']}",
-            lambda: pipeline.generate_global_style_prompt(project_id),
+            _job_name("describe avatar", project["name"], []),
+            lambda: pipeline.describe_avatar_face(project_id),
             project_id=project_id,
-            action="global-style-prompt",
+            action="avatar-description",
         )
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
@@ -342,6 +407,8 @@ def create_app() -> FastAPI:
         lyrics_path: str = Form(...),
         global_style_prompt: str = Form(...),
         genre: str = Form(""),
+        avatar_gender: str = Form(""),
+        avatar_face_description: str = Form(""),
         reference_image_paths: str = Form(""),
         comfy_base_url: str = Form("http://127.0.0.1:8188"),
         output_resolution: str = Form("1280x720"),
@@ -361,6 +428,8 @@ def create_app() -> FastAPI:
             lyrics_path=_storage_path(lyrics_path.strip()),
             global_style_prompt=global_style_prompt,
             genre=genre.strip(),
+            avatar_gender=_normalize_avatar_gender(avatar_gender),
+            avatar_face_description=avatar_face_description.strip(),
             reference_image_paths=json.dumps([_storage_path(item) for item in _reference_paths_from_text(reference_image_paths)]),
             comfy_base_url=comfy_base_url.strip() or "http://127.0.0.1:8188",
             output_resolution=output_resolution.strip() or "1280x720",
@@ -375,33 +444,13 @@ def create_app() -> FastAPI:
     @app.post("/projects/{project_id}/realign-lyrics")
     def realign_lyrics(project_id: int):
         logger.info("manual realign start project_id=%s", project_id)
-        project = store.get_project(project_id)
-        def job_action():
-            pipeline.regroup_project(project_id)
-            mark_used(project_id, "align")
-            mark_used(project_id, "segments")
-        jobs.submit(
-            f"realign lyrics: {project['name']}",
-            job_action,
-            project_id=project_id,
-            action="align",
-        )
+        regroup_now(project_id, "manual realign")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/realign-lyrics-cpu")
     def realign_lyrics_cpu(project_id: int):
         logger.info("manual realign cpu start project_id=%s", project_id)
-        project = store.get_project(project_id)
-        def job_action():
-            pipeline.regroup_project(project_id, force_cpu=True)
-            mark_used(project_id, "align")
-            mark_used(project_id, "segments")
-        jobs.submit(
-            f"realign lyrics (CPU): {project['name']}",
-            job_action,
-            project_id=project_id,
-            action="align",
-        )
+        regroup_now(project_id, "manual realign cpu", force_cpu=True)
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/segments")
@@ -425,6 +474,13 @@ def create_app() -> FastAPI:
     def prompts(project_id: int, selected_lines: list[int] = Form(default=[])):
         if submit_project_action(project_id, "prompts", selected_lines):
             mark_used(project_id, "prompts")
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/generate-prompts")
+    def generate_prompts(project_id: int, selected_lines: list[int] = Form(default=[])):
+        if submit_prompt_actions(project_id, selected_lines):
+            mark_used(project_id, "prompts")
+            mark_used(project_id, "video-prompts")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/images")
@@ -612,1286 +668,38 @@ def _slug(value: str) -> str:
 def _storage_path(value: str | Path) -> str:
     return storage_relative_path(APP_ROOT, value)
 
+from .ui import assets as _ui_assets
+from .ui import rendering as _ui_rendering
+
+
+# Compatibility bridge for older tests and callers that import private UI
+# helpers from musicvideogen.app. New UI code should import from
+# musicvideogen.ui.* modules directly.
+def _sync_ui_rendering_roots() -> None:
+    _ui_rendering.set_app_root(APP_ROOT)
+
+
+def _wrap_ui_rendering_function(name: str):
+    def _wrapped(*args, **kwargs):
+        _sync_ui_rendering_roots()
+        return getattr(_ui_rendering, name)(*args, **kwargs)
+
+    _wrapped.__name__ = name
+    _wrapped.__doc__ = getattr(getattr(_ui_rendering, name), "__doc__", None)
+    return _wrapped
+
 
 def _page(title: str, body: str, queue_count: int = 0) -> str:
-    browser_title = _browser_title(title, queue_count)
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{_text(browser_title)}</title>
-  <style>
-    body {{ margin: 0; font-family: Segoe UI, Arial, sans-serif; background: #f6f4ee; color: #1c2526; }}
-    main {{ max-width: none; margin: 0; padding: 24px; }}
-    h1 {{ font-size: 28px; margin: 0; }}
-    form, .panel {{ background: #fff; border: 1px solid #d8d3c8; border-radius: 8px; padding: 16px; margin-bottom: 16px; }}
-    label {{ display: block; font-size: 13px; font-weight: 650; margin-top: 10px; }}
-    input, textarea, select {{ box-sizing: border-box; width: 100%; border: 1px solid #b9c0bd; border-radius: 6px; padding: 8px; font: inherit; }}
-    textarea {{ min-height: 80px; }}
-    .prompt-textarea {{ min-width: 260px; min-height: 72px; resize: vertical; }}
-    .prompt-actions {{ display: flex; gap: 8px; margin: 6px 0 10px; }}
-    .hidden-action-form {{ display: none; }}
-    .compact-form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
-    .jobs-heading {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
-    .job-options {{ display: flex; flex-wrap: wrap; gap: 14px; margin-top: 10px; align-items: center; }}
-    .job-options label {{ display: inline-flex; gap: 6px; align-items: center; margin: 0; }}
-    .job-options input {{ width: auto; }}
-    .timing-column {{ width: 11rem; min-width: 11rem; }}
-    .timing-form {{ display: grid; grid-template-columns: max-content max-content auto; gap: 4px; align-items: center; }}
-    .timing-form input {{ width: 7ch; padding-left: 6px; padding-right: 6px; }}
-    .section-form select {{ min-width: 104px; }}
-    .approval-label {{ display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 650; }}
-    .approval-label input {{ width: auto; }}
-    button, .button {{ border: 0; border-radius: 6px; background: #245c54; color: white; padding: 8px 12px; font-weight: 650; cursor: pointer; text-decoration: none; display: inline-block; }}
-    .icon-button {{ width: 34px; height: 34px; padding: 0; border-radius: 50%; line-height: 34px; text-align: center; }}
-    .wip-button {{ background: #e53d91; box-shadow: inset 0 -2px 0 rgba(0,0,0,.16); }}
-    .wip-button:hover, .wip-button:focus {{ background: #c92878; }}
-    .used-button {{ background: #555; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
-    .used-button:hover, .used-button:focus {{ background: #444; }}
-    .danger-panel {{ border-color: #e2b1b1; background: #fff8f8; }}
-    .danger-button {{ background: #9b1c1c; }}
-    .danger-button:hover, .danger-button:focus {{ background: #7f1717; }}
-    .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }}
-    .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
-    .project-list {{ display: grid; grid-template-columns: 1fr; gap: 6px 18px; padding: 8px 10px 4px 26px; }}
-    .project-list-item {{ min-width: 0; padding: 4px 8px 4px 0; }}
-    .project-list-item a {{ display: inline-block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 44px); vertical-align: bottom; }}
-    .project-list-item.project-done a {{ text-decoration: line-through; color: #66706d; }}
-    .project-done-label {{ margin-left: 6px; color: #66706d; font-size: 12px; font-weight: 700; white-space: nowrap; }}
-    @media (min-width: 820px) {{ .project-list {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }} }}
-    @media (min-width: 1240px) {{ .project-list {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }} }}
-    .open-count-label {{ margin-left: auto; align-self: center; font-weight: 750; color: #20302d; white-space: nowrap; }}
-    .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(246,244,238,.96); border-bottom: 1px solid #d8d3c8; backdrop-filter: blur(8px); }}
-    .project-title-row {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 12px; }}
-    .project-title-row .button {{ margin-left: 0; }}
-    .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: #555; color: white; font-size: 18px; font-weight: 900; line-height: 1; text-decoration: none; }}
-    .project-nav-button:hover, .project-nav-button:focus {{ background: #444; }}
-    .project-nav-disabled {{ opacity: .32; cursor: default; }}
-    .project-nav-disabled:hover, .project-nav-disabled:focus {{ background: #555; }}
-    .queue-estimate {{ margin-left: auto; padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; font-weight: 750; white-space: nowrap; }}
-    .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
-    table {{ width: 100%; border-collapse: collapse; background: white; border: 1px solid #d8d3c8; }}
-    th, td {{ padding: 8px; border-bottom: 1px solid #e7e1d6; text-align: left; vertical-align: top; font-size: 13px; }}
-    th {{ background: #e9efe9; }}
-    .status {{ font-weight: 700; }}
-    .status-error {{ margin-top: 4px; color: #9b1c1c; font-weight: 500; max-width: 260px; overflow-wrap: anywhere; }}
-    .error {{ color: #9b1c1c; max-width: 220px; overflow-wrap: anywhere; }}
-    .low-confidence {{ background: #ffe5f2; }}
-    tr.section-gap {{ background: #eeeeee; }}
-    tr.section-verse {{ background: lightyellow; }}
-    tr.section-bridge {{ background: #eeeeee; }}
-    tr.section-chorus {{ background: #e5f0ff; }}
-    tr.approved-row {{ background: #7ed67e; box-shadow: inset 5px 0 0 #168a16; }}
-    tr.low-confidence {{ box-shadow: inset 4px 0 0 #e53d91; }}
-    tr.locked-row {{ position: relative; opacity: .58; pointer-events: none; }}
-    .row-lock-overlay {{ position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(128,128,128,.25); color: #17201e; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; pointer-events: none; }}
-    .confidence {{ font-weight: 700; color: #9b1c64; }}
-    .timing-confidence {{ margin-top: 4px; font-weight: 700; color: #9b1c64; }}
-    .select-cell {{ width: 44px; text-align: center; }}
-    .section-legend {{ display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 10px 0 18px; font-size: 13px; color: #44504d; }}
-    .legend-swatch {{ width: 18px; height: 12px; border: 1px solid #ccd4d1; display: inline-block; margin-right: 6px; vertical-align: -2px; }}
-    .legend-swatch.section-gap {{ background: #eeeeee; }}
-    .legend-swatch.section-verse {{ background: lightyellow; }}
-    .legend-swatch.section-bridge {{ background: #eeeeee; }}
-    .legend-swatch.section-chorus {{ background: #e5f0ff; }}
-    .preview-image {{ width: 292px; height: 164px; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; display: block; }}
-    .preview-button {{ padding: 0; border: 0; background: transparent; color: inherit; }}
-    .assets-column {{ min-width: 608px; }}
-    .assets-stack {{ display: grid; gap: 8px; align-content: start; }}
-    .asset-previews {{ display: flex; gap: 8px; align-items: flex-start; }}
-    .image-choice {{ display: grid; gap: 6px; min-width: 90px; }}
-    .image-choice label {{ display: flex; gap: 6px; align-items: center; margin: 0; font-weight: 500; }}
-    .image-choice input {{ width: auto; }}
-    .asset-path {{ display: block; max-width: 140px; margin-top: 4px; color: #5b6462; overflow-wrap: anywhere; font-size: 11px; }}
-    .lyrics-lines div + div {{ margin-top: 4px; }}
-    .redo-cell {{ text-align: center; min-width: 72px; }}
-    .redo-action {{ margin-top: 4px; color: #44504d; font-size: 11px; overflow-wrap: anywhere; }}
-    .inline-player {{ width: 180px; max-width: 100%; margin-left: 8px; vertical-align: middle; }}
-    .lightbox {{ position: fixed; inset: 0; z-index: 50; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.78); padding: 24px; }}
-    .lightbox.open {{ display: flex; }}
-    .lightbox-content {{ width: min(960px, 94vw); }}
-    .lightbox video, .lightbox img {{ width: 100%; max-height: 82vh; object-fit: contain; background: #000; border-radius: 8px; }}
-    .lightbox-close {{ float: right; margin-bottom: 8px; }}
-  </style>
-  <script>
-    const projectRowServerHtml = new Map();
-    function rememberProjectRows() {{
-      document.querySelectorAll('tr[id^="line-row-"], tr[id^="segment-row-"]').forEach((row) => {{
-        projectRowServerHtml.set(row.id, row.outerHTML);
-      }});
-    }}
-    function copySelectedLines(form) {{
-      form.querySelectorAll('input[name="selected_lines"]').forEach((input) => input.remove());
-      const selectedSegments = document.querySelectorAll('.segment-select:checked');
-      const selectedLines = selectedSegments.length ? selectedSegments : document.querySelectorAll('.line-select:checked');
-      if (!selectedLines.length) {{
-        const hasSegments = document.querySelectorAll('.segment-select').length > 0;
-        const itemLabel = hasSegments ? 'Segmente' : 'Zeilen';
-        if (!confirm('Keine Checkbox markiert. Es werden alle(!) ' + itemLabel + ' verarbeitet. Fortfahren?')) {{
-          return false;
-        }}
-      }}
-      selectedLines.forEach((checkbox) => {{
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'selected_lines';
-        input.value = checkbox.value;
-        form.appendChild(input);
-      }});
-      return true;
-    }}
-    function currentProjectId() {{
-      const match = window.location.pathname.match(/^\\/projects\\/(\\d+)/);
-      return match ? Number(match[1]) : 0;
-    }}
-    function projectActionSubmitted(form) {{
-      if (!copySelectedLines(form)) return false;
-      const projectId = currentProjectId();
-      if (projectId) {{
-        window.setTimeout(() => refreshProjectStatus(projectId), 150);
-      }}
-      return true;
-    }}
-    function toggleRowSelection(event, row) {{
-      const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';
-      if (event.target.closest(interactiveSelector)) return;
-      const checkbox = row.querySelector('.segment-select, .line-select');
-      if (!checkbox) return;
-      checkbox.checked = !checkbox.checked;
-    }}
-    function projectRowChanged(row, replacement) {{
-      const previousHtml = projectRowServerHtml.get(row.id) || row.outerHTML;
-      return previousHtml !== replacement.outerHTML;
-    }}
-    function replaceProjectRow(row, html) {{
-      const checkbox = row.querySelector('.segment-select, .line-select');
-      const template = document.createElement('template');
-      template.innerHTML = html.trim();
-      const replacement = template.content.firstElementChild;
-      if (!replacement) return;
-      if (!projectRowChanged(row, replacement)) return;
-      const replacementCheckbox = replacement.querySelector('.segment-select, .line-select');
-      if (checkbox && replacementCheckbox) {{
-        replacementCheckbox.checked = checkbox.checked;
-      }}
-      row.replaceWith(replacement);
-      projectRowServerHtml.set(replacement.id, replacement.outerHTML);
-    }}
-    const baseDocumentTitle = document.title.replace(/^\\(\\d+\\)\\s+/, '');
-    function updateBrowserTitle(queueCount) {{
-      if (queueCount === undefined || queueCount === null) return;
-      const count = Math.max(0, Number(queueCount) || 0);
-      document.title = count > 0 ? '(' + count + ') ' + baseDocumentTitle : baseDocumentTitle;
-    }}
-    function updateProjectStatus(data) {{
-      // Detect if the structure has changed (lines → segments after realignment)
-      if (window._currentItemKind !== undefined && data.item_kind !== window._currentItemKind) {{
-        location.reload();
-        return;
-      }}
-      window._currentItemKind = data.item_kind;
-
-      updateQueueEstimate(data.queue_estimate_seconds);
-      updateBrowserTitle(data.queue_count);
-      Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
-        const row = document.getElementById(rowId);
-        if (row) replaceProjectRow(row, html);
-      }});
-    }}
-    async function refreshProjectStatus(projectId) {{
-      if (!projectId) return;
-      const response = await fetch('/projects/' + projectId + '/status');
-      if (!response.ok) return;
-      const data = await response.json();
-      updateProjectStatus(data);
-    }}
-    async function pollProjectStatus(projectId) {{
-      try {{
-        await refreshProjectStatus(projectId);
-      }} catch (error) {{
-        return;
-      }} finally {{
-        window.setTimeout(() => pollProjectStatus(projectId), 2500);
-      }}
-    }}
-    function updateJobsStatus(data) {{
-      updateQueueEstimate(data.queue_estimate_seconds);
-      updateBrowserTitle(data.queue_count);
-      const jobsBody = document.getElementById('jobs-table-body');
-      if (jobsBody && data.jobs_html !== undefined) jobsBody.innerHTML = data.jobs_html;
-      const autodelete = document.querySelector('input[name="autodelete_finished"]');
-      if (autodelete && data.autodelete_finished !== undefined) autodelete.checked = Boolean(data.autodelete_finished);
-      const shutdown = document.querySelector('input[name="shutdown_after_queue"]');
-      if (shutdown && data.shutdown_after_queue !== undefined) shutdown.checked = Boolean(data.shutdown_after_queue);
-    }}
-    async function refreshJobsStatus() {{
-      const response = await fetch('/jobs/status');
-      if (!response.ok) return;
-      updateJobsStatus(await response.json());
-    }}
-    async function pollJobsStatus() {{
-      try {{
-        await refreshJobsStatus();
-      }} catch (error) {{
-        return;
-      }} finally {{
-        window.setTimeout(pollJobsStatus, 2500);
-      }}
-    }}
-    function formatDuration(seconds) {{
-      const total = Math.max(0, Math.round(Number(seconds) || 0));
-      const hours = Math.floor(total / 3600);
-      const minutes = Math.floor((total % 3600) / 60);
-      const remaining = total % 60;
-      if (hours) return hours + 'h ' + minutes + 'm';
-      if (minutes) return minutes + 'm ' + remaining + 's';
-      return remaining + 's';
-    }}
-    function updateQueueEstimate(seconds) {{
-      const element = document.getElementById('queue-estimate');
-      if (!element || seconds === undefined || seconds === null) return;
-      const value = Math.max(0, Number(seconds) || 0);
-      element.dataset.seconds = String(Math.round(value));
-      element.textContent = value > 0 ? 'Queue ca. ' + formatDuration(value) : 'Queue frei';
-    }}
-    function setupQueueEstimateCountdown() {{
-      window.setInterval(() => {{
-        const element = document.getElementById('queue-estimate');
-        if (!element) return;
-        const value = Math.max(0, Number(element.dataset.seconds || 0) - 1);
-        updateQueueEstimate(value);
-      }}, 1000);
-    }}
-    function scrollToTop() {{
-      const firstSegment = document.querySelector('tr[id^="segment-row-"]');
-      const target = firstSegment || document.querySelector('tr[id^="line-row-"]');
-      if (!target) {{
-        window.scrollTo({{ top: 0, behavior: 'smooth' }});
-        return;
-      }}
-      const topbar = document.querySelector('.project-topbar');
-      const offset = topbar ? topbar.getBoundingClientRect().height : 0;
-      const top = target.getBoundingClientRect().top + window.scrollY - offset;
-      window.scrollTo({{ top: Math.max(0, top), behavior: 'smooth' }});
-    }}
-    function scrollStorageKey() {{
-      return 'musicvideogen-scroll:' + window.location.pathname;
-    }}
-    function rememberScrollPosition() {{
-      sessionStorage.setItem(scrollStorageKey(), String(window.scrollY));
-    }}
-    function confirmProjectSettingsSave(form) {{
-      rememberScrollPosition();
-      return true;
-    }}
-    document.addEventListener('submit', rememberScrollPosition);
-    document.addEventListener('DOMContentLoaded', () => {{
-      rememberProjectRows();
-      const stored = sessionStorage.getItem(scrollStorageKey());
-      if (stored === null) return;
-      const scrollY = Number(stored);
-      if (!Number.isFinite(scrollY)) return;
-      requestAnimationFrame(() => window.scrollTo(0, scrollY));
-    }});
-    function toggleAudio(button) {{
-      const audio = button.nextElementSibling;
-      if (!audio) return;
-      if (audio.paused) {{
-        audio.play();
-        button.textContent = '||';
-      }} else {{
-        audio.pause();
-        button.textContent = '▶';
-      }}
-      audio.onended = () => {{ button.textContent = '▶'; }};
-    }}
-    function openClipLightbox(src) {{
-      const box = document.getElementById('clip-lightbox');
-      const video = document.getElementById('clip-lightbox-video');
-      video.src = src;
-      box.classList.add('open');
-      video.play();
-    }}
-    function closeClipLightbox() {{
-      const box = document.getElementById('clip-lightbox');
-      const video = document.getElementById('clip-lightbox-video');
-      video.pause();
-      video.removeAttribute('src');
-      video.load();
-      box.classList.remove('open');
-    }}
-    function openImageLightbox(src) {{
-      const box = document.getElementById('image-lightbox');
-      const image = document.getElementById('image-lightbox-image');
-      image.src = src;
-      box.classList.add('open');
-    }}
-    function closeImageLightbox() {{
-      const box = document.getElementById('image-lightbox');
-      const image = document.getElementById('image-lightbox-image');
-      image.removeAttribute('src');
-      box.classList.remove('open');
-    }}
-  </script>
-</head>
-<body><main>{body}</main></body>
-</html>"""
+    return _ui_assets._page(title, body, queue_count)
 
 
 def _browser_title(title: str, queue_count: int = 0) -> str:
-    count = max(0, int(queue_count or 0))
-    return f"({count}) {title}" if count else title
+    return _ui_assets._browser_title(title, queue_count)
 
 
-def _run_project_action(pipeline, project_id: int, action: str, selected_indices: list[int]) -> object:
-    method_names = {
-        "prompts": "generate_prompts",
-        "video-prompts": "generate_video_prompts",
-        "images": "generate_images",
-        "avatar-image": "generate_avatar_images",
-        "clips": "generate_clips",
-    }
-    return getattr(pipeline, method_names[action])(project_id, selected_indices)
+for _ui_name in _ui_rendering.__all__:
+    globals()[_ui_name] = _wrap_ui_rendering_function(_ui_name)
 
-
-def _selected_action_indices(project_id: int, item_kind: str, selected: list[int], store: Store) -> list[int]:
-    if selected:
-        selected_set = {int(index) for index in selected}
-    else:
-        selected_set = set()
-    rows = store.list_segments(project_id) if item_kind == "segments" else store.list_lines(project_id)
-    if selected_set:
-        rows = [row for row in rows if _row_index(row, item_kind) in selected_set]
-    rows = [row for row in rows if not bool(_row_value(row, "video_approved", 0))]
-    return [_row_index(row, item_kind) for row in rows]
-
-
-def _projects_html(
-    projects,
-    jobs,
-    average_durations: dict[str, float] | None = None,
-    queue_estimate_seconds: float | None = None,
-    job_options: JobOptions | None = None,
-) -> str:
-    average_durations = average_durations or {}
-    job_options = job_options or JobOptions()
-    rows = "".join(_project_list_item_html(p) for p in projects)
-    job_rows = _jobs_table_body_html(jobs, average_durations)
-    queue_estimate = _queue_estimate_html(queue_estimate_seconds)
-    autodelete_checked = " checked" if job_options.autodelete_finished else ""
-    shutdown_checked = " checked" if job_options.shutdown_after_queue else ""
-    return f"""
-<h1>VocaVid</h1>
-<form action="/projects" method="post" enctype="multipart/form-data">
-  <label>Name</label><input name="name" required>
-  <label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>
-  <label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>
-  <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="2">
-  <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="1">
-  <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5">
-  <label>Whisper Model</label>{_whisper_model_select_html("small")}
-  <p><button>Create Project</button></p>
-</form>
-<div class="panel"><h2>Projects</h2><ul class="project-list">{rows}</ul></div>
-<div class="panel">
-  <h2 class="jobs-heading">Jobs {queue_estimate}</h2>
-  <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
-  <table><thead><tr><th>#</th><th>Name</th><th>Status</th><th>Created</th><th>Error</th><th>Avg</th><th></th></tr></thead><tbody id="jobs-table-body">{job_rows}</tbody></table>
-  <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
-  <form class="compact-form job-options" action="/jobs/options" method="post">
-    <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
-    <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
-  </form>
-</div>
-<script>setupQueueEstimateCountdown(); pollJobsStatus();</script>
-"""
-
-
-def _jobs_table_body_html(jobs, average_durations: dict[str, float]) -> str:
-    return "".join(
-        f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
-        for job in jobs
-    )
-
-
-def _project_list_item_html(project) -> str:
-    done = _is_kdenlive_project_done(project)
-    css_class = "project-list-item project-done" if done else "project-list-item"
-    done_label = '<span class="project-done-label">fertig</span>' if done else ""
-    return f'<li class="{css_class}"><a href="/projects/{project["id"]}">{_text(project["name"])}</a>{done_label}</li>'
-
-
-def _is_kdenlive_project_done(project) -> bool:
-    final_video_path = str(_row_value(project, "final_video_path", "") or "")
-    return final_video_path.lower().endswith(".kdenlive")
-
-
-def _job_name(label: str, project_name: str, selected_indices: list[int] | None = None, item_kind: str | None = None) -> str:
-    selected = sorted(int(index) + 1 for index in (selected_indices or []))
-    if not selected:
-        return f"{label}: {project_name}"
-    if item_kind and len(selected) == 1:
-        item_label = "segment" if item_kind == "segments" else "line"
-        return f"{label}: {project_name} ({item_label} {selected[0]})"
-    indices = ", ".join(str(index) for index in selected)
-    return f"{label}: {project_name} (segments {indices})"
-
-
-def _action_item_kind(action: str, has_segments: bool) -> str:
-    if action == "align" or action == "segments":
-        return "lines"
-    return "segments" if has_segments else "lines"
-
-
-def _locked_indices(active_jobs, item_kind: str, rows) -> dict[int, str]:
-    row_indices = [_row_index(row, item_kind) for row in rows]
-    locked: dict[int, str] = {}
-    for job in active_jobs:
-        if job.item_kind != item_kind:
-            continue
-        selected = list(job.selected_indices or [])
-        indices = selected if selected else row_indices
-        for index in indices:
-            locked[int(index)] = job.status
-    return locked
-
-
-def _row_index(row, item_kind: str) -> int:
-    key = "segment_index" if item_kind == "segments" else "line_index"
-    return int(row[key])
-
-
-def _merge_row_class(row_class: str, extra_class: str) -> str:
-    if not extra_class:
-        return row_class
-    if not row_class:
-        return f' class="{extra_class}"'
-    return row_class[:-1] + f" {extra_class}\""
-
-
-def _project_html(
-    project,
-    lines,
-    segments=None,
-    used_actions=None,
-    active_jobs=None,
-    queue_estimate_seconds: float | None = None,
-    previous_project_id: int | None = None,
-    next_project_id: int | None = None,
-) -> str:
-    segments = segments or []
-    used_actions = used_actions or set()
-    active_jobs = active_jobs or []
-    work_items = segments or lines
-    item_kind = "segments" if segments else "lines"
-    locked = _locked_indices(active_jobs, item_kind, work_items)
-    assemble_enabled = _all_videos_approved(work_items)
-    action_specs = [
-        ("align", "Align", False),
-        ("segments", "Segs + Audio", False),
-        ("scene-plan", "Scene Plan", False),
-        ("prompts", "Gen Image Prompts", False),
-        ("video-prompts", "Gen Video Prompts", False),
-        ("images", "Gen Images", False),
-        ("avatar-image", "Gen Avatar Image", False),
-        ("clips", "Gen Clips", False),
-        ("assemble", "Assemble Final", True),
-    ]
-    actions = "".join(
-        _action_button(
-            project["id"],
-            number,
-            action,
-            label,
-            is_wip,
-            action in used_actions,
-            enabled=(action != "assemble" or not work_items or assemble_enabled),
-        )
-        for number, (action, label, is_wip) in enumerate(action_specs, start=1)
-    )
-    open_filter = _open_filter_html(work_items)
-    queue_estimate = _queue_estimate_html(queue_estimate_seconds)
-    previous_project_nav = _project_nav_html(previous_project_id, "previous")
-    next_project_nav = _project_nav_html(next_project_id, "next")
-    return f"""
-<div class="project-topbar">
-  <div class="project-title-row">
-    {previous_project_nav}
-    <h1>{project['name']}</h1>
-    {next_project_nav}
-    {queue_estimate}
-    <a class="button" href="/">Back</a>
-  </div>
-  <div class="actions">{actions}{open_filter}</div>
-</div>
-{_segment_settings_html(project)}
-{_scene_plan_editor_html(project)}
-{_work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)}
-{_clip_lightbox_html()}
-{_image_lightbox_html()}
-{_clear_project_html(project)}
-{_scroll_top_button_html()}
-<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]});</script>
-"""
-
-
-def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
-    project_ids = [int(project["id"]) for project in projects]
-    try:
-        index = project_ids.index(int(project_id))
-    except ValueError:
-        return None, None
-    previous_project_id = project_ids[index - 1] if index > 0 else None
-    next_project_id = project_ids[index + 1] if index + 1 < len(project_ids) else None
-    return previous_project_id, next_project_id
-
-
-def _project_nav_html(project_id: int | None, direction: str) -> str:
-    if direction == "previous":
-        symbol = "◀"
-        active_title = "Vorhergehendes Projekt"
-        disabled_title = "Kein vorhergehendes Projekt"
-    else:
-        symbol = "▶"
-        active_title = "Nachfolgendes Projekt"
-        disabled_title = "Kein nachfolgendes Projekt"
-    if project_id is None:
-        return f'<span class="project-nav-button project-nav-disabled" title="{disabled_title}">{symbol}</span>'
-    return f'<a class="project-nav-button" href="/projects/{project_id}" title="{active_title}">{symbol}</a>'
-
-
-def _segment_settings_html(project) -> str:
-    name = _row_value(project, "name", "")
-    audio_path = _row_value(project, "audio_path", "")
-    lyrics_path = _row_value(project, "lyrics_path", "")
-    global_style_prompt = _row_value(project, "global_style_prompt", "")
-    genre = _row_value(project, "genre", "")
-    reference_paths = "\n".join(_reference_paths_from_json(_row_value(project, "reference_image_paths", "[]")))
-    comfy_base_url = _row_value(project, "comfy_base_url", "http://127.0.0.1:8188")
-    output_resolution = _row_value(project, "output_resolution", "1280x720")
-    fps = _row_value(project, "fps", 24)
-    lyric_group_size = _row_value(project, "lyric_group_size", 2)
-    chorus_group_size = _row_value(project, "chorus_group_size", 1)
-    transition_handle_seconds = _row_value(project, "transition_handle_seconds", 0.5)
-    whisper_model_size = normalize_whisper_model_size(_row_value(project, "whisper_model_size", "small"))
-    return f"""
-<form class="hidden-action-form" id="global-style-prompt-form-{project['id']}" action="/projects/{project['id']}/global-style-prompt" method="post"></form>
-<form class="hidden-action-form" id="realign-lyrics-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics" method="post"></form>
-<form class="hidden-action-form" id="realign-lyrics-cpu-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics-cpu" method="post"></form>
-<form action="/projects/{project['id']}/settings" method="post" onsubmit="return confirmProjectSettingsSave(this)" data-original-lyric-group-size="{_attr(lyric_group_size)}" data-original-chorus-group-size="{_attr(chorus_group_size)}">
-  <h2>Project Settings</h2>
-  <label>Name</label><input name="name" value="{_attr(name)}" required>
-  <label>WAV Path</label><input name="audio_path" value="{_attr(audio_path)}" required>
-  <label>Lyrics Path</label><input name="lyrics_path" value="{_attr(lyrics_path)}" required>
-  <label>Global Style Prompt</label><textarea name="global_style_prompt" required>{_text(global_style_prompt)}</textarea>
-  <p><button type="submit" form="global-style-prompt-form-{project['id']}">KI-Vorschlag erstellen</button></p>
-  <label>Genre</label><input name="genre" value="{_attr(genre)}">
-  <label>Reference Image Paths</label><textarea name="reference_image_paths">{_text(reference_paths)}</textarea>
-  <label>Comfy Base URL</label><input name="comfy_base_url" value="{_attr(comfy_base_url)}">
-  <label>Resolution</label><input name="output_resolution" value="{_attr(output_resolution)}">
-  <label>FPS</label><input name="fps" type="number" min="1" value="{_attr(fps)}">
-  <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="{_attr(lyric_group_size)}">
-  <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="{_attr(chorus_group_size)}">
-  <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="{_attr(transition_handle_seconds)}">
-  <label>Whisper Model</label>{_whisper_model_select_html(whisper_model_size)}
-  <p>
-    <button>Save Project Settings</button>
-    <button type="submit" form="realign-lyrics-form-{project['id']}" onclick="return confirm('Lyrics neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics</button>
-    <button type="submit" form="realign-lyrics-cpu-form-{project['id']}" onclick="return confirm('Lyrics per CPU neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics (CPU)</button>
-  </p>
-</form>
-"""
-
-
-def _scene_plan_editor_html(project) -> str:
-    scene_plan = _row_value(project, "scene_plan", "") or ""
-    return f"""
-<form action="/projects/{project['id']}/scene-plan/save" method="post">
-  <h2>Scene Plan</h2>
-  <textarea name="scene_plan">{_text(scene_plan)}</textarea>
-  <p><button>Save Scene Plan</button></p>
-</form>
-"""
-
-
-def _work_items_html(project, lines, segments, locked=None, show_generation_columns: bool = False) -> str:
-    locked = locked or {}
-    if segments:
-        return _segments_html(project, lines, segments, locked, show_generation_columns=show_generation_columns)
-    return _lyrics_html(project, lines, locked, show_generation_columns=show_generation_columns)
-
-
-def _project_status_payload(
-    project,
-    lines,
-    segments,
-    active_jobs,
-    average_durations: dict[str, float] | None = None,
-    used_actions: set[str] | None = None,
-    queue_jobs=None,
-) -> dict[str, object]:
-    average_durations = average_durations or {}
-    used_actions = used_actions or set()
-    counted_jobs = active_jobs if queue_jobs is None else queue_jobs
-    item_kind = "segments" if segments else "lines"
-    rows = segments or lines
-    locked = _locked_indices(active_jobs, item_kind, rows)
-    html = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
-    return {
-        "item_kind": item_kind,
-        "locked": {
-            "segments": sorted(locked) if item_kind == "segments" else [],
-            "lines": sorted(locked) if item_kind == "lines" else [],
-        },
-        "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
-        "queue_count": len(counted_jobs),
-        "rows": _extract_row_snippets(html),
-    }
-
-
-def _extract_row_snippets(html: str) -> dict[str, str]:
-    return {
-        match.group(1): match.group(0)
-        for match in re.finditer(r'<tr id="([^"]+)"[\s\S]*?</tr>', html)
-    }
-
-
-def _lyrics_html(project, lines, locked=None, show_generation_columns: bool = False) -> str:
-    locked = locked or {}
-    rows = ""
-    for line in lines:
-        confidence = _display_confidence(line)
-        confidence_value = "" if confidence is None else f"{round(float(confidence) * 100)}%"
-        row_class = _row_class(line["section"], bool(line["is_chorus"]), confidence, bool(_row_value(line, "video_approved", 0)))
-        generation_cells = ""
-        if show_generation_columns:
-            image_choice_html = _image_choice_html(project["id"], "lines", line["line_index"], line)
-            image_html = _assets_stack_html(
-                _image_preview_html(project, line["image_path"]),
-                _image_preview_html(project, _row_value(line, "avatar_image_path", "")),
-                image_choice_html,
-            )
-            clip_html = _clip_play_html(project, line["clip_path"])
-            approval_html = _approval_html(project["id"], "lines", line["line_index"], line)
-            video_prompt = _row_value(line, "video_prompt", "")
-            prompt_editor = _prompt_editor_html(
-                f"/projects/{project['id']}/lines/{line['line_index']}/prompts",
-                line["prompt"] or "",
-                video_prompt or "",
-            )
-            redo_html = _redo_html(project["id"], "lines", line["line_index"], _row_value(line, "last_action", ""))
-            generation_cells = f"""
-  <td colspan="2">{prompt_editor}</td>
-  <td class="assets-column">{image_html}</td>
-  <td>{clip_html}</td>
-  <td>{redo_html}</td>
-  <td>{approval_html}</td>"""
-        status_html = _status_html(line["status"], line["error"] or "")
-        insert_html = _insert_line_html(project["id"], line["line_index"], line["section"])
-        delete_html = _delete_line_html(project["id"], line["line_index"])
-        timing = _timing_text(line["start_sec"], line["end_sec"])
-        start_value = _time_value(line["start_sec"])
-        end_value = _time_value(line["end_sec"])
-        approved = "1" if bool(_row_value(line, "video_approved", 0)) else "0"
-        locked_status = locked.get(int(line["line_index"]))
-        tr_class = _merge_row_class(row_class, "locked-row" if locked_status else "")
-        lock_overlay = f'<div class="row-lock-overlay">{_text(locked_status)}</div>' if locked_status else ""
-        rows += f"""
-<tr id="line-row-{line['line_index']}"{tr_class} data-work-item="1" data-video-approved="{approved}" data-locked="{'1' if locked_status else '0'}" onclick="toggleRowSelection(event, this)">
-  <td class="select-cell"><input type="checkbox" class="line-select" name="selected_lines" value="{line['line_index']}"></td>
-  <td>{_text(line['clean_text'])}</td>
-  <td class="timing-column">
-    <form class="compact-form timing-form" action="/projects/{project['id']}/lines/{line['line_index']}/timing" method="post">
-      <input name="start_sec" value="{start_value}" placeholder="von">
-      <input name="end_sec" value="{end_value}" placeholder="bis">
-      <button>Save</button>
-    </form>
-    <div>{timing}</div>
-  </td>
-  <td class="confidence">{confidence_value}</td>
-{generation_cells}
-  <td>{status_html}</td>
-  <td><form action="/projects/{project['id']}/lines/{line['line_index']}/retry" method="post"><button>Retry</button></form></td>
-  <td>{insert_html}</td>
-  <td>{delete_html}</td>
-  <td>{lock_overlay}</td>
-</tr>"""
-    generation_headers = '<th colspan="2">Prompts</th><th>Images</th><th>Clip</th><th>Redo</th><th>OK</th>' if show_generation_columns else ""
-    return f"""
-<div class="panel"><h2>Lyrics / Timing</h2></div>
-<table>
-  <thead><tr><th>Select</th><th>Lyrics</th><th class="timing-column">Timing</th><th>Confidence</th>{generation_headers}<th>Status</th><th></th><th>Insert</th><th>Loeschen</th></tr></thead>
-  <tbody>{rows}</tbody>
-</table>
-{_section_legend_html()}
-"""
-
-
-def _segments_html(project, lines, segments, locked=None, show_generation_columns: bool = False) -> str:
-    locked = locked or {}
-    confidence_by_line = _line_confidence_by_index(lines)
-    rows = ""
-    for segment in segments:
-        generation_cells = ""
-        audio_html = _audio_play_html(segment["audio_path"])
-        row_class = _row_class(
-            segment["section"] if segment["kind"] != "gap" else segment["kind"],
-            bool(segment["is_chorus"]),
-            None,
-            bool(_row_value(segment, "video_approved", 0)),
-        )
-        timing = _timing_text(segment["start_sec"], segment["end_sec"])
-        confidence_html = _segment_confidence_html(segment, confidence_by_line)
-        alignment_cells = ""
-        if not show_generation_columns:
-            timing_editor = _segment_timing_editor_html(project["id"], segment)
-            section_editor = _segment_section_editor_html(project["id"], segment)
-            alignment_cells = f"""
-  <td>{section_editor}</td>
-  <td class="timing-column">{timing_editor}<div>{timing}</div>{confidence_html}</td>
-  <td>{audio_html}</td>"""
-        text_html = _multiline_text_html(segment["clean_text"])
-        if show_generation_columns:
-            image_choice_html = _image_choice_html(project["id"], "segments", segment["segment_index"], segment)
-            image_html = _assets_stack_html(
-                _image_preview_html(project, segment["image_path"]),
-                _image_preview_html(project, _row_value(segment, "avatar_image_path", "")),
-                image_choice_html,
-            )
-            clip_html = _clip_play_html(project, segment["clip_path"])
-            approval_html = _approval_html(project["id"], "segments", segment["segment_index"], segment)
-            video_prompt = _row_value(segment, "video_prompt", "")
-            prompt_editor = _prompt_editor_html(
-                f"/projects/{project['id']}/segments/{segment['segment_index']}/prompts",
-                segment["prompt"] or "",
-                video_prompt or "",
-            )
-            redo_html = _redo_html(project["id"], "segments", segment["segment_index"], _row_value(segment, "last_action", ""))
-            generation_cells = f"""
-  <td colspan="2">{prompt_editor}</td>
-  <td class="assets-column">{image_html}</td>
-  <td>{clip_html}</td>
-  <td>{redo_html}</td>
-  <td>{approval_html}</td>"""
-        status_html = _status_html(segment["status"], segment["error"] or "")
-        approved = "1" if bool(_row_value(segment, "video_approved", 0)) else "0"
-        locked_status = locked.get(int(segment["segment_index"]))
-        tr_class = _merge_row_class(row_class, "locked-row" if locked_status else "")
-        lock_overlay = f'<div class="row-lock-overlay">{_text(locked_status)}</div>' if locked_status else ""
-        rows += f"""
-<tr id="segment-row-{segment['segment_index']}"{tr_class} data-work-item="1" data-video-approved="{approved}" data-locked="{'1' if locked_status else '0'}" onclick="toggleRowSelection(event, this)">
-  <td class="select-cell"><input type="checkbox" class="segment-select" name="selected_lines" value="{segment['segment_index']}"></td>
-  <td>{segment['segment_index']}</td>
-  <td>{text_html}</td>
-{alignment_cells}
-{generation_cells}
-  <td>{status_html}</td>
-  <td>{lock_overlay}</td>
-</tr>"""
-    alignment_headers = '<th>Typ</th><th class="timing-column">Timing</th><th>Audio</th>' if not show_generation_columns else ""
-    generation_headers = '<th colspan="2">Prompts</th><th>Images</th><th>Clip</th><th>Redo</th><th>OK</th>' if show_generation_columns else ""
-    return f"""
-<div class="panel"><h2>Render Segments</h2></div>
-<table>
-  <thead><tr><th>Select</th><th>#</th><th>Text</th>{alignment_headers}{generation_headers}<th>Status</th></tr></thead>
-  <tbody>{rows}</tbody>
-</table>
-{_section_legend_html()}
-"""
-
-
-def _action_button(project_id: int, number: int, action: str, label: str, is_wip: bool, is_used: bool, enabled: bool = True) -> str:
-    title = ""
-    css_class = ""
-    if is_used:
-        css_class = "used-button"
-        title = "Already used; click to run again"
-    elif is_wip:
-        css_class = "wip-button"
-        title = "WIP: not fully clean yet"
-    attrs = ""
-    if css_class:
-        attrs += f' class="{css_class}"'
-    if not enabled:
-        attrs += ' type="button" title="Alle Videos erst mit OK markieren" onclick="alert(\'Bitte erst alle Videos mit OK freigeben.\')"'
-    elif title:
-        attrs += f' title="{title}"'
-    return f"""<form action="/projects/{project_id}/{action}" method="post" onsubmit="return projectActionSubmitted(this)"><button{attrs}>{number}. {label}</button></form>"""
-
-
-def _open_filter_html(rows) -> str:
-    total = len(rows)
-    open_count = sum(1 for row in rows if not bool(_row_value(row, "video_approved", 0)))
-    return f"""<span class="open-count-label">{open_count}/{total} offen</span>"""
-
-
-def _queue_estimate_html(seconds: float | None) -> str:
-    value = max(0.0, float(seconds or 0.0))
-    label = "Queue frei" if value <= 0 else f"Queue ca. {_format_duration(value)}"
-    return f'<span id="queue-estimate" class="queue-estimate" data-seconds="{int(round(value))}">{_text(label)}</span>'
-
-
-def _scroll_top_button_html() -> str:
-    return '<button class="scroll-top-button" type="button" onclick="scrollToTop()" title="Nach oben">Top</button>'
-
-
-def _job_average_seconds(job, average_durations: dict[str, float]) -> float | None:
-    action = job.action or _action_from_job_name(job.name)
-    if not action:
-        return None
-    return average_durations.get(action)
-
-
-def _action_from_job_name(name: str) -> str:
-    label = str(name).split(":", 1)[0].strip()
-    return {
-        "generate prompts": "prompts",
-        "generate video prompts": "video-prompts",
-        "generate images": "images",
-        "generate avatar image": "avatar-image",
-        "generate clips": "clips",
-        "align": "align",
-        "build segments": "segments",
-        "generate scene plan": "scene-plan",
-        "assemble": "assemble",
-    }.get(label, "")
-
-
-def _duration_html(seconds: float | None) -> str:
-    if seconds is None:
-        return ""
-    return _text(_format_duration(seconds))
-
-
-def _format_duration(seconds: float | int | None) -> str:
-    if seconds is None:
-        return ""
-    total = max(0, int(round(float(seconds))))
-    minutes, remaining = divmod(total, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours}h {minutes}m"
-    if minutes:
-        return f"{minutes}m {remaining}s"
-    return f"{remaining}s"
-
-
-def _queue_estimate_seconds(active_jobs, average_durations: dict[str, float]) -> float:
-    total = 0.0
-    now = datetime.now()
-    for job in active_jobs:
-        average = average_durations.get(job.action)
-        if average is None:
-            continue
-        remaining = float(average)
-        if job.status == "running" and job.started_at:
-            try:
-                elapsed = (now - datetime.fromisoformat(job.started_at)).total_seconds()
-            except ValueError:
-                elapsed = 0.0
-            remaining = max(0.0, remaining - elapsed)
-        total += remaining
-    return total
-
-
-def _job_delete_html(job) -> str:
-    if job.status == "running":
-        return ""
-    return f"""
-<form class="compact-form" action="/jobs/{job.id}/delete" method="post">
-  <button>Delete</button>
-</form>
-"""
-
-
-def _redo_html(project_id: int, item_kind: str, item_index: int, last_action: str | None) -> str:
-    if not last_action:
-        return ""
-    action = _text(last_action)
-    return f"""
-<form class="compact-form redo-cell" action="/projects/{project_id}/{item_kind}/{item_index}/redo" method="post">
-  <button class="icon-button" type="submit" title="Redo again">&#8635;</button>
-  <div class="redo-action">{action}</div>
-</form>
-"""
-
-
-def _insert_line_html(project_id: int, line_index: int, section: str) -> str:
-    return f"""
-<form class="compact-form insert-line-form" action="/projects/{project_id}/lines/{line_index}/insert-after" method="post">
-  <input name="text" placeholder="Neue Zeile darunter" required>
-  <input name="section" value="{_attr(section)}" placeholder="Section">
-  <button>+</button>
-</form>
-"""
-
-
-def _delete_line_html(project_id: int, line_index: int) -> str:
-    return f"""
-<form class="compact-form" action="/projects/{project_id}/lines/{line_index}/delete" method="post" onsubmit="return confirm('Lyrics-Zeile wirklich loeschen? Segmente und generierte Inhalte ab dieser Zeile werden zurueckgesetzt.')">
-  <button class="danger-button">Loeschen</button>
-</form>
-"""
-
-
-def _clear_project_html(project) -> str:
-    return f"""
-<details class="danger-panel">
-  <summary>Danger Zone</summary>
-  <div class="actions">
-    <form class="compact-form" action="/projects/{project['id']}/clear" method="post" onsubmit="return confirm('Projekt wirklich leeren? Generierte Dateien, Segmente, Timings, Prompts und Button-Status werden zurueckgesetzt. Uploads und Settings bleiben erhalten.')">
-      <button class="danger-button">Clear Project</button>
-    </form>
-    <form class="compact-form" action="/projects/{project['id']}/delete" method="post" onsubmit="return confirm('Projekt wirklich loeschen? Datenbankeintrag, Upload-Ordner und generierte Dateien werden entfernt.')">
-      <button class="danger-button">Delete Project</button>
-    </form>
-  </div>
-</details>
-"""
-
-
-def _image_preview_html(project, image_path: str | None) -> str:
-    if not image_path:
-        return ""
-    url = _generated_asset_url(project, image_path)
-    return (
-        f'<button class="preview-button" type="button" onclick="openImageLightbox({_js_arg(url)})">'
-        f'<img class="preview-image" src="{url}" alt="Generated image"></button>'
-    )
-
-
-def _assets_stack_html(*items: str) -> str:
-    visible_items = [item for item in items if item]
-    if not visible_items:
-        return ""
-    preview_items = [item for item in visible_items if 'class="preview-button"' in item]
-    other_items = [item for item in visible_items if 'class="preview-button"' not in item]
-    previews_html = '<div class="asset-previews">' + "".join(preview_items) + "</div>" if preview_items else ""
-    return '<div class="assets-stack">' + previews_html + "".join(other_items) + "</div>"
-
-
-def _image_choice_html(project_id: int, item_kind: str, item_index: int, row) -> str:
-    image_path = _row_value(row, "image_path", "")
-    avatar_image_path = _row_value(row, "avatar_image_path", "")
-    if not image_path or not avatar_image_path:
-        return ""
-    selected = _row_value(row, "selected_image_source", "avatar")
-    image_checked = " checked" if selected == "image" else ""
-    avatar_checked = " checked" if selected != "image" else ""
-    return f"""
-<form class="compact-form image-choice" action="/projects/{project_id}/{item_kind}/{item_index}/image-source" method="post">
-  <label><input type="radio" name="selected_image_source" value="image"{image_checked} onchange="rememberScrollPosition(); this.form.submit()"> Image</label>
-  <label><input type="radio" name="selected_image_source" value="avatar"{avatar_checked} onchange="rememberScrollPosition(); this.form.submit()"> Avatar</label>
-</form>
-"""
-
-
-def _approval_html(project_id: int, item_kind: str, item_index: int, row) -> str:
-    checked = " checked" if bool(_row_value(row, "video_approved", 0)) else ""
-    return f"""
-<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post">
-  <input type="hidden" name="video_approved" value="0">
-  <label class="approval-label"><input type="checkbox" name="video_approved" value="1"{checked} onchange="rememberScrollPosition(); this.form.submit()"> OK</label>
-</form>
-"""
-
-
-def _prompt_editor_html(action: str, prompt: str, video_prompt: str) -> str:
-    return f"""
-<form class="compact-form" action="{action}/image/save" method="post">
-  <label>Image</label><textarea class="prompt-textarea" name="prompt">{_text(prompt)}</textarea>
-  <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/image/ai-fill">AI fill</button></p>
-</form>
-<form class="compact-form" action="{action}/video/save" method="post">
-  <label>Video</label><textarea class="prompt-textarea" name="video_prompt">{_text(video_prompt)}</textarea>
-  <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/video/ai-fill">AI fill</button></p>
-</form>
-"""
-
-
-def _segment_section_editor_html(project_id: int, segment) -> str:
-    section_type = _section_type(segment["section"], bool(segment["is_chorus"]))
-    if section_type not in {"verse", "bridge", "refrain"}:
-        section_type = "verse"
-    verse_selected = " selected" if section_type == "verse" else ""
-    bridge_selected = " selected" if section_type == "bridge" else ""
-    refrain_selected = " selected" if section_type == "refrain" else ""
-    return f"""
-<form class="compact-form section-form" action="/projects/{project_id}/segments/{segment['segment_index']}/section" method="post">
-  <select name="section_type" onchange="rememberScrollPosition(); this.form.submit()">
-    <option value="verse"{verse_selected}>Verse</option>
-    <option value="bridge"{bridge_selected}>Bridge</option>
-    <option value="refrain"{refrain_selected}>Refrain</option>
-  </select>
-</form>
-"""
-
-
-def _whisper_model_select_html(selected: str) -> str:
-    selected = normalize_whisper_model_size(selected)
-    options = []
-    for model_size in WHISPER_MODEL_SIZES:
-        selected_attr = " selected" if model_size == selected else ""
-        options.append(f'<option value="{_attr(model_size)}"{selected_attr}>{_text(model_size)}</option>')
-    return f'<select name="whisper_model_size">{"".join(options)}</select>'
-
-
-def _segment_timing_editor_html(project_id: int, segment) -> str:
-    start_value = _time_value(segment["start_sec"])
-    end_value = _time_value(segment["end_sec"])
-    return f"""
-<form class="compact-form timing-form" action="/projects/{project_id}/segments/{segment['segment_index']}/timing" method="post">
-  <input name="start_sec" value="{start_value}" placeholder="von">
-  <input name="end_sec" value="{end_value}" placeholder="bis">
-  <button>Save</button>
-</form>
-"""
-
-
-def _line_confidence_by_index(lines) -> dict[int, float]:
-    values: dict[int, float] = {}
-    for line in lines:
-        confidence = _display_confidence(line)
-        if confidence is None:
-            continue
-        try:
-            values[int(line["line_index"])] = float(confidence)
-        except (KeyError, TypeError, ValueError):
-            continue
-    return values
-
-
-def _display_confidence(row):
-    if _is_sparse_fallback_row(row):
-        return None
-    return _row_value(row, "confidence", None)
-
-
-def _is_sparse_fallback_row(row) -> bool:
-    return str(_row_value(row, "error", "") or "").startswith("Sparse Whisper alignment;")
-
-
-def _segment_confidence_html(segment, confidence_by_line: dict[int, float]) -> str:
-    values = [
-        confidence_by_line[index]
-        for index in _source_line_indices(segment)
-        if index in confidence_by_line
-    ]
-    if not values:
-        return ""
-    confidence = min(values)
-    return f'<div class="timing-confidence">Confidence {round(confidence * 100)}%</div>'
-
-
-def _source_line_indices(segment) -> list[int]:
-    value = _row_value(segment, "source_line_indices", [])
-    if isinstance(value, str):
-        try:
-            value = json.loads(value or "[]")
-        except json.JSONDecodeError:
-            value = []
-    if not isinstance(value, list):
-        return []
-    indices: list[int] = []
-    for item in value:
-        try:
-            indices.append(int(item))
-        except (TypeError, ValueError):
-            continue
-    return indices
-
-
-def _status_html(status: str, error: str) -> str:
-    error_html = f'<div class="status-error">{_text(error)}</div>' if error else ""
-    return f'<div class="status">{_text(status)}</div>{error_html}'
-
-
-def _all_videos_approved(rows) -> bool:
-    return bool(rows) and all(bool(_row_value(row, "video_approved", 0)) for row in rows)
-
-
-def _audio_play_html(audio_path: str | None) -> str:
-    if not audio_path:
-        return ""
-    url = _local_asset_url(audio_path)
-    return (
-        f'<button class="icon-button" type="button" title="Play audio" data-audio-src="{url}" onclick="toggleAudio(this)">▶</button>'
-        f'<audio class="inline-player" preload="none" src="{url}"></audio>'
-    )
-
-
-def _clip_play_html(project, clip_path: str | None) -> str:
-    if not clip_path:
-        return ""
-    url = _generated_asset_url(project, clip_path)
-    return f'<button class="icon-button" type="button" title="Play clip" onclick="openClipLightbox(\'{url}\')">▶</button>'
-
-
-def _clip_lightbox_html() -> str:
-    return """
-<div id="clip-lightbox" class="lightbox" onclick="if (event.target === this) closeClipLightbox()">
-  <div class="lightbox-content">
-    <button class="lightbox-close" type="button" onclick="closeClipLightbox()">Close</button>
-    <video id="clip-lightbox-video" controls></video>
-  </div>
-</div>
-"""
-
-
-def _image_lightbox_html() -> str:
-    return """
-<div id="image-lightbox" class="lightbox" onclick="if (event.target === this) closeImageLightbox()">
-  <div class="lightbox-content">
-    <button class="lightbox-close" type="button" onclick="closeImageLightbox()">Close</button>
-    <img id="image-lightbox-image" alt="Generated image">
-  </div>
-</div>
-"""
-
-
-def _row_class(section: str, is_chorus: bool, confidence, approved: bool = False) -> str:
-    classes = [_section_class(section, is_chorus)]
-    if approved:
-        classes.append("approved-row")
-    if confidence is not None and float(confidence) < 0.45:
-        classes.append("low-confidence")
-    return f' class="{" ".join(classes)}"'
-
-
-def _section_class(section: str, is_chorus: bool) -> str:
-    section_type = _section_type(section, is_chorus)
-    if section_type == "refrain":
-        return "section-chorus"
-    if section_type == "bridge":
-        return "section-bridge"
-    if section_type == "verse":
-        return "section-verse"
-    return "section-gap"
-
-
-def _section_type(section: str, is_chorus: bool) -> str:
-    value = str(section or "").lower()
-    if is_chorus or "chorus" in value or "refrain" in value:
-        return "refrain"
-    if "bridge" in value:
-        return "bridge"
-    if "verse" in value:
-        return "verse"
-    if "instrumental" in value or "break" in value or "gap" in value or value == "":
-        return "gap"
-    return "gap"
-
-
-def _section_legend_html() -> str:
-    return """
-<div class="section-legend">
-  <span><span class="legend-swatch section-gap"></span>Other</span>
-  <span><span class="legend-swatch section-verse"></span>Verse</span>
-  <span><span class="legend-swatch section-bridge"></span>Bridge</span>
-  <span><span class="legend-swatch section-chorus"></span>Refrain</span>
-</div>
-"""
-
-
-def _multiline_text_html(value: str) -> str:
-    lines = [line.strip() for line in str(value or "").splitlines() if line.strip()]
-    if not lines:
-        return ""
-    return '<div class="lyrics-lines">' + "".join(f"<div>{_text(line)}</div>" for line in lines) + "</div>"
-
-
-def _timing_text(start, end) -> str:
-    if start is None or end is None:
-        return ""
-    return f"{float(start):.1f} - {float(end):.1f}"
-
-
-def _time_value(value) -> str:
-    if value is None:
-        return ""
-    return f"{float(value):.1f}"
-
-
-def _comfy_output_url(comfy_base_url: str, output_path: str) -> str:
-    path = Path(output_path.replace("\\", "/"))
-    filename = path.name
-    subfolder = path.parent.as_posix()
-    url = f"{comfy_base_url.rstrip('/')}/view?filename={quote(filename)}"
-    if subfolder and subfolder != ".":
-        url += f"&amp;subfolder={quote(subfolder, safe='')}"
-    return f"{url}&amp;type=output"
-
-
-def _generated_asset_url(project, path: str) -> str:
-    if _is_local_project_asset(path):
-        return _local_asset_url(path)
-    return _comfy_output_url(_row_value(project, "comfy_base_url", "http://127.0.0.1:8188"), path)
-
-
-def _is_local_project_asset(path: str) -> bool:
-    if is_internal_storage_path(path):
-        return True
-    try:
-        Path(path).resolve().relative_to(APP_ROOT.resolve())
-        return True
-    except (OSError, ValueError):
-        return False
-
-
-def _local_asset_url(path: str) -> str:
-    candidate = resolve_storage_path(APP_ROOT, path)
-    normalized = storage_relative_path(APP_ROOT, path)
-    url = "/assets/" + quote(normalized.lstrip("/"), safe="/")
-    version = _local_asset_version(candidate, normalized)
-    return f"{url}?v={version}" if version else url
-
-
-def _local_asset_version(candidate: Path, normalized: str) -> str:
-    candidates = [candidate]
-    normalized_path = normalized.lstrip("/").replace("/", "\\")
-    if normalized_path:
-        candidates.append(APP_ROOT / normalized_path)
-    for item in candidates:
-        try:
-            stat = item.stat()
-        except OSError:
-            continue
-        return f"{stat.st_mtime_ns}-{stat.st_size}"
-    return ""
-
-
-def _row_value(row, key: str, default):
-    try:
-        return row[key]
-    except (KeyError, IndexError, TypeError):
-        return default
-
-
-def _reference_paths_from_text(value: str) -> list[str]:
-    return [line.strip() for line in value.splitlines() if line.strip()]
-
-
-def _reference_paths_from_json(value: str) -> list[str]:
-    try:
-        parsed = json.loads(value or "[]")
-    except json.JSONDecodeError:
-        return _reference_paths_from_text(value)
-    if not isinstance(parsed, list):
-        return []
-    return [str(item) for item in parsed if str(item).strip()]
-
-
-def _attr(value) -> str:
-    return escape(str(value), quote=True)
-
-
-def _js_arg(value) -> str:
-    return "'" + str(value).replace("\\", "\\\\").replace("'", "\\'") + "'"
-
-
-def _text(value) -> str:
-    return escape(str(value), quote=False)
-
+del _ui_name
 
 app = create_app()

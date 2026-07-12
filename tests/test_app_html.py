@@ -1,6 +1,28 @@
+import tempfile
 import unittest
+from html import unescape
+from pathlib import Path
 
-from musicvideogen.app import APP_ROOT, _job_name, _local_asset_url, _page, _project_html, _projects_html, _reference_paths_from_text
+from fastapi.testclient import TestClient
+
+import musicvideogen.app as app_module
+import musicvideogen.ui.context as ui_context
+from musicvideogen.app import APP_ROOT
+from musicvideogen.ui.assets import _page
+from musicvideogen.ui.formatting import (
+    _job_name,
+    _local_asset_url,
+    _reference_paths_from_text,
+)
+from musicvideogen.ui.projects import (
+    _project_html,
+    _project_status_payload,
+    _projects_html,
+)
+from musicvideogen.ui.queue import _queue_estimate_label
+from musicvideogen.ui.storyboard import (
+    _segment_inspector_html,
+)
 from musicvideogen.worker import Job
 
 
@@ -13,45 +35,94 @@ class RowLike:
 
 
 class AppHtmlTests(unittest.TestCase):
+    def setUp(self):
+        ui_context.APP_ROOT = app_module.APP_ROOT
+
+    def test_page_uses_dark_studio_shell_styles(self):
+        html = _page("Projects", "")
+
+        self.assertIn(":root", html)
+        self.assertIn("--studio-bg", html)
+        self.assertIn("background:", html)
+        self.assertIn(".studio-topbar", html)
+        self.assertIn(".studio-logo", html)
+        self.assertIn(".studio-logo { width: 68px; height: 68px;", html)
+        self.assertIn(".studio-panel", html)
+        self.assertIn(".studio-button", html)
+        self.assertIn(".studio-chip", html)
+        self.assertIn("--bg-app: #0b1012;", html)
+        self.assertIn("--action: #29d3b0;", html)
+        self.assertIn("--accent: #e9489f;", html)
+        self.assertIn("radial-gradient(ellipse 60% 280px at 8% 0%, rgba(41,211,176,.07), transparent 72%)", html)
+        self.assertIn("form, .panel { background: var(--bg-panel); border: 1px solid var(--border-subtle); color: var(--text-primary);", html)
+        self.assertIn("table { width: 100%; border-collapse: collapse; background: var(--bg-card); color: var(--text-primary);", html)
+        self.assertIn("button, .button {", html)
+        self.assertIn("background: var(--action);", html)
+        self.assertIn(".actions button { border: 1px solid #3a454b; background: #293136; color: #c8d0d4;", html)
+        self.assertIn(".wip-button { border-color: var(--accent); background: var(--accent);", html)
+        self.assertIn(".actions .wip-button { border-color: var(--accent); background: var(--accent); color: #fff;", html)
+        self.assertIn(".danger-panel { margin-top: 24px; border-color: rgba(238,102,117,.48); background: transparent; color: var(--danger);", html)
+        self.assertIn(".danger-panel[open] { background: transparent;", html)
+        self.assertIn(".project-title-right { justify-content: flex-end;", html)
+        self.assertIn(".queue-estimate { padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: #202a2f; color: var(--text-secondary);", html)
+        self.assertIn(".queue-modal { z-index: 180;", html)
+        self.assertIn(".queue-modal-content { width: min(1120px, 96vw); height: 75vh; max-height: 75vh;", html)
+        self.assertIn(".queue-modal-body { min-height: 0; overflow: auto; padding-bottom: 16px;", html)
+
     def test_project_form_does_not_ask_for_workflow_json_paths(self):
         html = _projects_html([], [])
 
         self.assertNotIn("Workflow JSON Path", html)
-        self.assertNotIn("Comfy Base URL", html)
         self.assertNotIn("workflows/image.json", html)
         self.assertNotIn("workflows/image_reference.json", html)
 
-    def test_project_form_is_minimal_import_form(self):
+    def test_start_page_has_new_project_modal_trigger_and_form(self):
         html = _projects_html([], [])
 
+        self.assertIn('class="start-dashboard"', html)
+        self.assertIn('class="studio-button" type="button" onclick="openNewProjectModal()"', html)
+        self.assertIn('id="new-project-modal"', html)
+        self.assertIn('action="/projects"', html)
+        self.assertIn('method="post" enctype="multipart/form-data"', html)
         self.assertIn('<label>Name</label><input name="name" required>', html)
         self.assertIn('<label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>', html)
         self.assertIn('<label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>', html)
+        self.assertIn('<label>Genre</label><input name="genre" required>', html)
+        self.assertIn('<label>Avatar</label><input name="avatar" type="file" accept="image/*">', html)
+        self.assertIn('<label>Male / Female Avatar</label><select name="avatar_gender">', html)
+        self.assertIn('<option value="male">Male</option>', html)
+        self.assertIn('<label>Avatar face description</label><textarea name="avatar_face_description"></textarea>', html)
+        self.assertNotIn('title="Available after creating the project">AI describe avatar</button>', html)
+        self.assertIn('<label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">', html)
+        self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
+        self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
+        self.assertIn('name="output_resolution" type="hidden" value="1280x720"', html)
+        self.assertIn('name="fps" type="hidden" value="24"', html)
+        self.assertIn('name="transition_handle_seconds" type="hidden" value="0.5"', html)
+        self.assertIn('name="whisper_model_size" type="hidden" value="large-v3"', html)
         self.assertNotIn("SUNO Lyrics", html)
         self.assertNotIn("Global Style Prompt", html)
         self.assertNotIn('name="global_style_prompt"', html)
         self.assertNotIn("Reference Images", html)
         self.assertNotIn('name="references"', html)
-        self.assertNotIn("Resolution", html)
-        self.assertNotIn('name="fps"', html)
+        self.assertNotIn("<label>Resolution</label>", html)
+        self.assertNotIn("<label>FPS</label>", html)
+        self.assertNotIn("<label>Whisper Model</label>", html)
 
     def test_project_form_includes_clip_group_defaults(self):
         html = _projects_html([], [])
 
         self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
         self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
-        self.assertIn('name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5"', html)
-        self.assertIn('name="whisper_model_size"', html)
-        self.assertIn('<option value="small" selected>small</option>', html)
-        self.assertIn('<option value="medium">medium</option>', html)
-        self.assertIn('<option value="large-v3">large-v3</option>', html)
+        self.assertIn('name="transition_handle_seconds" type="hidden" value="0.5"', html)
+        self.assertIn('name="whisper_model_size" type="hidden" value="large-v3"', html)
         self.assertLess(html.index('name="lyrics"'), html.index('name="lyric_group_size"'))
         self.assertLess(html.index('name="lyric_group_size"'), html.index('name="chorus_group_size"'))
         self.assertLess(html.index('name="chorus_group_size"'), html.index('name="transition_handle_seconds"'))
         self.assertLess(html.index('name="transition_handle_seconds"'), html.index('name="whisper_model_size"'))
         self.assertLess(html.index('name="whisper_model_size"'), html.index("<p><button>Create Project</button></p>"))
 
-    def test_projects_list_is_responsive_and_marks_kdenlive_projects_done(self):
+    def test_start_page_renders_project_cards_and_marks_done_projects(self):
         projects = [
             {"id": 2, "name": "Finished Song", "final_video_path": "outputs/finished/final.kdenlive"},
             {"id": 1, "name": "Open Song", "final_video_path": None},
@@ -60,17 +131,62 @@ class AppHtmlTests(unittest.TestCase):
         body = _projects_html(projects, [])
         html = _page("Projects", body)
 
-        self.assertIn('<ul class="project-list">', body)
-        self.assertIn('class="project-list-item project-done"', body)
-        self.assertIn('<a href="/projects/2">Finished Song</a>', body)
-        self.assertIn('<span class="project-done-label">fertig</span>', body)
-        self.assertIn('<li class="project-list-item"><a href="/projects/1">Open Song</a></li>', body)
-        self.assertIn(".project-list { display: grid;", html)
-        self.assertIn("grid-template-columns: 1fr", html)
-        self.assertIn("@media (min-width: 820px)", html)
-        self.assertIn("@media (min-width: 1240px)", html)
-        self.assertIn(".project-list-item a { display: inline-block; white-space: nowrap;", html)
-        self.assertIn(".project-list-item.project-done a { text-decoration: line-through;", html)
+        self.assertIn('class="project-card project-card-done"', body)
+        self.assertIn('<a class="project-card-link" href="/projects/2">', body)
+        self.assertIn("Finished Song", body)
+        self.assertIn('class="project-done-badge" aria-label="Done"', body)
+        self.assertIn("&#10003;", body)
+        self.assertIn('<a class="project-card-link" href="/projects/1">', body)
+        self.assertIn('data-project-id="2"', body)
+        self.assertIn('data-status="done"', body)
+        self.assertIn('data-status="in-progress"', body)
+        self.assertIn('class="progress-pill project-progress-badge"', body)
+        self.assertIn('<span class="progress-pill-label">0/0</span>', body)
+        self.assertNotIn("Open project", body)
+        self.assertNotIn(">DONE<", body)
+        self.assertIn(".project-grid", html)
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", html)
+        self.assertIn("aspect-ratio: 16 / 9", html)
+        self.assertIn(".project-done-badge", html)
+        self.assertIn('id="project-search"', body)
+        self.assertIn('id="project-filter"', body)
+        self.assertIn('id="project-sort"', body)
+        self.assertIn("function applyProjectBrowserControls", html)
+        self.assertIn("setupProjectBrowserControls();", html)
+        self.assertIn('class="project-card-placeholder-mark" aria-label="No preview yet"', body)
+        self.assertNotIn(">FS<", body)
+        self.assertNotIn(">OS<", body)
+        self.assertIn('<img class="studio-logo" src="/icon/VocaVid_icon.svg" alt="" aria-hidden="true">', body)
+
+    def test_project_cards_use_chorus_clip_preview_before_other_media(self):
+        projects = [{"id": 7, "name": "Demo Song", "final_video_path": None}]
+        previews = {
+            7: [
+                {
+                    "section": "Verse",
+                    "is_chorus": 0,
+                    "clip_path": "outputs/demo/clips/verse.mp4",
+                    "image_path": "outputs/demo/images/verse.png",
+                    "avatar_image_path": None,
+                },
+                {
+                    "section": "Refrain",
+                    "is_chorus": 1,
+                    "clip_path": "outputs/demo/clips/refrain.mp4",
+                    "image_path": "outputs/demo/images/refrain.png",
+                    "avatar_image_path": None,
+                },
+            ]
+        }
+
+        body = _projects_html(projects, [], project_previews=previews)
+
+        self.assertIn('<video src="/assets/outputs/demo/clips/refrain.mp4', body)
+        self.assertIn('preload="metadata" muted playsinline', body)
+        self.assertNotIn("verse.mp4", body)
+        self.assertIn('class="progress-pill project-progress-badge"', body)
+        self.assertIn('<span class="progress-pill-fill" style="--progress: 0%"></span>', body)
+        self.assertIn('<span class="progress-pill-label">0/2</span>', body)
 
     def test_jobs_table_has_delete_actions_except_running_and_clear_queued_button(self):
         jobs = [
@@ -86,6 +202,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<button>Delete queued</button>", html)
         self.assertIn('action="/jobs/delete-finished"', html)
         self.assertIn("<button>Delete finished</button>", html)
+        self.assertIn('class="queue-summary-grid"', html)
+        self.assertIn('class="queue-admin-controls"', html)
+        self.assertIn('class="queue-cleanup-actions"', html)
+        self.assertIn('class="compact-form queue-settings-line"', html)
         self.assertIn("generate prompts: Demo Song", html)
         self.assertIn("<th>Avg</th>", html)
         self.assertIn("<td>12s</td>", html)
@@ -96,12 +216,71 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/jobs/1/delete"', html)
         self.assertIn("<th></th>", html)
         self.assertGreater(html.index('action="/jobs/delete-finished"'), html.index("</table>"))
+        self.assertGreater(html.index('class="queue-admin-controls"'), html.index("</table>"))
+
+    def test_queue_jobs_with_project_targets_are_clickable(self):
+        jobs = [
+            Job(
+                id=5,
+                name="generate clips: Demo Song (segment 3)",
+                status="queued",
+                created_at="2026-06-27T19:15:24",
+                project_id=7,
+                action="clips",
+                item_kind="segments",
+                selected_indices=[2],
+            )
+        ]
+
+        html = _projects_html([], jobs)
+
+        self.assertIn('class="queue-job-row"', html)
+        self.assertIn('data-href="/projects/7"', html)
+        self.assertIn('data-template-id="segment-inspector-template-segments-2"', html)
+        self.assertIn("openQueueJobRow(this)", html)
+        self.assertIn("Open target", html)
+
+    def test_start_page_queue_summary_shows_status_counts_and_estimate(self):
+        jobs = [
+            Job(id=4, name="queued", status="queued", created_at="2026-06-27T19:15:24"),
+            Job(id=3, name="running", status="running", created_at="2026-06-27T19:03:22"),
+            Job(id=2, name="done", status="done", created_at="2026-06-27T18:00:00"),
+            Job(id=1, name="failed", status="failed", created_at="2026-06-27T17:00:00"),
+        ]
+
+        html = _projects_html([], jobs, queue_estimate_seconds=70.0)
+
+        self.assertNotIn('id="jobs-panel"', html)
+        self.assertIn('id="queue-modal"', html)
+        self.assertIn('class="queue-modal-body"', html)
+        self.assertIn('class="queue-summary-card queue-summary-card-active"', html)
+        self.assertIn("<strong>1</strong><span>queued</span>", html)
+        self.assertIn("<strong>1</strong><span>running</span>", html)
+        self.assertIn("<strong>1</strong><span>done</span>", html)
+        self.assertIn("<strong>1</strong><span>failed</span>", html)
+        self.assertIn("<strong>1m 10s</strong><span>estimate</span>", html)
+
+    def test_queue_estimate_label_shows_count_and_unknown_when_time_runs_out(self):
+        self.assertEqual(_queue_estimate_label(126, 3), "3 ~2m 6s")
+        self.assertEqual(_queue_estimate_label(0, 1), "1 ~?s")
+        self.assertEqual(_queue_estimate_label(0, 0), "Queue 0")
 
     def test_start_page_has_queue_polling_and_queue_options(self):
-        html = _page("Projects", _projects_html([], [], queue_estimate_seconds=70.0), queue_count=2)
+        jobs = [
+            Job(id=4, name="queued", status="queued", created_at="2026-06-27T19:15:24"),
+            Job(id=3, name="running", status="running", created_at="2026-06-27T19:03:22"),
+        ]
+        html = _page("Projects", _projects_html([], jobs, queue_estimate_seconds=70.0), queue_count=2)
 
         self.assertIn('id="queue-estimate"', html)
-        self.assertIn("Queue ca. 1m 10s", html)
+        self.assertNotIn('id="production-queue-estimate"', html)
+        self.assertIn('data-queue-estimate="1"', html)
+        self.assertIn('data-count="2"', html)
+        self.assertIn(">2 ~1m 10s</button>", html)
+        self.assertIn('onclick="openQueueModal()"', html)
+        self.assertNotIn('href="#jobs-panel"', html)
+        self.assertNotIn('id="jobs-panel"', html)
+        self.assertIn('id="queue-summary"', html)
         self.assertIn('id="jobs-table-body"', html)
         self.assertIn('name="autodelete_finished"', html)
         self.assertIn("Autodelete finished", html)
@@ -109,6 +288,38 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("Shutdown computer 15mins after last queue", html)
         self.assertIn("setupQueueEstimateCountdown(); pollJobsStatus();", html)
         self.assertIn("fetch('/jobs/status')", html)
+        self.assertIn("data.queue_summary_html", html)
+        self.assertIn("queueSummary.innerHTML = data.queue_summary_html", html)
+
+    def test_jobs_status_endpoint_returns_queue_summary_for_polling(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+
+                app = app_module.create_app()
+                app.state.jobs.submit("queued job", lambda: "ok", action="prompts")
+                client = TestClient(app)
+
+                response = client.get("/jobs/status")
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertIn("queue_summary_html", payload)
+                self.assertIn("<span>queued</span>", payload["queue_summary_html"])
+                self.assertIn("<span>running</span>", payload["queue_summary_html"])
+                self.assertIn("<span>estimate</span>", payload["queue_summary_html"])
+                self.assertNotIn('id="queue-summary"', payload["queue_summary_html"])
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
 
     def test_job_name_includes_one_based_selected_segment_indices(self):
         self.assertEqual(_job_name("generate images", "Demo Song", [0, 2]), "generate images: Demo Song (segments 1, 3)")
@@ -123,12 +334,14 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="wip-button"', html)
         self.assertIn('title="WIP: not fully clean yet"', html)
         self.assertEqual(html.count('class="wip-button"'), 1)
-        self.assertIn('<button>1. Align</button>', html)
-        self.assertIn('<button>4. Gen Image Prompts</button>', html)
-        self.assertIn('<button>5. Gen Video Prompts</button>', html)
-        self.assertIn('<button>6. Gen Images</button>', html)
-        self.assertIn('<button>7. Gen Avatar Image</button>', html)
-        self.assertIn('<button>8. Gen Clips</button>', html)
+        self.assertIn('<button>1. Analyze + Split</button>', html)
+        self.assertNotIn("Segs + Audio", html)
+        self.assertIn('<button>3. Gen Prompts</button>', html)
+        self.assertNotIn("Gen Image Prompts", html)
+        self.assertNotIn("Gen Video Prompts", html)
+        self.assertIn('<button>4. Gen Images</button>', html)
+        self.assertIn('<button>5. Gen Avatar Images</button>', html)
+        self.assertIn('<button>6. Gen Clips</button>', html)
         self.assertNotIn('class="button wip-button"', html)
 
     def test_project_header_has_previous_and_next_project_triangle_links(self):
@@ -141,6 +354,628 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('title="Vorhergehendes Projekt"'), html.index("<h1>Demo</h1>"))
         self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
         self.assertIn(".project-nav-button", html)
+
+    def test_project_page_wraps_storyboard_before_advanced_table(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 3,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Storyboard lyric",
+                "start_sec": 1.0,
+                "end_sec": 2.5,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines, previous_project_id=8, next_project_id=6)
+
+        self.assertIn('class="project-studio"', html)
+        self.assertIn('class="project-title-row"', html)
+        self.assertIn('class="project-title-left"', html)
+        self.assertIn('class="project-title-center"', html)
+        self.assertIn('class="project-title-right"', html)
+        self.assertLess(html.index('class="project-title-left"'), html.index('class="project-title-center"'))
+        self.assertLess(html.index('class="project-title-center"'), html.index('class="project-title-right"'))
+        self.assertIn('aria-label="Back to projects" title="Back to projects">←</a>', html)
+        self.assertLess(html.index('aria-label="Back to projects"'), html.index('title="Project Settings"'))
+        self.assertLess(html.index('title="Project Settings"'), html.index('id="project-progress-pill"'))
+        self.assertLess(html.index('id="project-progress-pill"'), html.index('title="Vorhergehendes Projekt"'))
+        self.assertLess(html.index('title="Vorhergehendes Projekt"'), html.index("<h1>Demo</h1>"))
+        self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
+        self.assertLess(html.index('title="Nachfolgendes Projekt"'), html.index('id="queue-estimate"'))
+        self.assertLess(html.index('id="queue-estimate"'), html.index('class="actions"'))
+        self.assertNotIn('class="view-switch"', html)
+        self.assertNotIn('data-project-view="storyboard"', html)
+        self.assertNotIn('data-project-view="table"', html)
+        self.assertNotIn(">Advanced Table</button>", html)
+        self.assertIn('id="project-storyboard"', html)
+        self.assertIn('class="storyboard-rail"', html)
+        self.assertIn('id="project-table-view" class="project-table-view" hidden', html)
+        self.assertIn('class="project-table-view"', html)
+        self.assertIn("Storyboard lyric", html)
+        self.assertIn("<table>", html)
+        self.assertLess(html.index('id="project-storyboard"'), html.index('id="project-table-view"'))
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
+        self.assertIn("<table>", table_html)
+        self.assertLess(html.index('id="project-table-view"'), html.index("<h2>Project Settings</h2>"))
+        self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
+        self.assertLess(html.index('name="global_style_prompt"'), html.index('name="scene_plan" form="scene-plan-form-7"'))
+        self.assertIn('<tr id="line-row-3"', table_html)
+        self.assertIn('action="/projects/7/lines/3/timing"', table_html)
+        self.assertIn('action="/projects/7/lines/3/insert-after"', table_html)
+        self.assertIn('action="/projects/7/lines/3/delete"', table_html)
+
+    def test_storyboard_card_media_prefers_clip_over_images(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Clip wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-line-000.png",
+                "clip_path": "outputs/project-7/clips/line-000.mp4",
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('class="storyboard-card-media storyboard-card-media-clip"', html)
+        self.assertIn('class="storyboard-card-video"', html)
+        self.assertIn('src="/assets/outputs/project-7/clips/line-000.mp4', html)
+        self.assertNotIn('poster="/assets/outputs/project-7/images/avatar-line-000.png', html)
+        self.assertIn('preload="metadata"', html)
+        self.assertNotIn('preload="none"', html)
+        self.assertNotIn(" muted", html)
+        self.assertIn('onclick="toggleStoryboardVideo(event, this)"', html)
+        self.assertIn('class="storyboard-video-toggle"', html)
+        self.assertIn('class="storyboard-video-expand"', html)
+        self.assertIn('aria-label="Open clip in lightbox"', html)
+        self.assertIn("openClipLightbox(&quot;/assets/outputs/project-7/clips/line-000.mp4", html)
+        self.assertIn(", this)", html)
+        self.assertIn("function toggleStoryboardVideo", _page("Demo", ""))
+        page_html = _page("Demo", "")
+        self.assertIn("function resetStoryboardVideo(target)", page_html)
+        self.assertIn("video.currentTime = 0;", page_html)
+        self.assertIn("resetStoryboardVideo(source);", page_html)
+        self.assertNotIn('class="storyboard-card-image"', html)
+
+    def test_storyboard_card_media_prefers_avatar_over_image(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Avatar wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-line-000.png",
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+        card_html = html[html.index('<article class="storyboard-card') : html.index("</article>", html.index('<article class="storyboard-card'))]
+
+        self.assertIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', card_html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/avatar-line-000.png&quot;)", card_html)
+        self.assertNotIn('src="/assets/outputs/project-7/images/line-000.png"', card_html)
+
+    def test_storyboard_card_media_uses_selected_image_when_both_images_exist(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Selected image wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-line-000.png",
+                "selected_image_source": "image",
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+        card_html = html[html.index('<article class="storyboard-card') : html.index("</article>", html.index('<article class="storyboard-card'))]
+
+        self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', card_html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/line-000.png&quot;)", card_html)
+        self.assertNotIn('src="/assets/outputs/project-7/images/avatar-line-000.png"', card_html)
+
+    def test_storyboard_includes_segment_inspector_with_existing_item_controls(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 2,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Inspector lyric",
+                "start_sec": 1.0,
+                "end_sec": 2.0,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": "outputs/project-7/images/segment-002.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-segment-002.png",
+                "selected_image_source": "image",
+                "clip_path": None,
+                "audio_path": None,
+                "last_action": "images",
+                "scene_plan": "",
+                "video_approved": 1,
+                "status": "failed",
+                "error": "render exploded",
+            }
+        ]
+
+        html = _project_html(project, [], segments)
+        inspector_html = html[html.index('<aside id="segment-inspector"') : html.index("</aside>", html.index('<aside id="segment-inspector"'))]
+
+        self.assertIn('class="segment-inspector"', html)
+        self.assertIn('<h3 class="segment-inspector-title"># 02</h3>', html)
+        self.assertIn("Inspector lyric", html)
+        self.assertIn('action="/projects/7/segments/2/prompts/image/save"', html)
+        self.assertIn('formaction="/projects/7/segments/2/prompts/image/ai-fill"', html)
+        self.assertIn('action="/projects/7/segments/2/prompts/video/save"', html)
+        self.assertIn('formaction="/projects/7/segments/2/prompts/video/ai-fill"', html)
+        self.assertIn('action="/projects/7/segments/2/image-source"', html)
+        self.assertIn('name="selected_image_source" value="image" checked', html)
+        self.assertNotIn('action="/projects/7/segments/2/redo"', inspector_html)
+        self.assertNotIn('<div class="redo-action">images</div>', inspector_html)
+        self.assertIn('action="/projects/7/segments/2/approval"', html)
+        self.assertIn('name="video_approved" value="0"', html)
+        self.assertIn('class="finish-toggle finish-toggle-active"', html)
+        self.assertIn("Mark as unfinished", html)
+        self.assertIn('<span class="finish-toggle-check" aria-hidden="true">&#10003;</span>', html)
+        self.assertIn('class="segment-inspector-label-row"', html)
+        self.assertIn('<div class="segment-inspector-label">Text</div><div class="segment-inspector-meta">1.0 - 2.0</div>', html)
+        self.assertNotIn('<div class="segment-inspector-label">Status</div>', inspector_html)
+        self.assertIn('class="storyboard-card-media storyboard-card-media-image"', html)
+        self.assertIn(".segment-inspector", _page("Demo", ""))
+        self.assertIn("minmax(360px, 520px)", _page("Demo", ""))
+
+    def test_storyboard_cards_select_active_inspector_and_show_progress(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "First segment",
+                "start_sec": None,
+                "end_sec": None,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": "outputs/project-7/images/segment-000.png",
+                "avatar_image_path": "outputs/project-7/images/avatar-segment-000.png",
+                "clip_path": "outputs/project-7/clips/segment-000.mp4",
+                "audio_path": None,
+                "last_action": "clips",
+                "video_approved": 1,
+                "status": "done",
+                "error": "",
+            },
+            {
+                "segment_index": 1,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Second segment",
+                "start_sec": None,
+                "end_sec": None,
+                "prompt": None,
+                "video_prompt": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "last_action": "",
+                "video_approved": 0,
+                "status": "pending",
+                "error": "",
+            },
+        ]
+
+        html = _page("Demo", _project_html(project, [], segments))
+
+        self.assertIn('class="storyboard-card storyboard-card-active storyboard-card-approved"', html)
+        self.assertNotIn("<h2>Storyboard</h2>", html)
+        self.assertIn('data-inspector-template="segment-inspector-template-segments-0"', html)
+        self.assertIn('class="segment-select storyboard-select" name="selected_lines" value="0"', html)
+        self.assertIn('title="Segment markieren"', html)
+        self.assertIn("!event.target.closest('.storyboard-select-wrap')", html)
+        self.assertIn('<div class="storyboard-card-title"><span># 00</span>', html)
+        self.assertIn('<span class="storyboard-card-meta"><span class="storyboard-section-badge storyboard-section-badge-verse">Verse</span></span>', html)
+        self.assertIn(".storyboard-section-badge-verse", html)
+        self.assertNotIn("Segment 0", html)
+        self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
+        self.assertIn('<template id="segment-inspector-template-segments-1">', html)
+        self.assertIn('class="segment-inspector-nav"', html)
+        self.assertIn('<h3 class="segment-inspector-title"># 00</h3>', html)
+        self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein vorhergehendes Segment">◀</span>', html)
+        self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Nachfolgendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-1&#x27;)">▶</button>', html)
+        self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Vorhergehendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-0&#x27;)">◀</button>', html)
+        self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein nachfolgendes Segment">▶</span>', html)
+        self.assertIn('class="storyboard-progress-strip"', html)
+        self.assertIn('<span class="progress-step progress-step-done">Prompt</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">Image</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">Avatar</span>', html)
+        self.assertIn('<span class="progress-step progress-step-done">Clip</span>', html)
+        self.assertNotIn('<span class="progress-step progress-step-done">OK</span>', html)
+        self.assertIn('<span class="storyboard-ok-badge" aria-label="Finished">&#10003;</span>', html)
+        self.assertIn("function selectStoryboardItem", html)
+        self.assertIn("function selectStoryboardTemplate", html)
+        self.assertIn("storyboard-card-active", html)
+
+    def test_segment_inspector_shows_quick_generation_actions_when_prompts_exist(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segment = {
+            "segment_index": 3,
+            "kind": "lyrics",
+            "section": "Verse",
+            "is_chorus": 0,
+            "clean_text": "Prompted segment",
+            "start_sec": None,
+            "end_sec": None,
+            "prompt": "image prompt",
+            "video_prompt": "video prompt",
+            "image_path": None,
+            "avatar_image_path": None,
+            "clip_path": None,
+            "last_action": "prompts",
+            "video_approved": 0,
+            "status": "done",
+            "error": "",
+        }
+
+        html = _segment_inspector_html(project, "segments", segment)
+
+        self.assertIn('class="inspector-generation-actions"', html)
+        self.assertIn('action="/projects/7/images"', html)
+        self.assertIn('<input type="hidden" name="selected_lines" value="3">', html)
+        self.assertIn("<button>Gen Image</button>", html)
+        self.assertIn('action="/projects/7/avatar-image"', html)
+        self.assertIn("<button>Gen Avatar</button>", html)
+        self.assertIn('action="/projects/7/clips"', html)
+        self.assertIn("<button>Gen Clip</button>", html)
+
+    def test_segment_inspector_uses_compact_prompt_lightboxes_and_hides_noise(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segment = {
+            "segment_index": 3,
+            "kind": "lyrics",
+            "section": "Verse",
+            "is_chorus": 0,
+            "clean_text": "Prompted segment",
+            "start_sec": None,
+            "end_sec": None,
+            "prompt": "image prompt",
+            "video_prompt": "video prompt",
+            "image_path": "outputs/project-7/images/segment-003.png",
+            "avatar_image_path": "outputs/project-7/images/avatar-segment-003.png",
+            "clip_path": "outputs/project-7/clips/segment-003.mp4",
+            "last_action": "clips",
+            "video_approved": 0,
+            "status": "done",
+            "error": "boom",
+        }
+
+        html = _segment_inspector_html(project, "segments", segment)
+
+        self.assertIn('class="inspector-prompt-preview"', html)
+        self.assertIn('class="inspector-prompt-media-grid"', html)
+        self.assertIn('class="inspector-prompt-media inspector-prompt-media-image"', html)
+        self.assertIn('class="inspector-prompt-media inspector-prompt-media-avatar"', html)
+        self.assertNotIn("inspector-prompt-media-wide", html)
+        self.assertIn('src="/assets/outputs/project-7/images/segment-003.png', html)
+        self.assertIn('src="/assets/outputs/project-7/images/avatar-segment-003.png', html)
+        self.assertIn("<span>Image</span>", html)
+        self.assertIn("<span>Avatar</span>", html)
+        self.assertNotIn("Show image", html)
+        self.assertIn("Edit image prompt", html)
+        self.assertIn("Edit video prompt", html)
+        self.assertIn('onclick="openImageLightbox(&#x27;/assets/outputs/project-7/images/segment-003.png&#x27;)"', html)
+        self.assertIn('onclick="openImageLightbox(&#x27;/assets/outputs/project-7/images/avatar-segment-003.png&#x27;)"', html)
+        self.assertIn('id="image-prompt-modal-segments-3"', html)
+        self.assertIn('id="video-prompt-modal-segments-3"', html)
+        self.assertIn('onclick="openPromptModal(&#x27;image-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('onclick="openPromptModal(&#x27;video-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('onclick="if (event.target === this) closePromptModal(&#x27;image-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('onclick="if (event.target === this) closePromptModal(&#x27;video-prompt-modal-segments-3&#x27;)"', html)
+        self.assertIn('action="/projects/7/segments/3/prompts/image/save"', html)
+        self.assertIn('name="prompt"', html)
+        self.assertIn('action="/projects/7/segments/3/prompts/video/save"', html)
+        self.assertIn('name="video_prompt"', html)
+        self.assertNotIn("<div class=\"segment-inspector-label\">Redo</div>", html)
+        self.assertNotIn("<div class=\"segment-inspector-label\">Status</div>", html)
+        self.assertNotIn('action="/projects/7/segments/3/redo"', html)
+
+    def test_segment_inspector_orders_actions_source_and_preview(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segment = {
+            "segment_index": 3,
+            "kind": "lyrics",
+            "section": "Verse",
+            "is_chorus": 0,
+            "clean_text": "Prompted segment",
+            "start_sec": None,
+            "end_sec": None,
+            "prompt": "image prompt",
+            "video_prompt": "video prompt",
+            "image_path": "outputs/project-7/images/segment-003.png",
+            "avatar_image_path": "outputs/project-7/images/avatar-segment-003.png",
+            "clip_path": None,
+            "last_action": "clips",
+            "video_approved": 0,
+            "status": "done",
+            "error": "",
+        }
+
+        html = _segment_inspector_html(project, "segments", segment)
+
+        self.assertLess(html.index("Image source"), html.index("Preview"))
+        self.assertLess(html.index("Preview"), html.index("Prompts"))
+        self.assertLess(html.index("Prompts"), html.index("Next renders"))
+        self.assertLess(html.index("Next renders"), html.index("Mark as finished"))
+        self.assertIn('class="compact-form image-choice image-choice-inline"', html)
+        self.assertIn('class="finish-toggle finish-toggle-inactive"', html)
+        self.assertIn("Mark as finished", html)
+
+    def test_segment_inspector_css_keeps_actions_and_media_balanced(self):
+        html = _page("Demo", "")
+
+        self.assertIn(".inspector-prompt-media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));", html)
+        self.assertIn(".inspector-prompt-actions { display: flex; justify-content: space-between;", html)
+        self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
+        self.assertIn(".inspector-generation-actions .compact-form { flex: 1 1 0; min-width: 0; width: auto;", html)
+        self.assertIn(".inspector-generation-actions button { width: 100%;", html)
+        self.assertIn(".finish-toggle { display: flex; width: 100%;", html)
+        self.assertIn(".storyboard-card { position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary);", html)
+        self.assertIn(".storyboard-card-approved { background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card);", html)
+        self.assertIn(".storyboard-card-locked { cursor: not-allowed; background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card);", html)
+        self.assertIn(".storyboard-card-locked > *:not(.storyboard-lock-overlay) { pointer-events: none; filter: grayscale(1); opacity: .52;", html)
+        self.assertIn(".storyboard-lock-overlay { position: absolute; inset: 0; z-index: 20;", html)
+        self.assertIn("background: rgba(11,16,18,.62);", html)
+        self.assertIn("@keyframes storyboardActiveRing", html)
+        self.assertIn("--storyboard-ring-angle: 0deg;", html)
+        self.assertIn("to { --storyboard-ring-angle: 360deg;", html)
+        self.assertIn(".storyboard-card-active::before { --storyboard-ring-angle: 0deg; content: \"\";", html)
+        self.assertIn("background: conic-gradient(from var(--storyboard-ring-angle), var(--studio-accent) 0 23%, transparent 23% 27%, var(--studio-pink) 27% 50%, transparent 50% 54%, var(--studio-accent) 54% 77%, transparent 77% 81%, var(--studio-pink) 81% 100%);", html)
+        self.assertIn("animation: storyboardActiveRing 2.2s linear infinite;", html)
+        self.assertNotIn("storyboardActiveRing { to { transform: rotate", html)
+        self.assertIn(".storyboard-card-body { display: grid; grid-template-rows: auto auto 1fr;", html)
+        self.assertNotIn(".storyboard-card-status", html)
+        self.assertIn(".storyboard-select-wrap { position: absolute; top: 8px; left: 8px;", html)
+        self.assertIn("width: 32px; height: 32px; margin: 0;", html)
+        self.assertIn("background: rgba(12,18,21,.88);", html)
+        self.assertIn(".storyboard-select-wrap:has(.storyboard-select:checked) { background: var(--action);", html)
+        self.assertIn(".storyboard-select { width: 18px; height: 18px;", html)
+        self.assertIn(".storyboard-video-expand { position: absolute; right: 8px; bottom: 8px;", html)
+        self.assertIn(".modal-content { position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible; border: 1px solid #344149; border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text-primary);", html)
+        self.assertIn(".modal-content > form { max-height: calc(88vh - 74px); overflow: auto;", html)
+        self.assertIn(".lightbox { position: fixed; inset: 0; z-index: 120;", html)
+        self.assertIn(".lightbox-close { position: absolute;", html)
+        self.assertIn("background: #29343a;", html)
+        self.assertIn(".lightbox-close:hover, .lightbox-close:focus { background: var(--accent);", html)
+        self.assertIn(".storyboard-ok-badge { position: absolute;", html)
+        self.assertIn("width: 32px; height: 32px;", html)
+        self.assertIn(".finish-toggle-check { margin-left: auto; font-size: 23px;", html)
+        self.assertIn("pointer-events: none;", html)
+        self.assertIn(".segment-inspector { position: sticky; z-index: 70;", html)
+        self.assertIn("background: var(--bg-panel); color: var(--text-primary);", html)
+        self.assertIn(".prompt-modal.lightbox { z-index: 120;", html)
+        self.assertIn(".image-prompt-modal-content .prompt-textarea { min-height: 144px;", html)
+        self.assertIn(".project-settings-body { max-height: calc(88vh - 74px); overflow: auto;", html)
+        self.assertIn(".project-settings-body > form { max-height: none; overflow: visible;", html)
+        self.assertIn(".segment-inspector-nav { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px;", html)
+        self.assertIn(".segment-inspector-title { color: var(--text-primary); font-size: 24px;", html)
+        self.assertIn(".segment-nav-button { border: 0;", html)
+        self.assertIn("scrollbar-color: #536168 #182126;", html)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", html)
+
+    def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
+        html = _page("Demo", "body")
+
+        self.assertIn("function projectStoryboardHasOpenPromptModal(storyboard)", html)
+        self.assertIn("storyboard.querySelector('.prompt-modal.open')", html)
+        self.assertIn("!projectStoryboardHasOpenPromptModal(storyboard)", html)
+
+    def test_storyboard_includes_line_inspector_when_segments_are_absent(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 3,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Line inspector lyric",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": "line image prompt",
+                "video_prompt": "line video prompt",
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": None,
+                "last_action": "",
+                "video_approved": 0,
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('<h3 class="segment-inspector-title"># 03</h3>', html)
+        self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
+        self.assertIn('action="/projects/7/lines/3/approval"', html)
+        self.assertIn("Line inspector lyric", html)
+        self.assertIn('<div class="status">pending</div>', html)
+
+    def test_storyboard_card_media_escapes_url_attributes(self):
+        project = {
+            "id": 7,
+            "name": "Demo",
+            "audio_path": "song.wav",
+            "final_video_path": None,
+            "comfy_base_url": 'http://example.test/"quoted"',
+        }
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Escaped image URL",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "musicvideogen/project-7/line-000.png",
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('src="http://example.test/&quot;quoted&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output"', html)
+        self.assertIn('onclick="openImageLightbox(&quot;http://example.test/\\&quot;quoted\\&quot;/view?filename=line-000.png&amp;subfolder=musicvideogen%2Fproject-7&amp;type=output&quot;)"', html)
+        self.assertNotIn('src="http://example.test/"quoted"', html)
+        self.assertNotIn('onclick="openImageLightbox(\'http://example.test/"quoted"', html)
+
+    def test_storyboard_card_media_serializes_onclick_urls_with_control_chars(self):
+        project = {
+            "id": 7,
+            "name": "Demo",
+            "audio_path": "song.wav",
+            "final_video_path": None,
+            "comfy_base_url": "http://example.test/'quoted\ncontrol\x01",
+        }
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Escaped image URL",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "musicvideogen/project-7/line-000.png",
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            },
+            {
+                "line_index": 1,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Escaped clip URL",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": "musicvideogen/project-7/clip-001.mp4",
+                "status": "done",
+                "error": "",
+            },
+        ]
+
+        html = _project_html(project, lines)
+        image_onclick = html.split('onclick="openImageLightbox(', 1)[1].split(')"', 1)[0]
+        clip_src = html.split('<video class="storyboard-card-video"', 1)[1].split('src="', 1)[1].split('"', 1)[0]
+
+        self.assertNotIn("\n", image_onclick)
+        self.assertNotIn("\n", clip_src)
+        self.assertNotIn("\x01", image_onclick)
+        self.assertNotIn("\x01", clip_src)
+        self.assertIn(r"\ncontrol\u0001/view?filename=line-000.png", unescape(image_onclick))
+        self.assertIn(r"\ncontrol\u0001/view?filename=clip-001.mp4", unescape(clip_src))
+        self.assertIn(r"http://example.test/'quoted", unescape(image_onclick))
+        self.assertIn(r"http://example.test/'quoted", unescape(clip_src))
+
+    def test_storyboard_card_media_uses_image_before_fallback(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Image wins",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('src="/assets/outputs/project-7/images/line-000.png"', html)
+        self.assertIn("openImageLightbox(&quot;/assets/outputs/project-7/images/line-000.png&quot;)", html)
+        self.assertNotIn("Awaiting media", html)
+
+    def test_storyboard_card_media_falls_back_when_empty(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "No media yet",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "clip_path": None,
+                "status": "pending",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('class="storyboard-card-media storyboard-card-media-empty"', html)
+        self.assertIn("Awaiting media", html)
 
     def test_project_header_disables_missing_project_navigation(self):
         project = {"id": 9, "name": "Newest", "audio_path": "song.wav", "final_video_path": None}
@@ -248,6 +1083,8 @@ class AppHtmlTests(unittest.TestCase):
             "final_video_path": None,
             "lyric_group_size": 2,
             "chorus_group_size": 4,
+            "avatar_gender": "female",
+            "avatar_face_description": "sharp jawline, short black hair",
         }
         segments = [
             {
@@ -270,13 +1107,21 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, [], segments)
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('name="lyric_group_size"', html)
         self.assertIn('value="2"', html)
         self.assertIn('name="chorus_group_size"', html)
         self.assertIn('value="4"', html)
         self.assertIn('action="/projects/7/settings"', html)
-        self.assertIn('action="/projects/7/segments"', html)
+        self.assertIn('action="/projects/7/avatar-description"', html)
+        self.assertIn('<label>Male / Female Avatar</label><select name="avatar_gender">', html)
+        self.assertIn('<option value="female" selected>Female</option>', html)
+        self.assertIn('<label>Avatar face description</label><textarea name="avatar_face_description">sharp jawline, short black hair</textarea>', html)
+        self.assertIn('AI describe avatar</button>', html)
+        self.assertIn('action="/projects/7/align"', html)
+        self.assertIn('<button>1. Analyze + Split</button>', html)
+        self.assertNotIn('<button>2. Segs + Audio</button>', html)
         self.assertIn("<h2>Render Segments</h2>", html)
         self.assertNotIn('<th colspan="2">Prompts</th>', html)
         self.assertNotIn("<th>Images</th>", html)
@@ -288,9 +1133,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('data-audio-src="/assets/outputs/segment-000.wav"', html)
         self.assertNotIn("<td>outputs/segment-000.wav</td>", html)
         self.assertNotIn("Slow establishing shot", html)
-        self.assertNotIn('<button class="icon-button" type="button" title="Play clip"', html)
-        self.assertNotIn("openClipLightbox", html)
-        self.assertNotIn("clip-000.mp4", html)
+        self.assertNotIn('<button class="icon-button" type="button" title="Play clip"', table_html)
+        self.assertNotIn("openClipLightbox", table_html)
+        self.assertNotIn("clip-000.mp4", table_html)
         self.assertIn("<th>#</th>", html)
         self.assertNotIn("<th>Section</th>", html)
         self.assertNotIn("<th>Chorus</th>", html)
@@ -326,17 +1171,18 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, [], segments, used_actions={"segments"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
-        self.assertIn("<th>Typ</th>", html)
-        self.assertIn('<th class="timing-column">Timing</th>', html)
-        self.assertIn("<th>Audio</th>", html)
-        self.assertNotIn('<th colspan="2">Prompts</th>', html)
-        self.assertNotIn("<th>Images</th>", html)
-        self.assertNotIn("<th>Clip</th>", html)
-        self.assertNotIn("<th>Redo</th>", html)
-        self.assertNotIn("<th>OK</th>", html)
-        self.assertNotIn("image prompt", html)
-        self.assertNotIn("openClipLightbox", html)
+        self.assertIn("<th>Typ</th>", table_html)
+        self.assertIn('<th class="timing-column">Timing</th>', table_html)
+        self.assertIn("<th>Audio</th>", table_html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', table_html)
+        self.assertNotIn("<th>Images</th>", table_html)
+        self.assertNotIn("<th>Clip</th>", table_html)
+        self.assertNotIn("<th>Redo</th>", table_html)
+        self.assertNotIn("<th>OK</th>", table_html)
+        self.assertNotIn("image prompt", table_html)
+        self.assertNotIn("openClipLightbox", table_html)
 
     def test_segment_table_hides_alignment_columns_after_scene_plan(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -390,15 +1236,16 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines, used_actions={"align"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
-        self.assertIn("<th>Lyrics</th>", html)
-        self.assertIn('<th class="timing-column">Timing</th>', html)
-        self.assertNotIn('<th colspan="2">Prompts</th>', html)
-        self.assertNotIn("<th>Images</th>", html)
-        self.assertNotIn("<th>Clip</th>", html)
-        self.assertNotIn("<th>Redo</th>", html)
-        self.assertNotIn("<th>OK</th>", html)
-        self.assertNotIn("image prompt", html)
+        self.assertIn("<th>Lyrics</th>", table_html)
+        self.assertIn('<th class="timing-column">Timing</th>', table_html)
+        self.assertNotIn('<th colspan="2">Prompts</th>', table_html)
+        self.assertNotIn("<th>Images</th>", table_html)
+        self.assertNotIn("<th>Clip</th>", table_html)
+        self.assertNotIn("<th>Redo</th>", table_html)
+        self.assertNotIn("<th>OK</th>", table_html)
+        self.assertNotIn("image prompt", table_html)
 
     def test_segment_scene_plan_is_saved_but_hidden_from_segment_table(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -423,9 +1270,10 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, [], segments))
 
-        self.assertIn("<h2>Scene Plan</h2>", html)
+        self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
+        self.assertNotIn("<h2>Scene Plan</h2>", html)
         self.assertNotIn('<th class="scene-plan-column">Scene Plan</th>', html)
-        self.assertNotIn('<td class="scene-plan-column">A long scene plan that should wrap in a narrow column</td>', html)
+        self.assertNotIn("A long scene plan that should wrap in a narrow column", html)
 
     def test_project_table_has_compact_timing_controls(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -556,11 +1404,45 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="section-verse locked-row"', html)
         self.assertIn('data-locked="1"', html)
         self.assertIn('<div class="row-lock-overlay">running</div>', html)
+        self.assertIn('class="storyboard-card storyboard-card-active storyboard-card-locked"', html)
+        self.assertIn('data-locked="1"', html)
+        self.assertIn('class="segment-select storyboard-select" name="selected_lines" value="0" aria-label="Segment markieren" disabled', html)
+        self.assertIn('<div class="storyboard-lock-overlay"><span>running</span></div>', html)
+        self.assertIn("card.dataset.locked === '1'", html)
+        self.assertIn("'.segment-select:checked:not(:disabled)'", html)
         self.assertIn("pollProjectStatus(7)", html)
         self.assertIn("fetch('/projects/' + projectId + '/status')", html)
         self.assertIn("function replaceProjectRow", html)
         self.assertIn("replacementCheckbox.checked = checkbox.checked", html)
         self.assertIn("replaceProjectRow(row, html)", html)
+
+    def test_storyboard_card_does_not_lock_from_stale_row_status_without_active_job(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Running line",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": "outputs/project-7/images/line-000.png",
+                "clip_path": None,
+                "audio_path": None,
+                "status": "running",
+                "error": "",
+            }
+        ]
+
+        html = _project_html(project, lines)
+
+        self.assertIn('class="storyboard-card storyboard-card-active"', html)
+        self.assertIn('data-locked="0"', html)
+        self.assertIn('class="line-select storyboard-select" name="selected_lines" value="0" aria-label="Zeile markieren"', html)
+        self.assertNotIn('storyboard-card-locked', html)
+        self.assertNotIn('storyboard-lock-overlay', html)
 
     def test_project_status_polling_skips_unchanged_rows(self):
         html = _page("Demo", "")
@@ -572,6 +1454,160 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("return previousHtml !== replacement.outerHTML", html)
         self.assertIn("if (!projectRowChanged(row, replacement)) return", html)
         self.assertIn("projectRowServerHtml.set(replacement.id, replacement.outerHTML)", html)
+
+    def test_project_status_payload_includes_storyboard_and_segment_rows_for_polling(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Fresh storyboard text",
+                "start_sec": 1.0,
+                "end_sec": 2.0,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "scene_plan": "",
+                "video_approved": 0,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        payload = _project_status_payload(project, [], segments, active_jobs=[])
+
+        self.assertIn("storyboard_html", payload)
+        self.assertIn('id="project-storyboard"', payload["storyboard_html"])
+        self.assertIn("Fresh storyboard text", payload["storyboard_html"])
+        self.assertNotIn("storyboard-card-status", payload["storyboard_html"])
+        self.assertIn('class="segment-inspector"', payload["storyboard_html"])
+        self.assertIn('action="/projects/7/segments/0/approval"', payload["storyboard_html"])
+        self.assertIn("rows", payload)
+        self.assertIn("segment-row-0", payload["rows"])
+        self.assertIn('id="segment-row-0"', payload["rows"]["segment-row-0"])
+        self.assertIn("Fresh storyboard text", payload["rows"]["segment-row-0"])
+        self.assertIn('action="/projects/7/segments/0/timing"', payload["rows"]["segment-row-0"])
+        self.assertIn('<div class="status">done</div>', payload["rows"]["segment-row-0"])
+        self.assertNotIn('id="project-storyboard"', payload["rows"]["segment-row-0"])
+
+    def test_project_status_payload_locks_storyboard_cards_for_queued_jobs(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 0,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Running line",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "status": "running",
+                "error": "",
+            },
+            {
+                "line_index": 1,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Queued line",
+                "start_sec": None,
+                "end_sec": None,
+                "confidence": None,
+                "prompt": None,
+                "image_path": None,
+                "clip_path": None,
+                "audio_path": None,
+                "status": "pending",
+                "error": "",
+            },
+        ]
+        active_jobs = [
+            Job(1, "avatar line 1", "running", "now", project_id=7, item_kind="lines", selected_indices=[0]),
+            Job(2, "avatar line 2", "queued", "now", project_id=7, item_kind="lines", selected_indices=[1]),
+        ]
+
+        payload = _project_status_payload(project, lines, [], active_jobs=active_jobs)
+
+        self.assertEqual(payload["locked"], {"segments": [], "lines": [0, 1]})
+        self.assertEqual(payload["storyboard_html"].count("storyboard-card-locked"), 2)
+        self.assertIn('<div class="storyboard-lock-overlay"><span>running</span></div>', payload["storyboard_html"])
+        self.assertIn('<div class="storyboard-lock-overlay"><span>queued</span></div>', payload["storyboard_html"])
+        self.assertEqual(payload["storyboard_html"].count('disabled>'), 2)
+
+    def test_project_status_payload_includes_line_rows_when_storyboard_exists(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [
+            {
+                "line_index": 2,
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "Fresh line text",
+                "start_sec": 1.0,
+                "end_sec": 2.0,
+                "confidence": None,
+                "prompt": "image prompt",
+                "video_prompt": "video prompt",
+                "image_path": None,
+                "clip_path": None,
+                "video_approved": 0,
+                "status": "done",
+                "error": "",
+            }
+        ]
+
+        payload = _project_status_payload(project, lines, [], active_jobs=[])
+
+        self.assertIn("storyboard_html", payload)
+        self.assertIn('id="project-storyboard"', payload["storyboard_html"])
+        self.assertIn("Fresh line text", payload["storyboard_html"])
+        self.assertIn("rows", payload)
+        self.assertEqual(set(payload["rows"]), {"line-row-2"})
+        self.assertIn('id="line-row-2"', payload["rows"]["line-row-2"])
+        self.assertIn("Fresh line text", payload["rows"]["line-row-2"])
+        self.assertIn('action="/projects/7/lines/2/timing"', payload["rows"]["line-row-2"])
+        self.assertIn('action="/projects/7/lines/2/insert-after"', payload["rows"]["line-row-2"])
+        self.assertIn('<div class="status">done</div>', payload["rows"]["line-row-2"])
+        self.assertNotIn('id="project-storyboard"', payload["rows"]["line-row-2"])
+
+    def test_project_status_polling_replaces_visible_storyboard(self):
+        html = _page("Demo", "")
+
+        self.assertIn("function replaceProjectStoryboard", html)
+        self.assertIn("data.storyboard_html", html)
+        self.assertIn("const storyboard = document.getElementById('project-storyboard')", html)
+        self.assertIn("let projectStoryboardServerHtml = ''", html)
+        self.assertIn("function rememberProjectStoryboard", html)
+        self.assertIn("function projectStoryboardChanged", html)
+        self.assertIn("if (!projectStoryboardChanged(storyboard, replacement)) return", html)
+        self.assertIn("projectStoryboardServerHtml = replacement.outerHTML", html)
+        self.assertIn("replacement.hidden = storyboard.hidden", html)
+        self.assertIn("storyboard.replaceWith(replacement)", html)
+        self.assertLess(html.index("if (!projectStoryboardChanged(storyboard, replacement)) return"), html.index("storyboard.replaceWith(replacement)"))
+
+    def test_project_status_polling_skips_storyboard_when_editor_is_active_or_dirty(self):
+        html = _page("Demo", "")
+
+        self.assertIn("const projectStoryboardFieldSelector = 'input:not(.storyboard-select), textarea, select'", html)
+        self.assertIn("function projectStoryboardHasActiveEdit", html)
+        self.assertIn("const active = document.activeElement", html)
+        self.assertIn("storyboard.contains(active)", html)
+        self.assertIn("active.matches(projectStoryboardFieldSelector)", html)
+        self.assertIn("function projectStoryboardFieldDirty", html)
+        self.assertIn("field.checked !== field.defaultChecked", html)
+        self.assertIn("field.value !== field.defaultValue", html)
+        self.assertIn("option.selected !== option.defaultSelected", html)
+        self.assertIn("function projectStoryboardHasDirtyFields", html)
+        self.assertIn("querySelectorAll(projectStoryboardFieldSelector)", html)
+        self.assertIn("function shouldReplaceProjectStoryboard", html)
+        self.assertIn("!projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard)", html)
+        self.assertIn("if (!shouldReplaceProjectStoryboard(storyboard)) return", html)
+        self.assertLess(html.index("if (!shouldReplaceProjectStoryboard(storyboard)) return"), html.index("storyboard.replaceWith(replacement)"))
 
     def test_segment_table_has_editable_section_type_after_text(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -797,14 +1833,15 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines, used_actions={"scene-plan"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('class="section-verse"', html)
         self.assertIn('class="section-chorus"', html)
         self.assertIn("1.0 - 2.1", html)
         self.assertIn("2.1 - 5.4", html)
-        self.assertNotIn("<th>#</th>", html)
-        self.assertNotIn("<th>Section</th>", html)
-        self.assertNotIn("<th>Chorus</th>", html)
+        self.assertNotIn("<th>#</th>", table_html)
+        self.assertNotIn("<th>Section</th>", table_html)
+        self.assertNotIn("<th>Chorus</th>", table_html)
         self.assertIn('<span class="legend-swatch section-verse"></span>Verse', html)
         self.assertIn('<span class="legend-swatch section-chorus"></span>Refrain', html)
 
@@ -815,43 +1852,45 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('id="clip-lightbox"', html)
         self.assertIn('id="clip-lightbox-video"', html)
+        self.assertIn('class="lightbox-close" type="button" aria-label="Close window"', html)
+        self.assertIn(">X</button>", html)
         self.assertIn("function openClipLightbox", html)
         self.assertIn("function closeClipLightbox", html)
 
-    def test_build_segments_button_is_in_top_action_row_after_align(self):
+    def test_analyze_split_is_single_top_action_before_generation(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
         html = _page("Demo", _project_html(project, []))
 
-        align_index = html.index('<button>1. Align</button>')
-        segments_index = html.index('<button>2. Segs + Audio</button>')
-        scene_plan_index = html.index('<button>3. Scene Plan</button>')
-        prompts_index = html.index('<button>4. Gen Image Prompts</button>')
-        video_prompts_index = html.index('<button>5. Gen Video Prompts</button>')
-        images_index = html.index('<button>6. Gen Images</button>')
-        avatar_index = html.index('<button>7. Gen Avatar Image</button>')
-        clips_index = html.index('<button>8. Gen Clips</button>')
-        assemble_index = html.index('9. Assemble Final')
+        align_index = html.index('<button>1. Analyze + Split</button>')
+        scene_plan_index = html.index('<button>2. Scene Plan</button>')
+        prompts_index = html.index('<button>3. Gen Prompts</button>')
+        images_index = html.index('<button>4. Gen Images</button>')
+        avatar_index = html.index('<button>5. Gen Avatar Images</button>')
+        clips_index = html.index('<button>6. Gen Clips</button>')
+        assemble_index = html.index('7. Assemble Final')
         settings_index = html.index('action="/projects/7/settings"')
-        self.assertLess(align_index, segments_index)
-        self.assertLess(segments_index, scene_plan_index)
+        self.assertNotIn('<button>2. Segs + Audio</button>', html)
+        self.assertNotIn("Gen Image Prompts", html)
+        self.assertNotIn("Gen Video Prompts", html)
+        self.assertNotIn('action="/projects/7/segments"', html[:settings_index])
+        self.assertLess(align_index, scene_plan_index)
         self.assertLess(scene_plan_index, prompts_index)
-        self.assertLess(prompts_index, video_prompts_index)
-        self.assertLess(video_prompts_index, images_index)
+        self.assertLess(prompts_index, images_index)
         self.assertLess(images_index, avatar_index)
         self.assertLess(avatar_index, clips_index)
         self.assertLess(clips_index, assemble_index)
-        self.assertLess(segments_index, settings_index)
+        self.assertLess(align_index, settings_index)
 
     def test_used_top_actions_are_numbered_and_dark_grey_but_clickable(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
-        html = _project_html(project, [], used_actions={"align", "prompts"})
+        html = _project_html(project, [], used_actions={"align", "prompts", "video-prompts"})
 
-        self.assertIn('<button class="used-button" title="Already used; click to run again">1. Align</button>', html)
-        self.assertIn('<button class="used-button" title="Already used; click to run again">4. Gen Image Prompts</button>', html)
+        self.assertIn('<button class="used-button" title="Already used; click to run again">1. Analyze + Split</button>', html)
+        self.assertIn('<button class="used-button" title="Already used; click to run again">3. Gen Prompts</button>', html)
         self.assertIn('action="/projects/7/align"', html)
-        self.assertIn('action="/projects/7/prompts"', html)
+        self.assertIn('action="/projects/7/generate-prompts"', html)
 
     def test_project_settings_are_visible_by_default_without_group_size_reset_warning(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -860,13 +1899,21 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertNotIn("<details>", html)
         self.assertNotIn("<summary>Project Settings</summary>", html)
+        self.assertIn('id="project-settings-modal"', html)
+        self.assertNotIn('id="scene-plan-modal"', html)
+        self.assertIn('class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()"', html)
+        self.assertNotIn('title="Scene Plan" onclick="openScenePlanModal()"', html)
+        self.assertIn("function openProjectSettingsModal", html)
+        self.assertNotIn("function openScenePlanModal", html)
         self.assertIn("<h2>Project Settings</h2>", html)
+        self.assertEqual(html.count("<h2>Project Settings</h2>"), 1)
         self.assertIn('data-original-lyric-group-size="2"', html)
         self.assertIn('data-original-chorus-group-size="1"', html)
         self.assertIn("confirmProjectSettingsSave(this)", html)
         self.assertNotIn("Projekt leeren und Segmente neu erstellen?", html)
         self.assertIn("Lyrics neu alignen und Segmente neu erstellen?", html)
         self.assertIn('class="hidden-action-form" id="global-style-prompt-form-7"', html)
+        self.assertIn('class="hidden-action-form" id="scene-plan-form-7"', html)
         self.assertIn('class="hidden-action-form" id="realign-lyrics-form-7"', html)
         self.assertIn('class="hidden-action-form" id="realign-lyrics-cpu-form-7"', html)
         self.assertIn(".hidden-action-form { display: none; }", html)
@@ -882,47 +1929,71 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, [])
 
-        self.assertIn("<h2>Scene Plan</h2>", html)
+        self.assertNotIn("<h2>Scene Plan</h2>", html)
         self.assertIn('action="/projects/7/scene-plan/save"', html)
-        self.assertIn('name="scene_plan"', html)
+        self.assertIn('name="scene_plan" form="scene-plan-form-7"', html)
         self.assertIn("0: Neon intro", html)
         self.assertIn("1: Close chorus", html)
-        self.assertIn("<button>Save Scene Plan</button>", html)
-        self.assertLess(html.index("<h2>Project Settings</h2>"), html.index("<h2>Scene Plan</h2>"))
-        self.assertLess(html.index("<h2>Scene Plan</h2>"), html.index("<h2>Lyrics / Timing</h2>"))
+        self.assertIn('<button type="submit" form="scene-plan-form-7">Save Scene Plan</button>', html)
+        self.assertLess(html.index('id="project-storyboard"'), html.index("<h2>Project Settings</h2>"))
+        self.assertLess(html.index("<h2>Lyrics / Timing</h2>"), html.index("<h2>Project Settings</h2>"))
+        self.assertLess(html.index('name="global_style_prompt"'), html.index('name="scene_plan" form="scene-plan-form-7"'))
+        self.assertLess(html.index('name="scene_plan" form="scene-plan-form-7"'), html.index('name="genre"'))
 
     def test_project_page_has_sticky_header_and_no_audio_final_info_panel(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "final.mp4"}
 
-        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0), queue_count=4)
+        html = _page("Demo", _project_html(project, [], queue_estimate_seconds=70.0, queue_count=4), queue_count=4)
 
         self.assertIn("<title>(4) Demo</title>", html)
         self.assertIn('class="project-topbar"', html)
         self.assertIn('class="project-title-row"', html)
         self.assertIn('id="queue-estimate"', html)
         self.assertIn('data-seconds="70"', html)
-        self.assertIn("Queue ca. 1m 10s", html)
+        self.assertIn('data-count="4"', html)
+        self.assertIn(">4 ~1m 10s</button>", html)
+        self.assertIn('id="queue-modal"', html)
+        self.assertIn('class="modal lightbox queue-modal"', html)
+        self.assertIn('class="queue-modal-body"', html)
+        self.assertGreater(html.index('id="queue-modal"'), html.index('class="actions"'))
+        self.assertLess(html.index('id="queue-modal"'), html.index('id="project-storyboard"'))
+        self.assertIn("openQueueModal()", html)
+        self.assertIn("closeQueueModal()", html)
+        self.assertIn("pollProjectStatus(7); pollJobsStatus();", html)
         self.assertIn('class="scroll-top-button"', html)
+        self.assertIn('aria-label="Nach oben">↑</button>', html)
+        self.assertNotIn(">Top</button>", html)
         self.assertIn("function scrollToTop", html)
         self.assertIn(".project-topbar", html)
         self.assertIn("position: sticky", html)
+        self.assertIn("background: rgba(13,19,22,.96)", html)
+        self.assertIn(".project-title-row h1 { color: var(--studio-text);", html)
+        self.assertIn(".segment-inspector { position: sticky;", html)
+        self.assertIn("top: 156px", html)
         self.assertNotIn("<strong>Audio:</strong>", html)
         self.assertNotIn("<strong>Final:</strong>", html)
 
-    def test_project_page_has_bottom_clear_button_with_confirmation(self):
+    def test_project_settings_modal_has_danger_zone_with_confirmation(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
         html = _project_html(project, [])
+        settings_html = html[html.index('id="project-settings-modal"') : html.index("</div>\n  </div>\n</div>", html.index('id="project-settings-modal"'))]
 
-        self.assertIn('<details class="danger-panel">', html)
-        self.assertIn("<summary>Danger Zone</summary>", html)
-        self.assertIn('action="/projects/7/clear"', html)
-        self.assertIn('action="/projects/7/delete"', html)
-        self.assertIn("return confirm('Projekt wirklich leeren?", html)
-        self.assertIn("return confirm('Projekt wirklich loeschen?", html)
-        self.assertIn('class="danger-button"', html)
-        self.assertGreater(html.index('action="/projects/7/clear"'), html.index('<table>'))
-        self.assertGreater(html.index('action="/projects/7/delete"'), html.index('action="/projects/7/clear"'))
+        self.assertIn('<div class="project-settings-body">', settings_html)
+        self.assertIn('<details class="danger-panel">', settings_html)
+        self.assertIn("<summary>Danger Zone</summary>", settings_html)
+        self.assertIn('action="/projects/7/clear"', settings_html)
+        self.assertIn('action="/projects/7/delete"', settings_html)
+        self.assertIn("return confirm('Projekt wirklich leeren?", settings_html)
+        self.assertIn("return confirm('Projekt wirklich loeschen?", settings_html)
+        self.assertIn('class="danger-button"', settings_html)
+        self.assertIn(".danger-panel { margin-top: 24px;", _page("Demo", ""))
+        self.assertIn(".danger-panel[open] { background: transparent;", _page("Demo", ""))
+        self.assertIn(".danger-panel .compact-form { background: transparent;", _page("Demo", ""))
+        self.assertIn(".danger-panel .actions { padding-top: 12px;", _page("Demo", ""))
+        self.assertLess(settings_html.index("<button>Save Project Settings</button>"), settings_html.index("<summary>Danger Zone</summary>"))
+        self.assertGreater(settings_html.index('action="/projects/7/clear"'), settings_html.index('name="whisper_model_size"'))
+        self.assertGreater(settings_html.index('action="/projects/7/delete"'), settings_html.index('action="/projects/7/clear"'))
 
     def test_project_page_renders_editable_project_settings(self):
         project = {
@@ -1063,15 +2134,16 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, [], segments, used_actions={"scene-plan"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('src="/assets/outputs/project-1/images/segment-000.png', html)
         self.assertIn('src="/assets/outputs/project-1/images/avatar-segment-000.png"', html)
         self.assertIn("openClipLightbox('/assets/outputs/project-1/clips/segment-000.mp4", html)
         self.assertIn('<td class="assets-column">', html)
         self.assertIn('<div class="asset-previews">', html)
-        self.assertIn('<form class="compact-form image-choice"', html)
-        self.assertLess(html.index("segment-000.png"), html.index("avatar-segment-000.png"))
-        self.assertLess(html.index('class="asset-previews"'), html.index('class="compact-form image-choice"'))
+        self.assertIn('<form class="compact-form image-choice image-choice-inline"', html)
+        self.assertLess(table_html.index("segment-000.png"), table_html.index("avatar-segment-000.png"))
+        self.assertLess(table_html.index('class="asset-previews"'), table_html.index('class="compact-form image-choice image-choice-inline"'))
         self.assertNotIn('<span class="asset-path">', html)
 
     def test_project_page_is_full_width_and_includes_image_lightbox(self):
@@ -1108,6 +2180,7 @@ class AppHtmlTests(unittest.TestCase):
         ]
 
         html = _project_html(project, lines, used_actions={"scene-plan"})
+        table_html = html[html.index('id="project-table-view"') : html.index("</section>", html.index('id="project-table-view"'))]
 
         self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
         self.assertIn('action="/projects/7/lines/3/prompts/image/ai-fill"', html)
@@ -1118,8 +2191,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<button>Save</button>", html)
         self.assertIn('formaction="/projects/7/lines/3/prompts/image/ai-fill">AI fill</button>', html)
         self.assertIn('formaction="/projects/7/lines/3/prompts/video/ai-fill">AI fill</button>', html)
-        self.assertIn("<th>Status</th>", html)
-        self.assertNotIn("<th>Error</th>", html)
+        self.assertIn("<th>Status</th>", table_html)
+        self.assertNotIn("<th>Error</th>", table_html)
         self.assertIn("failed", html)
         self.assertIn("bad node", html)
 
@@ -1256,8 +2329,11 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, [], segments))
 
-        self.assertIn('<span class="open-count-label">1/2 offen</span>', html)
-        self.assertIn(".open-count-label { margin-left: auto", html)
+        self.assertIn('id="project-progress-pill" class="progress-pill"', html)
+        self.assertIn('<span class="progress-pill-fill" style="--progress: 50%"></span>', html)
+        self.assertIn('<span class="progress-pill-label">1/2</span>', html)
+        self.assertNotIn("1/2 offen", html)
+        self.assertIn(".progress-pill { position: relative;", html)
         self.assertNotIn("open-filter-button", html)
         self.assertNotIn("open-filter-info", html)
         self.assertIn('data-work-item="1" data-video-approved="0"', html)
@@ -1307,7 +2383,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('type="button"', html)
         self.assertIn("alert('Bitte erst alle Videos mit OK freigeben.')", html)
         self.assertIn('title="Alle Videos erst mit OK markieren"', html)
-        self.assertIn("9. Assemble Final", html)
+        self.assertIn("7. Assemble Final", html)
 
         lines[1]["video_approved"] = 1
         approved_html = _project_html(project, lines)

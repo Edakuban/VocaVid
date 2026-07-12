@@ -11,6 +11,7 @@ Mode: {{ mode }}
 Clip duration seconds: {{ duration }}
 Global visual style: {{ global_style }}
 Genre: {{ genre }}
+Avatar identity: {{ avatar_identity_context }}
 Scene plan for this clip: {{ scene_plan }}
 
 Focus on concrete subject, setting, mood, lighting, camera framing, and motion potential.

@@ -61,6 +61,85 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertIn("Genre: industrial rock", captured["prompt"])
             self.assertIn("Lyrics: One line\nHook line", captured["prompt"])
 
+    def test_describe_avatar_face_uses_optional_workflow_and_stores_text(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            root = Path(directory)
+            store = Store(root / "test.sqlite3")
+            audio = root / "song.wav"
+            lyrics = root / "lyrics.txt"
+            avatar = root / "avatar.png"
+            _write_wav(audio, duration_sec=5.0)
+            lyrics.write_text("[Verse]\nOne line\n", encoding="utf-8")
+            avatar.write_bytes(b"avatar")
+            project_id = store.create_project(
+                {
+                    "name": "Demo",
+                    "audio_path": str(audio),
+                    "lyrics_path": str(lyrics),
+                    "global_style_prompt": "",
+                    "reference_image_paths": [str(avatar)],
+                    "avatar_gender": "female",
+                },
+                parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+            )
+            workflows = root / "workflows"
+            workflows.mkdir()
+            (workflows / "avatar_description.json").write_text(
+                '{"image":{"class_type":"LoadImage","inputs":{"image":"old.png"}},"text":{"class_type":"TextGenerate","inputs":{"prompt":"old"}}}',
+                encoding="utf-8",
+            )
+            pipeline = Pipeline(store, root / "outputs")
+            pipeline.workflows = WorkflowPaths.defaults(root)
+
+            import musicvideogen.pipeline as pipeline_module
+
+            captured = {}
+
+            class FakeClient:
+                def __init__(self, base_url):
+                    self.base_url = base_url
+
+                def run_workflow(self, workflow, variables):
+                    captured["workflow"] = workflow
+                    captured["variables"] = variables
+                    return type("Result", (), {"ok": True, "output_files": [], "text_outputs": ["oval face, dark eyes"], "error": ""})()
+
+            original_client = pipeline_module.ComfyClient
+            try:
+                pipeline_module.ComfyClient = FakeClient
+                pipeline.describe_avatar_face(project_id)
+            finally:
+                pipeline_module.ComfyClient = original_client
+
+            project = store.get_project(project_id)
+            self.assertEqual(project["avatar_face_description"], "oval face, dark eyes")
+            self.assertEqual(captured["workflow"]["image"]["inputs"]["image"], str(avatar))
+            self.assertIn("Describe the visible face", captured["workflow"]["text"]["inputs"]["prompt"])
+            self.assertEqual(captured["variables"]["avatar_gender"], "female")
+
+    def test_describe_avatar_face_fails_when_workflow_is_missing(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            root = Path(directory)
+            store = Store(root / "test.sqlite3")
+            audio = root / "song.wav"
+            lyrics = root / "lyrics.txt"
+            _write_wav(audio, duration_sec=5.0)
+            lyrics.write_text("[Verse]\nOne line\n", encoding="utf-8")
+            project_id = store.create_project(
+                {
+                    "name": "Demo",
+                    "audio_path": str(audio),
+                    "lyrics_path": str(lyrics),
+                    "global_style_prompt": "",
+                },
+                parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+            )
+            pipeline = Pipeline(store, root / "outputs")
+            pipeline.workflows = WorkflowPaths.defaults(root)
+
+            with self.assertRaisesRegex(FileNotFoundError, "avatar_description workflow is missing"):
+                pipeline.describe_avatar_face(project_id)
+
     def test_generate_global_style_prompt_falls_back_when_promptgen_workflow_is_missing(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
@@ -766,6 +845,7 @@ class PipelineSegmentTests(unittest.TestCase):
             "scene_plan": "chorus performance with microphone",
             "genre": "industrial rock",
             "global_style": "cinematic",
+            "avatar_identity_context": "female avatar; oval face, dark eyes",
         }
 
         import musicvideogen.pipeline as pipeline_module
@@ -776,6 +856,7 @@ class PipelineSegmentTests(unittest.TestCase):
         self.assertIn("replacing only the primary focus person", prompt)
         self.assertIn("focus singer on stage", prompt)
         self.assertIn("chorus performance with microphone", prompt)
+        self.assertIn("female avatar; oval face, dark eyes", prompt)
         self.assertIn("Do not alter non-focus people", prompt)
 
     def test_avatar_workflow_uses_fullbody_avatar_when_project_avatar_is_empty(self):
