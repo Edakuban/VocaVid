@@ -7,7 +7,7 @@ from .models import LyricLine
 TAG_RE = re.compile(r"^\s*\[([^\]]+)\]\s*$")
 CHORUS_SECTIONS = {"chorus", "refrain"}
 REFERENCE_TAGS = {"me", "self", "ref", "reference", "singer", "ich", "mich"}
-INSTRUMENTAL_SECTION_WORDS = {"instrumental", "intro", "outro", "end"}
+INSTRUMENTAL_SECTION_WORDS = {"instrumental", "intro", "outro", "end", "break", "build", "drop", "interlude"}
 
 
 def parse_suno_lyrics(text: str) -> list[LyricLine]:

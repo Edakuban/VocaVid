@@ -113,6 +113,28 @@ class SegmentTests(unittest.TestCase):
             ],
         )
 
+    def test_issue_9_arrangement_markers_become_gap_segments(self):
+        lines = [
+            _line(0, "Break", False, "Break", 0, 8, confidence=0.0),
+            _line(1, "Build-Up", False, "Build-Up", 8, 16, confidence=0.0),
+            _line(2, "Drop", False, "Drop", 16, 24, confidence=0.0),
+            _line(3, "Interlude", False, "Interlude", 24, 32, confidence=0.0),
+            _line(4, "Bridge", False, "Middle eight", 32, 40, confidence=0.0),
+        ]
+
+        segments = build_render_segments(lines, total_duration_sec=40, lyric_group_size=2, chorus_group_size=1)
+
+        self.assertEqual(
+            [(segment.kind, segment.section, segment.clean_text) for segment in segments],
+            [
+                ("gap", "Break", "Break"),
+                ("gap", "Build-Up", "Build-Up"),
+                ("gap", "Drop", "Drop"),
+                ("gap", "Interlude", "Interlude"),
+                ("lyrics", "Bridge", "Middle eight"),
+            ],
+        )
+
     def test_long_instrumental_marker_splits_into_eight_to_twelve_second_parts(self):
         lines = [
             _line(0, "Instrumental Intro", False, "Instrumental Intro", 0, 35, confidence=0.0),

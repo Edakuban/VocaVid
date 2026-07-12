@@ -99,3 +99,45 @@ Hook
                 (4, "End", "End"),
             ],
         )
+
+    def test_parse_suno_lyrics_supports_issue_9_meta_tags(self):
+        lyrics = """
+[Intro]
+
+[Break]
+
+[Build-Up]
+
+[Drop]
+
+[Bridge]
+Middle eight
+
+[Refrain]
+Hook one
+
+[Pre-Chorus]
+Before the hook
+
+[Chorus]
+Hook two
+
+[Interlude]
+"""
+
+        lines = parse_suno_lyrics(lyrics)
+
+        self.assertEqual(
+            [(line.section, line.clean_text, line.is_chorus) for line in lines],
+            [
+                ("Intro", "Intro", False),
+                ("Break", "Break", False),
+                ("Build-Up", "Build-Up", False),
+                ("Drop", "Drop", False),
+                ("Bridge", "Middle eight", False),
+                ("Refrain", "Hook one", True),
+                ("Pre-Chorus", "Before the hook", False),
+                ("Chorus", "Hook two", True),
+                ("Interlude", "Interlude", False),
+            ],
+        )

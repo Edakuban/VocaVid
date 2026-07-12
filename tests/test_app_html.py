@@ -13,6 +13,7 @@ from VocaVid.ui.formatting import (
     _job_name,
     _local_asset_url,
     _reference_paths_from_text,
+    _section_type,
 )
 from VocaVid.ui.projects import (
     _project_html,
@@ -1844,6 +1845,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("<th>Chorus</th>", table_html)
         self.assertIn('<span class="legend-swatch section-verse"></span>Verse', html)
         self.assertIn('<span class="legend-swatch section-chorus"></span>Refrain', html)
+
+    def test_pre_chorus_is_not_displayed_as_refrain_without_chorus_flag(self):
+        self.assertEqual(_section_type("Pre-Chorus", False), "gap")
+        self.assertEqual(_section_type("Chorus 2", False), "refrain")
+        self.assertEqual(_section_type("Refrain:", False), "refrain")
 
     def test_page_includes_clip_lightbox_player(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}

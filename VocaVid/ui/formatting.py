@@ -7,6 +7,7 @@ from html import escape
 from pathlib import Path
 from urllib.parse import quote
 
+from ..lyrics import is_chorus_section
 from ..paths import is_internal_storage_path, resolve_storage_path, storage_relative_path
 from ..store import Store
 from . import context
@@ -244,7 +245,7 @@ def _section_class(section: str, is_chorus: bool) -> str:
 
 def _section_type(section: str, is_chorus: bool) -> str:
     value = str(section or "").lower()
-    if is_chorus or "chorus" in value or "refrain" in value:
+    if is_chorus or is_chorus_section(value):
         return "refrain"
     if "bridge" in value:
         return "bridge"
