@@ -72,12 +72,65 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
   <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="{_attr(chorus_group_size)}">
   <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="{_attr(transition_handle_seconds)}">
   <label>Whisper Model</label>{_whisper_model_select_html(whisper_model_size)}
-  <p>
-    <button>Save Project Settings</button>
-    <button type="submit" form="realign-lyrics-form-{project['id']}" onclick="return confirm('Lyrics neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics</button>
+  <div class="settings-realign-actions">
+    <button type="submit" form="realign-lyrics-form-{project['id']}" onclick="return confirm('Lyrics per GeForce GPU neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics (GeForce GPU)</button>
     <button type="submit" form="realign-lyrics-cpu-form-{project['id']}" onclick="return confirm('Lyrics per CPU neu alignen und Segmente neu erstellen? Generierte Dateien, Segmente, Timings, Prompts, OK-Status und Button-Status werden zurueckgesetzt.')">Realign Lyrics (CPU)</button>
-  </p>
+    <button type="button" onclick="closeProjectSettingsModal(); openManualTimingModal()">Realign Lyrics (manually)</button>
+  </div>
+  <div class="settings-save-actions">
+    <button>Save Project Settings</button>
+  </div>
 </form>
+"""
+
+
+def _manual_timing_modal_html(project, lines) -> str:
+    audio_url = _local_asset_url(_row_value(project, "audio_path", ""))
+    rows = ""
+    for position, line in enumerate(lines):
+        line_index = int(line["line_index"])
+        checked = " checked" if position == 0 or bool(_row_value(line, "manual_segment_start", 0)) else ""
+        disabled = " disabled" if position == 0 else ""
+        first_boundary_hidden = f'<input type="hidden" name="manual_segment_starts" value="{line_index}">' if position == 0 else ""
+        clean_text = _row_value(line, "clean_text", _row_value(line, "raw_text", ""))
+        section = _row_value(line, "section", "Verse")
+        rows += f"""
+<tr>
+  <td class="manual-boundary-cell">
+    <input type="checkbox" name="manual_segment_starts" value="{line_index}"{checked}{disabled}>
+    {first_boundary_hidden}
+  </td>
+  <td>
+    <input type="hidden" name="line_indices" value="{line_index}">
+    <textarea class="manual-lyric-text" name="clean_texts" required>{_text(clean_text)}</textarea>
+  </td>
+  <td><input name="sections" value="{_attr(section)}"></td>
+  <td><input class="manual-time-input" name="start_secs" value="{_attr(_time_value(_row_value(line, "start_sec", None)))}" placeholder="0.0" required></td>
+  <td><input class="manual-time-input" name="end_secs" value="{_attr(_time_value(_row_value(line, "end_sec", None)))}" placeholder="0.0" required></td>
+</tr>"""
+    return f"""
+<div id="manual-timing-modal" class="modal lightbox" onclick="if (event.target === this) closeManualTimingModal()">
+  <div class="modal-content manual-timing-modal-content">
+    <div class="studio-panel-head">
+      <h2>Manual Timing</h2>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeManualTimingModal()">X</button>
+    </div>
+    <form class="manual-timing-form" action="/projects/{project['id']}/manual-timing" method="post">
+      <div class="manual-audio-bar">
+        <audio id="manual-timing-audio" controls preload="metadata" src="{_attr(audio_url)}" ontimeupdate="updateManualTimingTimestamp(this)"></audio>
+        <output id="manual-timing-current">0.0</output>
+        <button class="manual-timestamp-button icon-button" type="button" title="Aktuellen Timestamp in die naechste offene Grenze setzen" onclick="applyManualTimingTimestamp()">&#8594;</button>
+      </div>
+      <table class="manual-timing-table">
+        <thead><tr><th>Segment</th><th>Lyrics</th><th>Bereich</th><th>Von</th><th>Bis</th></tr></thead>
+        <tbody>{rows}</tbody>
+      </table>
+      <div class="manual-timing-actions">
+        <button type="submit">Save Manual Timing</button>
+      </div>
+    </form>
+  </div>
+</div>
 """
 
 
@@ -523,11 +576,9 @@ def _image_lightbox_html() -> str:
 """
 
 
-def _scroll_top_button_html() -> str:
-    return '<button class="scroll-top-button" type="button" onclick="scrollToTop()" title="Nach oben" aria-label="Nach oben">↑</button>'
-
 __all__ = [
     "_segment_settings_html",
+    "_manual_timing_modal_html",
     "_work_items_html",
     "_lyrics_html",
     "_segments_html",
@@ -555,5 +606,4 @@ __all__ = [
     "_clip_play_html",
     "_clip_lightbox_html",
     "_image_lightbox_html",
-    "_scroll_top_button_html",
 ]

@@ -19,7 +19,7 @@ from .forms import (
     _clear_project_html,
     _clip_lightbox_html,
     _image_lightbox_html,
-    _scroll_top_button_html,
+    _manual_timing_modal_html,
     _segment_settings_html,
     _work_items_html,
 )
@@ -321,10 +321,10 @@ def _project_html(
     {table}
   </section>
 {_project_settings_modal_html(project)}
+{_manual_timing_modal_html(project, lines)}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
-{_scroll_top_button_html()}
 <script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus();</script>
 """
 

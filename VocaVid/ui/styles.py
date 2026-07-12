@@ -310,15 +310,19 @@ STYLES = f"""
     .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary); overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background-color .15s ease; }}
-    .storyboard-card-approved {{ background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); border-color: rgba(69,201,141,.22); }}
+    .storyboard-card-approved {{ background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); border-color: rgba(69,201,141,.58); }}
+    .storyboard-card-unfinished {{ background: linear-gradient(180deg, rgba(233,72,159,.07), rgba(233,72,159,.025)), var(--bg-card); border-color: rgba(233,72,159,.58); }}
     .storyboard-card-locked {{ cursor: not-allowed; background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); }}
     .storyboard-card-locked > *:not(.storyboard-lock-overlay) {{ pointer-events: none; filter: grayscale(1); opacity: .52; }}
     .storyboard-lock-overlay {{ position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(11,16,18,.62); color: var(--text-primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: grayscale(1) blur(1px); }}
     .storyboard-lock-overlay span {{ border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(8,9,13,.7); padding: 7px 11px; }}
     .storyboard-card:hover, .storyboard-card:focus {{ background: var(--bg-card-hover); border-color: var(--border-default); box-shadow: 0 0 0 3px var(--action-soft); outline: none; }}
+    .storyboard-card-approved:hover, .storyboard-card-approved:focus {{ border-color: rgba(69,201,141,.72); box-shadow: 0 0 0 3px rgba(69,201,141,.14); }}
+    .storyboard-card-unfinished:hover, .storyboard-card-unfinished:focus {{ border-color: rgba(233,72,159,.72); box-shadow: 0 0 0 3px rgba(233,72,159,.14); }}
     @property --storyboard-ring-angle {{ syntax: "<angle>"; inherits: false; initial-value: 0deg; }}
     @keyframes storyboardActiveRing {{ to {{ --storyboard-ring-angle: 360deg; }} }}
     .storyboard-card-active {{ border-color: transparent; box-shadow: 0 0 0 3px rgba(53,224,179,.18), 0 18px 48px rgba(255,79,139,.16); transform: translateY(-2px); }}
+    .storyboard-card-active:hover, .storyboard-card-active:focus {{ border-color: transparent; box-shadow: 0 0 0 3px rgba(53,224,179,.18), 0 18px 48px rgba(255,79,139,.16); }}
     .storyboard-card-active::before {{ --storyboard-ring-angle: 0deg; content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: inherit; padding: 3px; background: conic-gradient(from var(--storyboard-ring-angle), var(--studio-accent) 0 23%, transparent 23% 27%, var(--studio-pink) 27% 50%, transparent 50% 54%, var(--studio-accent) 54% 77%, transparent 77% 81%, var(--studio-pink) 81% 100%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; animation: storyboardActiveRing 2.2s linear infinite; }}
     .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #202a2f, #12191d); color: var(--text-muted); font-weight: 700; overflow: hidden; }}
     .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
@@ -360,6 +364,9 @@ STYLES = f"""
     .segment-inspector-label {{ color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }}
     .segment-inspector-label-row {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; }}
     .segment-inspector-meta {{ color: var(--text-muted); font-size: 12px; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }}
+    .segment-inspector-audio-meta {{ display: inline-flex; align-items: center; gap: 8px; }}
+    .segment-inspector-audio-meta audio {{ display: none; }}
+    .segment-audio-button {{ width: 28px; height: 28px; line-height: 28px; font-size: 12px; }}
     .segment-inspector-text {{ margin: 0; overflow-wrap: anywhere; }}
     .segment-inspector-actions {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
     .segment-inspector-actions .compact-form {{ width: 100%; }}
@@ -387,6 +394,23 @@ STYLES = f"""
     .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
     .project-settings-body {{ max-height: calc(88vh - 74px); overflow: auto; }}
     .project-settings-body > form {{ max-height: none; overflow: visible; }}
+    .settings-realign-actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }}
+    .settings-save-actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }}
+    .manual-timing-modal-content {{ width: min(1120px, 96vw); max-height: 88vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }}
+    .manual-timing-form {{ min-height: 0; overflow: auto; margin: 0; border: 0; border-radius: 0; }}
+    .manual-audio-bar {{ position: sticky; top: 0; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 0 0 12px; background: var(--bg-panel); }}
+    .manual-audio-bar audio {{ width: 100%; }}
+    #manual-timing-current {{ min-width: 72px; color: var(--text-primary); font-weight: 850; font-variant-numeric: tabular-nums; text-align: right; }}
+    .manual-timestamp-button {{ width: 34px; height: 34px; font-size: 17px; }}
+    .manual-timing-table {{ table-layout: fixed; }}
+    .manual-timing-table th:nth-child(1), .manual-timing-table td:nth-child(1) {{ width: 74px; text-align: center; }}
+    .manual-timing-table th:nth-child(3), .manual-timing-table td:nth-child(3) {{ width: 150px; }}
+    .manual-timing-table th:nth-child(4), .manual-timing-table td:nth-child(4), .manual-timing-table th:nth-child(5), .manual-timing-table td:nth-child(5) {{ width: 96px; }}
+    .manual-boundary-cell input {{ width: auto; }}
+    .manual-lyric-text {{ min-height: 44px; resize: vertical; }}
+    .manual-time-input {{ font-variant-numeric: tabular-nums; }}
+    .manual-time-input.manual-time-filled {{ border-color: var(--action); box-shadow: 0 0 0 3px var(--action-soft); }}
+    .manual-timing-actions {{ display: flex; justify-content: flex-end; margin-top: 14px; }}
     @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} }}
     .project-table-view[hidden] {{ display: none; }}
     .queue-control {{ display: inline-flex; }}
@@ -397,7 +421,6 @@ STYLES = f"""
     .queue-modal-content .queue-summary-grid {{ padding: 16px 16px 0; }}
     .queue-modal-content .jobs-table-wrap {{ padding-top: 16px; }}
     .danger-panel .actions {{ padding-top: 12px; }}
-    .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
     table {{ width: 100%; border-collapse: collapse; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); }}
     th, td {{ padding: 8px; border-bottom: 1px solid var(--border-subtle); text-align: left; vertical-align: top; font-size: 13px; }}
     th {{ background: #202a2f; color: var(--text-secondary); }}

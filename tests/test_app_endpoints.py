@@ -1093,6 +1093,65 @@ class AppEndpointTests(unittest.TestCase):
             app_module.DB_PATH = old_db_path
             app_module.Pipeline = old_pipeline
 
+    def test_manual_timing_endpoint_saves_lines_builds_segments_and_marks_setup_used(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\nTwo\nThree\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": str(audio),
+                        "lyrics_path": str(lyrics),
+                        "global_style_prompt": "cinematic",
+                    },
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+                client = TestClient(app_module.create_app())
+
+                response = client.post(
+                    f"/projects/{project_id}/manual-timing",
+                    data={
+                        "line_indices": ["0", "1", "2"],
+                        "clean_texts": ["Edited one", "Edited two", "Edited three"],
+                        "sections": ["Verse", "Verse", "Refrain"],
+                        "start_secs": ["0:00", "0:01", "0:02"],
+                        "end_secs": ["0:01", "0:02", "0:03"],
+                        "manual_segment_starts": ["0", "2"],
+                    },
+                    follow_redirects=False,
+                )
+
+                self.assertEqual(response.status_code, 303)
+                updated_store = Store(app_module.DB_PATH)
+                lines = updated_store.list_lines(project_id)
+                self.assertEqual(lines[0]["clean_text"], "Edited one")
+                self.assertEqual(lines[0]["confidence"], 1.0)
+                self.assertEqual(lines[2]["manual_segment_start"], 1)
+                segments = updated_store.list_segments(project_id)
+                self.assertEqual(len(segments), 2)
+                self.assertEqual(segments[0]["clean_text"], "Edited one\nEdited two")
+                self.assertEqual(segments[0]["start_sec"], 0.0)
+                self.assertEqual(segments[0]["end_sec"], 2.0)
+                self.assertEqual(segments[1]["clean_text"], "Edited three")
+                self.assertEqual(segments[1]["section"], "Refrain")
+                self.assertTrue(str(segments[0]["audio_path"]).endswith("audio-segments/segment-000.wav"))
+                self.assertEqual(updated_store.list_used_project_actions(project_id), {"align", "segments"})
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
 
 def _write_wav(path: Path) -> None:
     import wave

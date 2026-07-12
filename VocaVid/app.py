@@ -453,6 +453,36 @@ def create_app() -> FastAPI:
         regroup_now(project_id, "manual realign cpu", force_cpu=True)
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
+    @app.post("/projects/{project_id}/manual-timing")
+    def save_manual_timing(
+        project_id: int,
+        line_indices: list[int] = Form(...),
+        clean_texts: list[str] = Form(...),
+        sections: list[str] = Form(...),
+        start_secs: list[str] = Form(...),
+        end_secs: list[str] = Form(...),
+        manual_segment_starts: list[int] = Form(default=[]),
+    ):
+        starts = {int(index) for index in manual_segment_starts}
+        row_count = len(line_indices)
+        if not all(len(values) == row_count for values in (clean_texts, sections, start_secs, end_secs)):
+            raise ValueError("Manual timing form fields must have matching row counts")
+        rows = [
+            {
+                "line_index": line_indices[index],
+                "clean_text": clean_texts[index],
+                "section": sections[index],
+                "start_sec": start_secs[index],
+                "end_sec": end_secs[index],
+                "manual_segment_start": int(line_indices[index]) in starts,
+            }
+            for index in range(row_count)
+        ]
+        pipeline.save_manual_timing(project_id, rows)
+        mark_used(project_id, "align")
+        mark_used(project_id, "segments")
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
     @app.post("/projects/{project_id}/segments")
     def segments(project_id: int):
         if submit_project_action(project_id, "segments"):

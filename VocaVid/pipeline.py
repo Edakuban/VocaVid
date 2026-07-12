@@ -15,8 +15,8 @@ from .assembly import assemble_kdenlive_project, split_audio_segment
 from .alignment import align_lyrics_to_words, infer_language_from_lyrics, normalize_whisper_model_size, transcribe_words_with_fallback
 from .audio import get_wav_duration_sec
 from .comfy import ComfyClient, load_workflow, with_output_prefix
-from .lyrics import is_instrumental_section, parse_suno_lyrics
-from .models import LineTiming, LyricLine
+from .lyrics import is_chorus_section, is_instrumental_section, parse_suno_lyrics
+from .models import LineTiming, LyricLine, RenderSegment
 from .paths import resolve_storage_path, slug_folder_name, storage_relative_path
 from .promptgen import inject_promptgen_context, inject_raw_text_prompt, inject_scenefill_context, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
 from .prompt_templates import load_named_prompt_template, render_prompt_template
@@ -182,6 +182,103 @@ class Pipeline:
             is_chorus=int(is_chorus),
             use_reference=int(is_chorus),
         )
+
+    def save_manual_timing(self, project_id: int, rows: list[dict[str, object]]) -> None:
+        project = self.store.get_project(project_id)
+        cleaned_rows = []
+        for position, row in enumerate(rows):
+            line_index = int(row["line_index"])
+            clean_text = str(row.get("clean_text", "")).strip()
+            if not clean_text:
+                continue
+            section = str(row.get("section", "")).strip() or "Verse"
+            start = _parse_manual_time(row.get("start_sec", ""))
+            end = _parse_manual_time(row.get("end_sec", ""))
+            if end <= start:
+                raise ValueError(f"Manual timing for line {line_index + 1} must end after it starts")
+            is_chorus = is_chorus_section(section)
+            manual_segment_start = bool(row.get("manual_segment_start")) or not cleaned_rows
+            cleaned_row = {
+                "line_index": line_index,
+                "section": section,
+                "is_chorus": is_chorus,
+                "use_reference": is_chorus,
+                "clean_text": clean_text,
+                "start_sec": start,
+                "end_sec": end,
+                "manual_segment_start": manual_segment_start,
+            }
+            cleaned_rows.append(cleaned_row)
+            self.store.update_line(
+                project_id,
+                line_index,
+                section=section,
+                is_chorus=int(is_chorus),
+                use_reference=int(is_chorus),
+                raw_text=clean_text,
+                clean_text=clean_text,
+                start_sec=start,
+                end_sec=end,
+                confidence=1.0,
+                manual_segment_start=int(manual_segment_start),
+                prompt=None,
+                video_prompt=None,
+                image_path=None,
+                avatar_image_path=None,
+                clip_path=None,
+                video_approved=0,
+                last_action="align",
+                status="pending",
+                error="",
+            )
+        if not cleaned_rows:
+            raise ValueError("Manual timing needs at least one lyric line")
+
+        groups: list[list[dict[str, object]]] = []
+        current: list[dict[str, object]] = []
+        for row in cleaned_rows:
+            if row["manual_segment_start"] and current:
+                groups.append(current)
+                current = []
+            current.append(row)
+        if current:
+            groups.append(current)
+
+        output_dir = self._project_dir(project) / "audio-segments"
+        segments: list[RenderSegment] = []
+        for index, group in enumerate(groups):
+            first = group[0]
+            start = float(first["start_sec"])
+            end = float(group[-1]["end_sec"])
+            section = str(first["section"])
+            text = "\n".join(str(item["clean_text"]) for item in group)
+            instrumental = is_instrumental_section(section) or is_instrumental_section(text)
+            audio_path = output_dir / f"segment-{index:03d}.wav"
+            split_audio_segment(
+                self._project_input_path(project["audio_path"]),
+                start,
+                end,
+                audio_path,
+                runner=self.ffmpeg_runner,
+            )
+            is_chorus = any(bool(item["is_chorus"]) for item in group)
+            segments.append(
+                RenderSegment(
+                    index=index,
+                    kind="gap" if instrumental else "lyrics",
+                    section=section,
+                    is_chorus=False if instrumental else is_chorus,
+                    use_reference=False if instrumental else is_chorus,
+                    source_line_indices=[int(item["line_index"]) for item in group],
+                    clean_text=text,
+                    start_sec=round(start, 6),
+                    end_sec=round(end, 6),
+                    audio_path=self._project_storage_path(audio_path),
+                )
+            )
+        self.store.replace_segments(project_id, segments)
+        self.store.update_project(project_id, final_video_path=None, scene_plan=None)
+        logger.info("manual timing saved project_id=%s segments=%s", project_id, len(segments))
 
     def build_segments(self, project_id: int) -> None:
         project = self.store.get_project(project_id)
@@ -1184,6 +1281,27 @@ def _row_value(row, key: str, default):
         return row[key]
     except (KeyError, IndexError, TypeError):
         return default
+
+
+def _parse_manual_time(value: object) -> float:
+    text = str(value or "").strip().replace(",", ".")
+    if not text:
+        raise ValueError("Manual timing values are required")
+    parts = text.split(":")
+    try:
+        if len(parts) == 1:
+            seconds = float(parts[0])
+        elif len(parts) == 2:
+            seconds = int(parts[0]) * 60 + float(parts[1])
+        elif len(parts) == 3:
+            seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+        else:
+            raise ValueError
+    except ValueError as exc:
+        raise ValueError(f"Invalid manual timing value: {text}") from exc
+    if seconds < 0:
+        raise ValueError("Manual timing values must be zero or greater")
+    return round(seconds, 6)
 
 
 def _normalize_avatar_gender(value: str) -> str:

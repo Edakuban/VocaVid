@@ -308,6 +308,54 @@ SCRIPTS = f"""
       if (!box) return;
       box.classList.remove('open');
     }}
+    function openManualTimingModal() {{
+      const box = document.getElementById('manual-timing-modal');
+      if (!box) return;
+      box.classList.add('open');
+    }}
+    function closeManualTimingModal() {{
+      const box = document.getElementById('manual-timing-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
+    function formatManualTimingTimestamp(seconds) {{
+      const value = Math.max(0, Number(seconds) || 0);
+      return value.toFixed(1);
+    }}
+    function updateManualTimingTimestamp(audio) {{
+      const output = document.getElementById('manual-timing-current');
+      if (!output) return;
+      output.textContent = formatManualTimingTimestamp(audio.currentTime);
+    }}
+    function manualTimingValueIsOpen(input) {{
+      const value = String(input.value || '').trim().replace(',', '.');
+      if (!value) return true;
+      return Number(value) === 0;
+    }}
+    function setManualTimingInput(input, timestamp) {{
+      input.value = timestamp;
+      input.dispatchEvent(new Event('input', {{ bubbles: true }}));
+      input.classList.add('manual-time-filled');
+      window.setTimeout(() => input.classList.remove('manual-time-filled'), 450);
+    }}
+    function applyManualTimingTimestamp() {{
+      const audio = document.getElementById('manual-timing-audio');
+      const table = document.querySelector('.manual-timing-table');
+      if (!audio || !table) return;
+      const timestamp = formatManualTimingTimestamp(audio.currentTime);
+      const rows = Array.from(table.querySelectorAll('tbody tr'));
+      for (let index = 1; index < rows.length; index += 1) {{
+        const previousEnd = rows[index - 1].querySelector('input[name="end_secs"]');
+        const currentStart = rows[index].querySelector('input[name="start_secs"]');
+        if (previousEnd && currentStart && manualTimingValueIsOpen(previousEnd) && manualTimingValueIsOpen(currentStart)) {{
+          setManualTimingInput(previousEnd, timestamp);
+          setManualTimingInput(currentStart, timestamp);
+          return;
+        }}
+      }}
+      const openEnd = rows.map((row) => row.querySelector('input[name="end_secs"]')).find((input) => input && manualTimingValueIsOpen(input));
+      if (openEnd) setManualTimingInput(openEnd, timestamp);
+    }}
     function openPromptModal(id) {{
       const box = document.getElementById(id);
       if (!box) return;
@@ -317,18 +365,6 @@ SCRIPTS = f"""
       const box = document.getElementById(id);
       if (!box) return;
       box.classList.remove('open');
-    }}
-    function scrollToTop() {{
-      const firstSegment = document.querySelector('tr[id^="segment-row-"]');
-      const target = firstSegment || document.querySelector('tr[id^="line-row-"]');
-      if (!target) {{
-        window.scrollTo({{ top: 0, behavior: 'smooth' }});
-        return;
-      }}
-      const topbar = document.querySelector('.project-topbar');
-      const offset = topbar ? topbar.getBoundingClientRect().height : 0;
-      const top = target.getBoundingClientRect().top + window.scrollY - offset;
-      window.scrollTo({{ top: Math.max(0, top), behavior: 'smooth' }});
     }}
     function switchProjectView(view) {{
       const storyboard = document.getElementById('project-storyboard');

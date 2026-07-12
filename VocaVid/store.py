@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS lyric_lines (
     start_sec REAL,
     end_sec REAL,
     confidence REAL,
+    manual_segment_start INTEGER NOT NULL DEFAULT 0,
     prompt TEXT,
     video_prompt TEXT,
     image_path TEXT,
@@ -134,6 +135,8 @@ class Store:
             conn.execute("ALTER TABLE lyric_lines ADD COLUMN video_approved INTEGER NOT NULL DEFAULT 0")
         if "last_action" not in columns:
             conn.execute("ALTER TABLE lyric_lines ADD COLUMN last_action TEXT")
+        if "manual_segment_start" not in columns:
+            conn.execute("ALTER TABLE lyric_lines ADD COLUMN manual_segment_start INTEGER NOT NULL DEFAULT 0")
         project_columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)")}
         if "genre" not in project_columns:
             conn.execute("ALTER TABLE projects ADD COLUMN genre TEXT NOT NULL DEFAULT ''")

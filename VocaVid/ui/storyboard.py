@@ -114,7 +114,7 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
     )
     media_html = _storyboard_card_media_html(project, row)
     text_html = _multiline_text_html(text) or _text(text)
-    timing_html = f'<div class="segment-inspector-meta">{_text(timing)}</div>' if timing else ""
+    timing_html = _segment_inspector_timing_html(project, row, timing)
     image_choice_section = f"""
       <div class="segment-inspector-section">
         <div class="segment-inspector-label">Image source</div>
@@ -171,6 +171,22 @@ def _segment_inspector_nav_button(item_kind: str, label: str, item_index, direct
     )
 
 
+def _segment_inspector_timing_html(project, row, timing: str) -> str:
+    if not timing:
+        return ""
+    audio_path = _row_value(row, "audio_path", "")
+    if not audio_path:
+        return f'<div class="segment-inspector-meta">{_text(timing)}</div>'
+    url = _generated_asset_url(project, audio_path)
+    return (
+        '<div class="segment-inspector-meta segment-inspector-audio-meta">'
+        f'<button class="segment-audio-button icon-button" type="button" title="Segment audio abspielen" onclick="toggleAudio(this)">▶</button>'
+        f'<audio preload="none" src="{_attr(_url_for_html_attribute(url))}"></audio>'
+        f'<span>{_text(timing)}</span>'
+        "</div>"
+    )
+
+
 def _storyboard_card_html(project, row, item_kind: str, active: bool = False, locked_status: str | None = None) -> str:
     index_key = "segment_index" if item_kind == "segments" else "line_index"
     index = _row_value(row, index_key, 0)
@@ -184,15 +200,17 @@ def _storyboard_card_html(project, row, item_kind: str, active: bool = False, lo
     text_html = _multiline_text_html(text) or _text(text)
     media_html = _storyboard_card_media_html(project, row)
     effective_locked_status = locked_status
-    active_class = " storyboard-card-active" if active else ""
-    approved_class = " storyboard-card-approved" if bool(_row_value(row, "video_approved", 0)) else ""
     locked_class = " storyboard-card-locked" if effective_locked_status else ""
+    active_class = " storyboard-card-active" if active else ""
+    approved = bool(_row_value(row, "video_approved", 0))
+    approved_class = " storyboard-card-approved" if approved else ""
+    unfinished_class = " storyboard-card-unfinished" if not approved and not effective_locked_status else ""
     locked_attr = "1" if effective_locked_status else "0"
     disabled_attr = " disabled" if effective_locked_status else ""
     lock_overlay = f'<div class="storyboard-lock-overlay"><span>{_text(effective_locked_status)}</span></div>' if effective_locked_status else ""
     progress = _storyboard_progress_strip_html(row)
     return f"""
-      <article class="storyboard-card{active_class}{approved_class}{locked_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" data-locked="{locked_attr}" onclick="selectStoryboardItem(event, this)" onkeydown="if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.storyboard-select-wrap')) selectStoryboardItem(event, this)">
+      <article class="storyboard-card{active_class}{approved_class}{unfinished_class}{locked_class}" tabindex="0" role="button" data-inspector-template="segment-inspector-template-{item_kind}-{_attr(index)}" data-locked="{locked_attr}" onclick="selectStoryboardItem(event, this)" onkeydown="if ((event.key === 'Enter' || event.key === ' ') && !event.target.closest('.storyboard-select-wrap')) selectStoryboardItem(event, this)">
         <label class="storyboard-select-wrap" title="{_attr(checkbox_label)}" onclick="event.stopPropagation()">
           <input type="checkbox" class="{checkbox_class} storyboard-select" name="selected_lines" value="{_attr(index)}" aria-label="{_attr(checkbox_label)}"{disabled_attr}>
         </label>
@@ -331,6 +349,7 @@ __all__ = [
     "_segment_inspector_html",
     "_segment_inspector_navigation_html",
     "_segment_inspector_nav_button",
+    "_segment_inspector_timing_html",
     "_storyboard_card_html",
     "_storyboard_card_meta_html",
     "_storyboard_section_badge",
