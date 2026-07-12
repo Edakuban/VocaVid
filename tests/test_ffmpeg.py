@@ -238,7 +238,7 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(properties["a_track"], "2")
             self.assertEqual(properties["b_track"], "3")
 
-    def test_assemble_kdenlive_project_reverts_only_descending_transitions(self):
+    def test_assemble_kdenlive_project_reverts_only_visually_descending_transitions(self):
         with tempfile.TemporaryDirectory() as directory:
             tmp_path = Path(directory)
             clips_dir = tmp_path / "media" / "clips"
@@ -301,10 +301,10 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(len(transition_properties), 2)
             self.assertEqual(transition_properties[0]["a_track"], "2")
             self.assertEqual(transition_properties[0]["b_track"], "3")
-            self.assertEqual(transition_properties[0]["reverse"], "0")
+            self.assertEqual(transition_properties[0]["reverse"], "1")
             self.assertEqual(transition_properties[1]["a_track"], "2")
             self.assertEqual(transition_properties[1]["b_track"], "3")
-            self.assertEqual(transition_properties[1]["reverse"], "1")
+            self.assertEqual(transition_properties[1]["reverse"], "0")
 
     def test_assemble_kdenlive_project_writes_relative_resource_paths(self):
         with tempfile.TemporaryDirectory() as directory:
