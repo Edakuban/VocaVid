@@ -37,6 +37,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("--studio-bg", html)
         self.assertIn("background:", html)
         self.assertIn(".studio-topbar", html)
+        self.assertIn(".studio-logo", html)
+        self.assertIn(".studio-logo { width: 68px; height: 68px;", html)
         self.assertIn(".studio-panel", html)
         self.assertIn(".studio-button", html)
         self.assertIn(".studio-chip", html)
@@ -79,6 +81,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>', html)
         self.assertIn('<label>Genre</label><input name="genre" required>', html)
         self.assertIn('<label>Avatar</label><input name="avatar" type="file" accept="image/*">', html)
+        self.assertIn('<label>Male / Female Avatar</label><select name="avatar_gender">', html)
+        self.assertIn('<option value="male">Male</option>', html)
+        self.assertIn('<label>Avatar face description</label><textarea name="avatar_face_description"></textarea>', html)
+        self.assertNotIn('title="Available after creating the project">AI describe avatar</button>', html)
         self.assertIn('<label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">', html)
         self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
         self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
@@ -126,7 +132,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('data-project-id="2"', body)
         self.assertIn('data-status="done"', body)
         self.assertIn('data-status="in-progress"', body)
-        self.assertIn('class="project-progress-badge">0/0</span>', body)
+        self.assertIn('class="progress-pill project-progress-badge"', body)
+        self.assertIn('<span class="progress-pill-label">0/0</span>', body)
         self.assertNotIn("Open project", body)
         self.assertNotIn(">DONE<", body)
         self.assertIn(".project-grid", html)
@@ -141,6 +148,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="project-card-placeholder-mark" aria-label="No preview yet"', body)
         self.assertNotIn(">FS<", body)
         self.assertNotIn(">OS<", body)
+        self.assertIn('<img class="studio-logo" src="/icon/VocaVid_icon.svg" alt="" aria-hidden="true">', body)
 
     def test_project_cards_use_chorus_clip_preview_before_other_media(self):
         projects = [{"id": 7, "name": "Demo Song", "final_video_path": None}]
@@ -168,7 +176,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<video src="/assets/outputs/demo/clips/refrain.mp4', body)
         self.assertIn('preload="metadata" muted playsinline', body)
         self.assertNotIn("verse.mp4", body)
-        self.assertIn('class="project-progress-badge">0/2</span>', body)
+        self.assertIn('class="progress-pill project-progress-badge"', body)
+        self.assertIn('<span class="progress-pill-fill" style="--progress: 0%"></span>', body)
+        self.assertIn('<span class="progress-pill-label">0/2</span>', body)
 
     def test_jobs_table_has_delete_actions_except_running_and_clear_queued_button(self):
         jobs = [
@@ -367,8 +377,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('class="project-title-center"'), html.index('class="project-title-right"'))
         self.assertIn('aria-label="Back to projects" title="Back to projects">←</a>', html)
         self.assertLess(html.index('aria-label="Back to projects"'), html.index('title="Project Settings"'))
-        self.assertLess(html.index('title="Project Settings"'), html.index('class="open-count-label"'))
-        self.assertLess(html.index('class="open-count-label"'), html.index('title="Vorhergehendes Projekt"'))
+        self.assertLess(html.index('title="Project Settings"'), html.index('id="project-progress-pill"'))
+        self.assertLess(html.index('id="project-progress-pill"'), html.index('title="Vorhergehendes Projekt"'))
         self.assertLess(html.index('title="Vorhergehendes Projekt"'), html.index("<h1>Demo</h1>"))
         self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
         self.assertLess(html.index('title="Nachfolgendes Projekt"'), html.index('id="queue-estimate"'))
@@ -1061,6 +1071,8 @@ class AppHtmlTests(unittest.TestCase):
             "final_video_path": None,
             "lyric_group_size": 2,
             "chorus_group_size": 4,
+            "avatar_gender": "female",
+            "avatar_face_description": "sharp jawline, short black hair",
         }
         segments = [
             {
@@ -1090,6 +1102,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('name="chorus_group_size"', html)
         self.assertIn('value="4"', html)
         self.assertIn('action="/projects/7/settings"', html)
+        self.assertIn('action="/projects/7/avatar-description"', html)
+        self.assertIn('<label>Male / Female Avatar</label><select name="avatar_gender">', html)
+        self.assertIn('<option value="female" selected>Female</option>', html)
+        self.assertIn('<label>Avatar face description</label><textarea name="avatar_face_description">sharp jawline, short black hair</textarea>', html)
+        self.assertIn('AI describe avatar</button>', html)
         self.assertIn('action="/projects/7/align"', html)
         self.assertIn('<button>1. Analyze + Split</button>', html)
         self.assertNotIn('<button>2. Segs + Audio</button>', html)
@@ -2300,9 +2317,11 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, [], segments))
 
-        self.assertIn('<span class="open-count-label">1/2</span>', html)
+        self.assertIn('id="project-progress-pill" class="progress-pill"', html)
+        self.assertIn('<span class="progress-pill-fill" style="--progress: 50%"></span>', html)
+        self.assertIn('<span class="progress-pill-label">1/2</span>', html)
         self.assertNotIn("1/2 offen", html)
-        self.assertIn(".open-count-label { align-self: center;", html)
+        self.assertIn(".progress-pill { position: relative;", html)
         self.assertNotIn("open-filter-button", html)
         self.assertNotIn("open-filter-info", html)
         self.assertIn('data-work-item="1" data-video-approved="0"', html)

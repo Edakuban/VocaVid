@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS projects (
     global_style_prompt TEXT NOT NULL,
     genre TEXT NOT NULL DEFAULT '',
     reference_image_paths TEXT NOT NULL DEFAULT '[]',
+    avatar_gender TEXT NOT NULL DEFAULT '',
+    avatar_face_description TEXT NOT NULL DEFAULT '',
     comfy_base_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:8188',
     output_resolution TEXT NOT NULL DEFAULT '1280x720',
     fps INTEGER NOT NULL DEFAULT 24,
@@ -145,6 +147,10 @@ class Store:
             conn.execute("ALTER TABLE projects ADD COLUMN whisper_model_size TEXT NOT NULL DEFAULT 'small'")
         if "scene_plan" not in project_columns:
             conn.execute("ALTER TABLE projects ADD COLUMN scene_plan TEXT")
+        if "avatar_gender" not in project_columns:
+            conn.execute("ALTER TABLE projects ADD COLUMN avatar_gender TEXT NOT NULL DEFAULT ''")
+        if "avatar_face_description" not in project_columns:
+            conn.execute("ALTER TABLE projects ADD COLUMN avatar_face_description TEXT NOT NULL DEFAULT ''")
         segment_columns = {row["name"] for row in conn.execute("PRAGMA table_info(render_segments)")}
         if "scene_plan" not in segment_columns:
             conn.execute("ALTER TABLE render_segments ADD COLUMN scene_plan TEXT")
@@ -165,9 +171,10 @@ class Store:
                 """
                 INSERT INTO projects (
                     name, audio_path, lyrics_path, global_style_prompt, genre, reference_image_paths,
+                    avatar_gender, avatar_face_description,
                     comfy_base_url, output_resolution, fps, lyric_group_size, chorus_group_size,
                     transition_handle_seconds, whisper_model_size
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     data["name"],
@@ -176,6 +183,8 @@ class Store:
                     data["global_style_prompt"],
                     data.get("genre", ""),
                     json.dumps(data.get("reference_image_paths", [])),
+                    data.get("avatar_gender", ""),
+                    data.get("avatar_face_description", ""),
                     data.get("comfy_base_url", "http://127.0.0.1:8188"),
                     data.get("output_resolution", "1280x720"),
                     int(data.get("fps", 24)),

@@ -20,6 +20,7 @@ Mode: {MODE}
 Section: {SECTION}
 Duration seconds: {DURATION}
 Genre: {GENRE}
+Avatar identity: {AVATAR_IDENTITY_CONTEXT}
 Global visual style: {GLOBAL_STYLE}
 Scene plan: {SCENE_PLAN}
 Lyrics:
@@ -85,6 +86,7 @@ Mode: {MODE}
 Section: {SECTION}
 Duration seconds: {DURATION}
 Genre: {GENRE}
+Avatar identity: {AVATAR_IDENTITY_CONTEXT}
 Global visual style: {GLOBAL_STYLE}
 Scene plan: {SCENE_PLAN}
 Lyrics:
@@ -117,6 +119,7 @@ def make_promptgen_prompt(
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
+    avatar_identity_context: str = "",
 ) -> str:
     mode = "chorus/refrain featuring the singer" if is_chorus else "non-chorus story visual"
     return render_prompt_template(
@@ -130,6 +133,7 @@ def make_promptgen_prompt(
             duration=duration,
             genre=genre,
             scene_plan=scene_plan,
+            avatar_identity_context=avatar_identity_context,
         ),
     )
 
@@ -143,6 +147,7 @@ def make_videoprompt_prompt(
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
+    avatar_identity_context: str = "",
 ) -> str:
     mode = "performance shot featuring the singer" if is_chorus else "story or atmosphere shot"
     return render_prompt_template(
@@ -157,6 +162,7 @@ def make_videoprompt_prompt(
             duration=duration,
             genre=genre,
             scene_plan=scene_plan,
+            avatar_identity_context=avatar_identity_context,
         ),
     )
 
@@ -180,6 +186,7 @@ def make_scenefill_prompt(
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
+    avatar_identity_context: str = "",
 ) -> str:
     mode = "performance shot featuring the singer" if is_chorus else "story or atmosphere shot"
     return render_prompt_template(
@@ -195,6 +202,7 @@ def make_scenefill_prompt(
                 duration=duration,
                 genre=genre,
                 scene_plan=scene_plan,
+                avatar_identity_context=avatar_identity_context,
             ),
             "draft_text": draft_text,
             "DRAFT_TEXT": draft_text,
@@ -216,6 +224,7 @@ def _prompt_variables(
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
+    avatar_identity_context: str = "",
 ) -> dict[str, object]:
     return {
         "lyric_text": lyric_text,
@@ -238,6 +247,8 @@ def _prompt_variables(
         "GENRE": genre,
         "scene_plan": scene_plan,
         "SCENE_PLAN": scene_plan,
+        "avatar_identity_context": avatar_identity_context,
+        "AVATAR_IDENTITY_CONTEXT": avatar_identity_context,
     }
 
 
@@ -254,6 +265,7 @@ def inject_promptgen_context(workflow_template: dict[str, Any], variables: dict[
         duration=str(variables.get("duration", "")),
         genre=str(variables.get("genre", "")),
         scene_plan=str(variables.get("scene_plan", "")),
+        avatar_identity_context=str(variables.get("avatar_identity_context", "")),
     )
     node = _find_text_prompt_node(workflow)
     if node is None:
@@ -276,6 +288,7 @@ def inject_videoprompt_context(workflow_template: dict[str, Any], variables: dic
         duration=str(variables.get("duration", "")),
         genre=str(variables.get("genre", "")),
         scene_plan=str(variables.get("scene_plan", "")),
+        avatar_identity_context=str(variables.get("avatar_identity_context", "")),
     )
     node = _find_text_prompt_node(workflow)
     if node is None:
@@ -298,6 +311,7 @@ def inject_scenefill_context(workflow_template: dict[str, Any], variables: dict[
         duration=str(variables.get("duration", "")),
         genre=str(variables.get("genre", "")),
         scene_plan=str(variables.get("scene_plan", "")),
+        avatar_identity_context=str(variables.get("avatar_identity_context", "")),
     )
     node = _find_text_prompt_node(workflow)
     if node is None:

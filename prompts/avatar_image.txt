@@ -8,6 +8,7 @@ Scene plan context:
 
 Genre: {GENRE}
 Global visual style: {GLOBAL_STYLE}
+Avatar identity: {AVATAR_IDENTITY_CONTEXT}
 
 Target selection:
 Replace the main focus person in Image 1: the person closest to camera, most centered, largest in frame, most brightly lit, or visually treated as the subject. If multiple people are visible, replace only that focus person. Do not change background people, crowds, silhouettes, companions, enemies, or secondary characters.

@@ -39,6 +39,7 @@ Scene plan context:
 
 Genre: {GENRE}
 Global visual style: {GLOBAL_STYLE}
+Avatar identity: {AVATAR_IDENTITY_CONTEXT}
 
 Target selection:
 Replace the main focus person in Image 1: the person closest to camera, most centered, largest in frame, most brightly lit, or visually treated as the subject. If multiple people are visible, replace only that focus person. Do not change background people, crowds, silhouettes, companions, enemies, or secondary characters.
@@ -308,6 +309,36 @@ class Pipeline:
             )
         self.store.update_project(project_id, global_style_prompt=style_prompt)
 
+    def describe_avatar_face(self, project_id: int) -> None:
+        project = self.store.get_project(project_id)
+        workflow_path = self.workflows.optional_avatar_description()
+        if not workflow_path:
+            raise FileNotFoundError(f"avatar_description workflow is missing: put the exported ComfyUI workflow at {self.workflows.avatar_description}")
+        reference_image_path = self._project_avatar_reference_path(project)
+        workflow = load_workflow(workflow_path)
+        variables = {
+            "reference_image_path": reference_image_path,
+            "reference_image_name": Path(reference_image_path).name,
+            "avatar_gender": _normalize_avatar_gender(_row_value(project, "avatar_gender", "")),
+            "avatar_face_description": _row_value(project, "avatar_face_description", "") or "",
+            "avatar_identity_context": _avatar_identity_context(project),
+            "avatar_description_prompt": (
+                "Describe the visible face and identity cues of this avatar reference image for reuse in AI music-video prompts. "
+                "Return only a concise neutral visual description of the face, hair, age impression, expression, and distinctive facial features. "
+                "Do not identify the person and do not add markdown."
+            ),
+        }
+        workflow = _inject_avatar_description_image(workflow, variables)
+        try:
+            workflow = inject_raw_text_prompt(workflow, str(variables["avatar_description_prompt"]))
+        except ValueError:
+            pass
+        result = ComfyClient(project["comfy_base_url"]).run_workflow(workflow, variables)
+        if result.ok and result.text_outputs:
+            self.store.update_project(project_id, avatar_face_description=result.text_outputs[0].strip())
+            return
+        raise RuntimeError(result.error or "No avatar face description text output")
+
     def generate_prompts(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         project = self.store.get_project(project_id)
         selected_segments = self._selected_segments(project_id, selected_line_indices)
@@ -319,7 +350,8 @@ class Pipeline:
             if not workflow_path:
                 for row in segments:
                     scene_plan = f"\nScene plan: {row['scene_plan']}" if row["scene_plan"] else ""
-                    prompt = f"{row['clean_text']}.{scene_plan} {project['global_style_prompt']}".strip()
+                    avatar_context = f"\nAvatar identity: {_avatar_identity_context(project)}" if _avatar_identity_context(project) else ""
+                    prompt = f"{row['clean_text']}.{scene_plan} {project['global_style_prompt']}{avatar_context}".strip()
                     self.store.update_segment(project_id, row["segment_index"], prompt=prompt, status="prompted", error="", last_action="prompts")
                 return
             for row in segments:
@@ -328,7 +360,8 @@ class Pipeline:
         workflow_path = self.workflows.optional_promptgen()
         if not workflow_path:
             for row in self._editable_selected_rows(project_id, selected_line_indices):
-                prompt = f"{row['clean_text']}. {project['global_style_prompt']}".strip()
+                avatar_context = f"\nAvatar identity: {_avatar_identity_context(project)}" if _avatar_identity_context(project) else ""
+                prompt = f"{row['clean_text']}. {project['global_style_prompt']}{avatar_context}".strip()
                 self.store.update_line(project_id, row["line_index"], prompt=prompt, status="prompted", error="", last_action="prompts")
             return
         for row in self._editable_selected_rows(project_id, selected_line_indices):
@@ -380,6 +413,7 @@ class Pipeline:
                         duration=f"{float(row['end_sec']) - float(row['start_sec']):.3f}",
                         genre=str(project["genre"] or ""),
                         scene_plan=str(row["scene_plan"] or ""),
+                        avatar_identity_context=_avatar_identity_context(project),
                     )
                     self.store.update_segment(
                         project_id,
@@ -410,6 +444,7 @@ class Pipeline:
                     global_style=str(project["global_style_prompt"]),
                     duration=f"{duration:.3f}",
                     genre=str(project["genre"] or ""),
+                    avatar_identity_context=_avatar_identity_context(project),
                 )
                 self.store.update_line(
                     project_id,
@@ -1103,6 +1138,9 @@ class Pipeline:
             "is_chorus": str(bool(row["is_chorus"])).lower(),
             "use_reference_image": str(bool(row["use_reference"])).lower(),
             "global_style": project["global_style_prompt"],
+            "avatar_gender": _normalize_avatar_gender(_row_value(project, "avatar_gender", "")),
+            "avatar_face_description": _row_value(project, "avatar_face_description", "") or "",
+            "avatar_identity_context": _avatar_identity_context(project),
             "duration": f"{duration:.3f}",
             "fps": str(project["fps"]),
             "output_resolution": project["output_resolution"],
@@ -1129,12 +1167,39 @@ class Pipeline:
             return ""
         return str(self._project_input_path(value))
 
+    def _project_avatar_reference_path(self, project) -> str:
+        references = json.loads(project["reference_image_paths"] or "[]")
+        resolved_references = [self._project_input_path(item) for item in references]
+        for item in resolved_references:
+            if item.exists():
+                return str(item)
+        fallback = Path.cwd() / "images" / "avatar.jpeg"
+        if fallback.exists():
+            return str(fallback)
+        raise FileNotFoundError("No avatar reference image available")
+
 
 def _row_value(row, key: str, default):
     try:
         return row[key]
     except (KeyError, IndexError, TypeError):
         return default
+
+
+def _normalize_avatar_gender(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"male", "female"} else ""
+
+
+def _avatar_identity_context(project) -> str:
+    gender = _normalize_avatar_gender(_row_value(project, "avatar_gender", ""))
+    face = str(_row_value(project, "avatar_face_description", "") or "").strip()
+    parts = []
+    if gender:
+        parts.append(f"{gender} avatar")
+    if face:
+        parts.append(face)
+    return "; ".join(parts)
 
 
 def _editable_rows(rows):
@@ -1242,6 +1307,18 @@ def _inject_avatar_load_images(workflow: dict, variables: dict[str, str]) -> dic
     return workflow
 
 
+def _inject_avatar_description_image(workflow: dict, variables: dict[str, str]) -> dict:
+    reference_image_path = variables.get("reference_image_path", "")
+    if not reference_image_path:
+        return workflow
+    for node in _nodes_by_class(workflow, "LoadImage"):
+        inputs = node["inputs"]
+        if "image" in inputs:
+            inputs["image"] = reference_image_path
+            break
+    return workflow
+
+
 def _inject_avatar_prompt(workflow: dict, variables: dict[str, str]) -> dict:
     prompt = render_prompt_template(
         load_named_prompt_template("avatar_image.txt", DEFAULT_AVATAR_IMAGE_TEMPLATE),
@@ -1254,6 +1331,12 @@ def _inject_avatar_prompt(workflow: dict, variables: dict[str, str]) -> dict:
             "GENRE": variables.get("genre", ""),
             "global_style": variables.get("global_style", ""),
             "GLOBAL_STYLE": variables.get("global_style", ""),
+            "avatar_gender": variables.get("avatar_gender", ""),
+            "AVATAR_GENDER": variables.get("avatar_gender", ""),
+            "avatar_face_description": variables.get("avatar_face_description", ""),
+            "AVATAR_FACE_DESCRIPTION": variables.get("avatar_face_description", ""),
+            "avatar_identity_context": variables.get("avatar_identity_context", ""),
+            "AVATAR_IDENTITY_CONTEXT": variables.get("avatar_identity_context", ""),
         },
     )
     for node in workflow.values():

@@ -5,6 +5,7 @@ Song section: {{ section }}
 Mode: {{ mode }}
 Clip duration seconds: {{ duration }}
 Genre: {{ genre }}
+Avatar identity: {{ avatar_identity_context }}
 Global visual style: {{ global_style }}
 Scene plan for this clip: {{ scene_plan }}
 

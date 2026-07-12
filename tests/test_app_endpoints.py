@@ -18,6 +18,30 @@ from musicvideogen.store import Store
 
 
 class AppEndpointTests(unittest.TestCase):
+    def test_icon_assets_are_served(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.get("/icon/VocaVid_icon.svg")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIn("image/svg", response.headers["content-type"])
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
     def test_jobs_status_endpoint_returns_current_queue_payload(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
@@ -213,6 +237,8 @@ class AppEndpointTests(unittest.TestCase):
                         data={
                             "name": "Demo",
                             "genre": "industrial rock",
+                            "avatar_gender": "female",
+                            "avatar_face_description": "angular face, silver hair",
                             "lyric_group_size": "3",
                             "chorus_group_size": "2",
                             "transition_handle_seconds": "0.7",
@@ -229,6 +255,8 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 303)
                 project = Store(app_module.DB_PATH).list_projects()[0]
                 self.assertEqual(project["genre"], "industrial rock")
+                self.assertEqual(project["avatar_gender"], "female")
+                self.assertEqual(project["avatar_face_description"], "angular face, silver hair")
                 self.assertEqual(project["lyric_group_size"], 3)
                 self.assertEqual(project["chorus_group_size"], 2)
                 self.assertEqual(project["transition_handle_seconds"], 0.7)
@@ -247,6 +275,83 @@ class AppEndpointTests(unittest.TestCase):
                 )
                 used_actions = Store(app_module.DB_PATH).list_used_project_actions(project["id"])
                 self.assertEqual(used_actions, {"align", "segments", "scene-plan"})
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
+    def test_create_project_queues_avatar_description_when_face_description_is_empty(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        calls = []
+
+        class FakePipeline:
+            def __init__(self, store, output_root):
+                self.store = store
+                self.output_root = output_root
+
+            def describe_avatar_face(self, project_id):
+                calls.append(("avatar-description", project_id))
+
+            def generate_global_style_prompt(self, project_id):
+                calls.append(("global-style-prompt", project_id))
+
+            def align_with_whisper(self, project_id, selected_line_indices=None):
+                calls.append(("align", project_id, list(selected_line_indices or [])))
+
+            def build_segments(self, project_id):
+                calls.append(("segments", project_id))
+
+            def generate_scene_plan(self, project_id, selected_segment_indices=None):
+                calls.append(("scene-plan", project_id, list(selected_segment_indices or [])))
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                app_module.Pipeline = FakePipeline
+                audio = root / "song.wav"
+                _write_wav(audio)
+
+                app = app_module.create_app()
+                client = TestClient(app)
+                with audio.open("rb") as audio_file:
+                    response = client.post(
+                        "/projects",
+                        data={
+                            "name": "Demo",
+                            "genre": "industrial rock",
+                            "avatar_gender": "male",
+                            "avatar_face_description": "",
+                        },
+                        files={
+                            "audio": ("song.wav", audio_file, "audio/wav"),
+                            "lyrics": ("lyrics.txt", b"[Verse]\nOne\nTwo\n", "text/plain"),
+                            "avatar": ("avatar.png", b"fake image", "image/png"),
+                        },
+                        follow_redirects=False,
+                    )
+
+                self.assertEqual(response.status_code, 303)
+                project = Store(app_module.DB_PATH).list_projects()[0]
+                deadline = time.time() + 2
+                while len(calls) < 5 and time.time() < deadline:
+                    time.sleep(0.01)
+                self.assertEqual(
+                    [call[0] for call in calls],
+                    ["avatar-description", "global-style-prompt", "align", "segments", "scene-plan"],
+                )
+                self.assertEqual(
+                    [job.action for job in sorted(app.state.jobs.list_jobs(), key=lambda job: job.id)],
+                    ["avatar-description", "global-style-prompt", "align", "segments", "scene-plan"],
+                )
+                self.assertEqual(project["avatar_face_description"], "")
+                app.state.jobs.executor.shutdown(wait=True)
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads
@@ -294,6 +399,61 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 303)
                 jobs = client.get("/").text
                 self.assertIn("generate global style prompt: Demo", jobs)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
+    def test_avatar_description_endpoint_queues_generation_job(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        calls = []
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".musicvideogen"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "musicvideogen.sqlite3"
+                store = Store(app_module.DB_PATH)
+                lyrics = root / "lyrics.txt"
+                audio = root / "song.wav"
+                lyrics.write_text("[Verse]\nOne\n", encoding="utf-8")
+                _write_wav(audio)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": str(audio),
+                        "lyrics_path": str(lyrics),
+                        "global_style_prompt": "",
+                    },
+                    parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+                )
+
+                class FakePipeline:
+                    def __init__(self, store, workspace):
+                        self.store = store
+
+                    def describe_avatar_face(self, project_id):
+                        calls.append(project_id)
+
+                app_module.Pipeline = FakePipeline
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.post(f"/projects/{project_id}/avatar-description", follow_redirects=False)
+
+                self.assertEqual(response.status_code, 303)
+                deadline = time.time() + 2
+                while not calls and time.time() < deadline:
+                    time.sleep(0.01)
+                self.assertEqual(calls, [project_id])
+                jobs = app.state.jobs.list_jobs()
+                self.assertEqual(jobs[0].action, "avatar-description")
+                self.assertEqual(jobs[0].project_id, project_id)
+                app.state.jobs.executor.shutdown(wait=True)
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads
@@ -706,6 +866,8 @@ class AppEndpointTests(unittest.TestCase):
                             "lyrics_path": str(lyrics),
                             "global_style_prompt": "cinematic",
                             "genre": "",
+                            "avatar_gender": "male",
+                            "avatar_face_description": "weathered face, dark beard",
                             "reference_image_paths": "",
                             "comfy_base_url": "http://127.0.0.1:8188",
                             "output_resolution": "1280x720",
@@ -726,6 +888,8 @@ class AppEndpointTests(unittest.TestCase):
                 line = updated_store.list_lines(project_id)[0]
                 self.assertEqual(project["lyric_group_size"], 2)
                 self.assertEqual(project["whisper_model_size"], "medium")
+                self.assertEqual(project["avatar_gender"], "male")
+                self.assertEqual(project["avatar_face_description"], "weathered face, dark beard")
                 self.assertEqual(line["start_sec"], 1.0)
                 self.assertEqual(line["end_sec"], 2.0)
                 self.assertEqual(line["prompt"], "old prompt")

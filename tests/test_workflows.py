@@ -14,6 +14,7 @@ class WorkflowPathTests(unittest.TestCase):
             paths = WorkflowPaths.defaults(root)
 
             self.assertEqual(paths.promptgen, root / "workflows" / "promptgen.json")
+            self.assertEqual(paths.avatar_description, root / "workflows" / "avatar_description.json")
             self.assertEqual(paths.image, root / "workflows" / "image.json")
             self.assertEqual(paths.image_aliases[0], root / "workflows" / "image_z_image_turbo.json")
             self.assertEqual(paths.avatar_image, root / "workflows" / "avatartoimage_flux.json")
@@ -42,6 +43,17 @@ class WorkflowPathTests(unittest.TestCase):
             paths = WorkflowPaths.defaults(root)
 
             self.assertEqual(paths.optional_promptgen(), workflows / "promptgen.json")
+
+    def test_existing_optional_avatar_description_is_returned_only_when_file_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflows = root / "workflows"
+            workflows.mkdir()
+            (workflows / "avatar_description.json").write_text("{}", encoding="utf-8")
+
+            paths = WorkflowPaths.defaults(root)
+
+            self.assertEqual(paths.optional_avatar_description(), workflows / "avatar_description.json")
 
     def test_missing_required_workflow_raises_clear_error(self):
         with tempfile.TemporaryDirectory() as directory:

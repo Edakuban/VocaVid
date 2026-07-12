@@ -29,6 +29,7 @@ from .worker import JobQueue
 APP_ROOT = Path.cwd() / ".musicvideogen"
 UPLOADS = APP_ROOT / "uploads"
 DB_PATH = APP_ROOT / "musicvideogen.sqlite3"
+ICON_ROOT = Path.cwd() / "icon"
 logger = logging.getLogger(__name__)
 _SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
 
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.state.job_options = job_options
     app.state.shutdown_controller = shutdown_controller
     app.mount("/assets", StaticFiles(directory=str(APP_ROOT)), name="assets")
+    app.mount("/icon", StaticFiles(directory=str(ICON_ROOT)), name="icon")
 
     def mark_used(project_id: int, action: str) -> None:
         store.mark_project_action_used(project_id, action)
@@ -179,7 +181,15 @@ def create_app() -> FastAPI:
             action="global-style-prompt",
         )
 
-    def submit_initial_project_jobs(project_id: int) -> None:
+    def submit_initial_project_jobs(project_id: int, *, describe_avatar: bool = False) -> None:
+        if describe_avatar:
+            project = store.get_project(project_id)
+            jobs.submit(
+                _job_name("describe avatar", project["name"], []),
+                lambda: pipeline.describe_avatar_face(project_id),
+                project_id=project_id,
+                action="avatar-description",
+            )
         submit_global_style_prompt(project_id)
         if submit_project_action(project_id, "align"):
             mark_used(project_id, "align")
@@ -256,6 +266,8 @@ def create_app() -> FastAPI:
     async def create_project(
         name: str = Form(...),
         genre: str = Form(...),
+        avatar_gender: str = Form(""),
+        avatar_face_description: str = Form(""),
         global_style_prompt: str = Form(""),
         comfy_base_url: str = Form("http://127.0.0.1:8188"),
         output_resolution: str = Form("1280x720"),
@@ -287,6 +299,8 @@ def create_app() -> FastAPI:
                 "lyrics_path": _storage_path(lyrics_path),
                 "global_style_prompt": global_style_prompt,
                 "genre": genre.strip(),
+                "avatar_gender": _normalize_avatar_gender(avatar_gender),
+                "avatar_face_description": avatar_face_description.strip(),
                 "reference_image_paths": reference_paths,
                 "comfy_base_url": comfy_base_url,
                 "output_resolution": output_resolution,
@@ -298,7 +312,7 @@ def create_app() -> FastAPI:
             },
             lines,
         )
-        submit_initial_project_jobs(project_id)
+        submit_initial_project_jobs(project_id, describe_avatar=not avatar_face_description.strip())
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
@@ -353,6 +367,17 @@ def create_app() -> FastAPI:
         submit_global_style_prompt(project_id)
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
+    @app.post("/projects/{project_id}/avatar-description")
+    def describe_avatar(project_id: int):
+        project = store.get_project(project_id)
+        jobs.submit(
+            _job_name("describe avatar", project["name"], []),
+            lambda: pipeline.describe_avatar_face(project_id),
+            project_id=project_id,
+            action="avatar-description",
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
     @app.post("/projects/{project_id}/lines/{line_index}/timing")
     def update_timing(project_id: int, line_index: int, start_sec: float = Form(...), end_sec: float = Form(...)):
         pipeline.update_timing(project_id, line_index, start_sec, end_sec)
@@ -386,6 +411,8 @@ def create_app() -> FastAPI:
         lyrics_path: str = Form(...),
         global_style_prompt: str = Form(...),
         genre: str = Form(""),
+        avatar_gender: str = Form(""),
+        avatar_face_description: str = Form(""),
         reference_image_paths: str = Form(""),
         comfy_base_url: str = Form("http://127.0.0.1:8188"),
         output_resolution: str = Form("1280x720"),
@@ -405,6 +432,8 @@ def create_app() -> FastAPI:
             lyrics_path=_storage_path(lyrics_path.strip()),
             global_style_prompt=global_style_prompt,
             genre=genre.strip(),
+            avatar_gender=_normalize_avatar_gender(avatar_gender),
+            avatar_face_description=avatar_face_description.strip(),
             reference_image_paths=json.dumps([_storage_path(item) for item in _reference_paths_from_text(reference_image_paths)]),
             comfy_base_url=comfy_base_url.strip() or "http://127.0.0.1:8188",
             output_resolution=output_resolution.strip() or "1280x720",
@@ -719,6 +748,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       background: var(--bg-header);
       color: var(--text-primary);
     }}
+    .studio-logo {{ width: 68px; height: 68px; object-fit: contain; flex: 0 0 auto; filter: drop-shadow(0 10px 24px rgba(0,0,0,.32)); }}
     .studio-brand {{ font-size: 23px; font-weight: 750; letter-spacing: -.02em; }}
     .studio-tagline {{ color: var(--studio-muted); font-weight: 650; }}
     .studio-spacer {{ flex: 1; }}
@@ -887,7 +917,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-card-done {{ border-color: rgba(69,201,141,.58); background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); }}
     .project-card-done .project-card-art {{ background: linear-gradient(135deg, rgba(69,201,141,.38), rgba(69,201,141,.12)); }}
     .project-done-badge {{ position: absolute; right: 10px; top: 10px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; border: 1px solid rgba(69,201,141,.58); background: rgba(218,255,236,.94); color: #0b6d45; font-size: 22px; font-weight: 950; box-shadow: 0 10px 26px rgba(0,0,0,.28); pointer-events: none; }}
-    .project-progress-badge {{ position: absolute; left: 10px; top: 10px; z-index: 2; display: inline-flex; align-items: center; min-width: 48px; justify-content: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.24); background: rgba(9,14,16,.76); color: var(--text-primary); padding: 6px 9px; font-size: 12px; font-weight: 850; font-variant-numeric: tabular-nums; box-shadow: 0 10px 26px rgba(0,0,0,.25); pointer-events: none; }}
+    .progress-pill {{ position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 82px; width: 92px; height: 30px; overflow: hidden; border-radius: 999px; border: 1px solid rgba(255,255,255,.20); background: rgba(9,14,16,.76); color: var(--text-primary); font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; box-shadow: 0 10px 26px rgba(0,0,0,.25); }}
+    .progress-pill-fill {{ position: absolute; inset: 0 auto 0 0; width: var(--progress, 0%); background: linear-gradient(90deg, rgba(41,211,176,.74), rgba(69,201,141,.76)); }}
+    .progress-pill-label {{ position: relative; z-index: 1; text-shadow: 0 1px 8px rgba(0,0,0,.48); }}
+    .project-progress-badge {{ position: absolute; left: 10px; top: 10px; z-index: 2; pointer-events: none; }}
     .project-card-hidden {{ display: none; }}
     .project-empty-state {{ display: none; padding: 26px 16px 32px; color: var(--text-muted); text-align: center; font-weight: 750; }}
     .project-empty-state.visible {{ display: block; }}
@@ -930,12 +963,13 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     @media (max-width: 680px) {{
       main {{ padding: 14px; }}
       .studio-topbar {{ align-items: stretch; flex-direction: column; }}
+      .studio-logo {{ width: 52px; height: 52px; }}
       .studio-spacer {{ display: none; }}
       .start-hero h1 {{ font-size: 32px; }}
       .stat-grid, .project-grid, .queue-summary-grid {{ grid-template-columns: 1fr; }}
       .project-card-link {{ grid-template-rows: auto minmax(0, 1fr); }}
     }}
-    .open-count-label {{ align-self: center; font-weight: 750; color: var(--studio-text); white-space: nowrap; }}
+    .project-title-left .progress-pill {{ align-self: center; }}
     .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(13,19,22,.96); border-bottom: 1px solid rgba(255,255,255,.055); color: var(--text-primary); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.22); }}
     .project-title-row h1 {{ color: var(--studio-text); text-shadow: 0 1px 18px rgba(0,0,0,.35); }}
     .project-title-row {{ display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); gap: 12px; align-items: center; margin-bottom: 12px; }}
@@ -1250,6 +1284,8 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     function updateProjectStatus(data) {{
       updateQueueEstimate(data.queue_estimate_seconds, data.queue_count);
       updateBrowserTitle(data.queue_count);
+      const progress = document.getElementById('project-progress-pill');
+      if (progress && data.progress_html !== undefined) progress.outerHTML = data.progress_html;
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
         const row = document.getElementById(rowId);
         if (row) replaceProjectRow(row, html);
@@ -1686,6 +1722,7 @@ def _projects_html(
 def _start_topbar_html(queue_estimate_seconds: float | None, queue_count: int = 0) -> str:
     return f"""
 <div class="studio-topbar">
+  <img class="studio-logo" src="/icon/VocaVid_icon.svg" alt="" aria-hidden="true">
   <div class="studio-brand">VocaVid</div>
   <div class="studio-tagline">Local AI music-video studio</div>
   <div class="studio-spacer"></div>
@@ -1709,6 +1746,8 @@ def _new_project_modal_html() -> str:
       <label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>
       <label>Genre</label><input name="genre" required>
       <label>Avatar</label><input name="avatar" type="file" accept="image/*">
+      <label>Male / Female Avatar</label>{_avatar_gender_select_html("")}
+      <label>Avatar face description</label><textarea name="avatar_face_description"></textarea>
       <label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">
       <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="2">
       <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="1">
@@ -1894,13 +1933,13 @@ def _project_list_item_html(project, preview_rows=None, has_active_jobs: bool = 
     done_label = '<span class="project-done-badge" aria-label="Done">&#10003;</span>' if done else ""
     media_html = _project_card_media_html(project, preview_rows)
     approved, total = _project_progress_counts(preview_rows)
-    progress = f"{approved}/{total}"
+    progress = _progress_pill_html(approved, total, css_class="project-progress-badge")
     active_attr = ' data-active="1"' if has_active_jobs else ""
     return f"""
 <article class="{css_class}" data-project-id="{_attr(project["id"])}" data-title="{_attr(project["name"])}" data-status="{status}"{active_attr}>
   <a class="project-card-link" href="/projects/{project["id"]}">
     {media_html}
-    <span class="project-progress-badge">{_text(progress)}</span>
+    {progress}
     <div class="project-card-body">
       <h3>{_text(project["name"])}</h3>
     </div>
@@ -2046,7 +2085,7 @@ def _project_html(
         )
         for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
-    open_filter = _open_filter_html(work_items)
+    progress = _project_progress_html(work_items)
     queue_control = _queue_control_html(queue_jobs, average_durations, queue_estimate_seconds, queue_count, job_options)
     queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
     previous_project_nav = _project_nav_html(previous_project_id, "previous")
@@ -2061,7 +2100,7 @@ def _project_html(
       <div class="project-title-left">
         <a class="button project-icon-button" href="/" aria-label="Back to projects" title="Back to projects">←</a>
         <button class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()">⚙</button>
-        {open_filter}
+        {progress}
       </div>
       <div class="project-title-center">
         {previous_project_nav}
@@ -2462,6 +2501,8 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
     global_style_prompt = _row_value(project, "global_style_prompt", "")
     scene_plan = _row_value(project, "scene_plan", "") or ""
     genre = _row_value(project, "genre", "")
+    avatar_gender = _normalize_avatar_gender(_row_value(project, "avatar_gender", ""))
+    avatar_face_description = _row_value(project, "avatar_face_description", "") or ""
     reference_paths = "\n".join(_reference_paths_from_json(_row_value(project, "reference_image_paths", "[]")))
     comfy_base_url = _row_value(project, "comfy_base_url", "http://127.0.0.1:8188")
     output_resolution = _row_value(project, "output_resolution", "1280x720")
@@ -2474,6 +2515,7 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
     return f"""
 <form class="hidden-action-form" id="global-style-prompt-form-{project['id']}" action="/projects/{project['id']}/global-style-prompt" method="post"></form>
 <form class="hidden-action-form" id="scene-plan-form-{project['id']}" action="/projects/{project['id']}/scene-plan/save" method="post"></form>
+<form class="hidden-action-form" id="avatar-description-form-{project['id']}" action="/projects/{project['id']}/avatar-description" method="post"></form>
 <form class="hidden-action-form" id="realign-lyrics-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics" method="post"></form>
 <form class="hidden-action-form" id="realign-lyrics-cpu-form-{project['id']}" action="/projects/{project['id']}/realign-lyrics-cpu" method="post"></form>
 <form action="/projects/{project['id']}/settings" method="post" onsubmit="return confirmProjectSettingsSave(this)" data-original-lyric-group-size="{_attr(lyric_group_size)}" data-original-chorus-group-size="{_attr(chorus_group_size)}">
@@ -2486,6 +2528,9 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
   <label>Scene Plan</label><textarea name="scene_plan" form="scene-plan-form-{project['id']}">{_text(scene_plan)}</textarea>
   <p><button type="submit" form="scene-plan-form-{project['id']}">Save Scene Plan</button></p>
   <label>Genre</label><input name="genre" value="{_attr(genre)}">
+  <label>Male / Female Avatar</label>{_avatar_gender_select_html(avatar_gender)}
+  <label>Avatar face description</label><textarea name="avatar_face_description">{_text(avatar_face_description)}</textarea>
+  <p><button type="submit" form="avatar-description-form-{project['id']}">AI describe avatar</button></p>
   <label>Reference Image Paths</label><textarea name="reference_image_paths">{_text(reference_paths)}</textarea>
   <label>Comfy Base URL</label><input name="comfy_base_url" value="{_attr(comfy_base_url)}">
   <label>Resolution</label><input name="output_resolution" value="{_attr(output_resolution)}">
@@ -2533,6 +2578,7 @@ def _project_status_payload(
         },
         "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
         "queue_count": len(counted_jobs),
+        "progress_html": _project_progress_html(rows),
         "rows": _extract_row_snippets(html),
         "storyboard_html": _storyboard_html(project, rows, item_kind, locked),
     }
@@ -2708,10 +2754,27 @@ def _action_button(project_id: int, number: int, action: str, label: str, is_wip
     return f"""<form action="/projects/{project_id}/{action}" method="post" onsubmit="return projectActionSubmitted(this)"><button{attrs}>{number}. {label}</button></form>"""
 
 
-def _open_filter_html(rows) -> str:
-    total = len(rows)
-    open_count = sum(1 for row in rows if not bool(_row_value(row, "video_approved", 0)))
-    return f"""<span class="open-count-label">{open_count}/{total}</span>"""
+def _project_progress_html(rows) -> str:
+    approved, total = _project_progress_counts(rows)
+    return _progress_pill_html(approved, total, element_id="project-progress-pill")
+
+
+def _progress_pill_html(approved: int, total: int, css_class: str = "", element_id: str = "") -> str:
+    total = max(0, int(total or 0))
+    approved = max(0, min(int(approved or 0), total)) if total else 0
+    percent = 0 if total == 0 else round((approved / total) * 100)
+    class_attr = "progress-pill"
+    if css_class:
+        class_attr += f" {css_class}"
+    id_attr = f' id="{_attr(element_id)}"' if element_id else ""
+    label = f"{approved}/{total}"
+    title = f"{label} finished"
+    return (
+        f'<span{id_attr} class="{_attr(class_attr)}" title="{_attr(title)}">'
+        f'<span class="progress-pill-fill" style="--progress: {percent}%"></span>'
+        f'<span class="progress-pill-label">{_text(label)}</span>'
+        "</span>"
+    )
 
 
 def _queue_estimate_html(seconds: float | None, queue_count: int = 0, open_modal: bool = True, element_id: str = "queue-estimate") -> str:
@@ -3009,6 +3072,24 @@ def _whisper_model_select_html(selected: str) -> str:
         selected_attr = " selected" if model_size == selected else ""
         options.append(f'<option value="{_attr(model_size)}"{selected_attr}>{_text(model_size)}</option>')
     return f'<select name="whisper_model_size">{"".join(options)}</select>'
+
+
+def _avatar_gender_select_html(selected: str) -> str:
+    selected = _normalize_avatar_gender(selected)
+    options = [
+        ("", "Not specified"),
+        ("male", "Male"),
+        ("female", "Female"),
+    ]
+    return '<select name="avatar_gender">' + "".join(
+        f'<option value="{_attr(value)}"{" selected" if value == selected else ""}>{_text(label)}</option>'
+        for value, label in options
+    ) + "</select>"
+
+
+def _normalize_avatar_gender(value: str) -> str:
+    normalized = str(value or "").strip().lower()
+    return normalized if normalized in {"male", "female"} else ""
 
 
 def _segment_timing_editor_html(project_id: int, segment) -> str:

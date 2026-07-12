@@ -11,6 +11,7 @@ Mode: {MODE}
 Section: {SECTION}
 Duration seconds: {DURATION}
 Genre: {GENRE}
+Avatar identity: {AVATAR_IDENTITY_CONTEXT}
 Global visual style: {GLOBAL_STYLE}
 Scene plan: {SCENE_PLAN}
 Lyrics:

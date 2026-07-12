@@ -7,6 +7,7 @@ Mode: {{ mode }}
 Section: {{ section }}
 Duration seconds: {{ duration }}
 Genre: {{ genre }}
+Avatar identity: {{ avatar_identity_context }}
 Global visual style: {{ global_style }}
 Scene plan: {{ scene_plan }}
 Lyrics:
