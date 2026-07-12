@@ -169,18 +169,40 @@ def create_app() -> FastAPI:
             submitted = submitted or submitted_prompts or submitted_video_prompts
         return submitted
 
+    def submit_global_style_prompt(project_id: int) -> None:
+        project = store.get_project(project_id)
+        shutdown_controller.cancel_pending()
+        jobs.submit(
+            f"generate global style prompt: {project['name']}",
+            lambda: pipeline.generate_global_style_prompt(project_id),
+            project_id=project_id,
+            action="global-style-prompt",
+        )
+
+    def submit_initial_project_jobs(project_id: int) -> None:
+        submit_global_style_prompt(project_id)
+        if submit_project_action(project_id, "align"):
+            mark_used(project_id, "align")
+        if submit_project_action(project_id, "segments"):
+            mark_used(project_id, "segments")
+        if submit_project_action(project_id, "scene-plan"):
+            mark_used(project_id, "scene-plan")
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         active_jobs = jobs.active_jobs()
         average_durations = store.average_job_durations()
+        projects = store.list_projects()
+        project_previews = {int(project["id"]): store.list_segments(int(project["id"])) for project in projects}
         return _page(
             "Projects",
             _projects_html(
-                store.list_projects(),
+                projects,
                 jobs.list_jobs(),
                 average_durations,
                 queue_estimate_seconds=_queue_estimate_seconds(active_jobs, average_durations),
                 job_options=job_options,
+                project_previews=project_previews,
             ),
             queue_count=len(active_jobs),
         )
@@ -233,6 +255,7 @@ def create_app() -> FastAPI:
     @app.post("/projects")
     async def create_project(
         name: str = Form(...),
+        genre: str = Form(...),
         global_style_prompt: str = Form(""),
         comfy_base_url: str = Form("http://127.0.0.1:8188"),
         output_resolution: str = Form("1280x720"),
@@ -240,20 +263,22 @@ def create_app() -> FastAPI:
         lyric_group_size: int = Form(2),
         chorus_group_size: int = Form(1),
         transition_handle_seconds: float = Form(0.5),
-        whisper_model_size: str = Form("small"),
+        whisper_model_size: str = Form("large-v3"),
         audio: UploadFile = File(...),
         lyrics: UploadFile = File(...),
+        avatar: UploadFile | None = File(None),
         references: list[UploadFile] = File(default=[]),
     ):
         project_dir = UPLOADS / _slug(name)
         project_dir.mkdir(parents=True, exist_ok=True)
         audio_path = await _save_upload(audio, project_dir)
         lyrics_path = await _save_upload(lyrics, project_dir)
-        reference_paths = [
-            _storage_path(await _save_upload(item, project_dir / "references"))
-            for item in references
-            if item.filename
-        ]
+        reference_paths = []
+        if avatar is not None and avatar.filename:
+            reference_paths.append(_storage_path(await _save_upload(avatar, project_dir / "references")))
+        for item in references:
+            if item.filename:
+                reference_paths.append(_storage_path(await _save_upload(item, project_dir / "references")))
         lines = parse_suno_lyrics(lyrics_path.read_text(encoding="utf-8"))
         project_id = store.create_project(
             {
@@ -261,7 +286,7 @@ def create_app() -> FastAPI:
                 "audio_path": _storage_path(audio_path),
                 "lyrics_path": _storage_path(lyrics_path),
                 "global_style_prompt": global_style_prompt,
-                "genre": "",
+                "genre": genre.strip(),
                 "reference_image_paths": reference_paths,
                 "comfy_base_url": comfy_base_url,
                 "output_resolution": output_resolution,
@@ -273,6 +298,7 @@ def create_app() -> FastAPI:
             },
             lines,
         )
+        submit_initial_project_jobs(project_id)
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
@@ -324,13 +350,7 @@ def create_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/global-style-prompt")
     def generate_global_style_prompt(project_id: int):
-        project = store.get_project(project_id)
-        jobs.submit(
-            f"generate global style prompt: {project['name']}",
-            lambda: pipeline.generate_global_style_prompt(project_id),
-            project_id=project_id,
-            action="global-style-prompt",
-        )
+        submit_global_style_prompt(project_id)
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/lines/{line_index}/timing")
@@ -632,26 +652,59 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{_text(browser_title)}</title>
+  <link rel="icon" type="image/x-icon" href="/icon/favicon.ico">
   <style>
     :root {{
       color-scheme: dark;
-      --studio-bg: #08090d;
-      --studio-surface: #11151d;
-      --studio-surface-2: #171d28;
-      --studio-line: rgba(255,255,255,.12);
-      --studio-text: #f6f7fb;
-      --studio-muted: #9aa6b8;
-      --studio-accent: #35e0b3;
-      --studio-pink: #ff4f8b;
-      --studio-amber: #f5b84b;
+      --bg-app: #0b1012;
+      --bg-header: #0d1316;
+      --bg-elevated: #12191d;
+      --bg-panel: #171f23;
+      --bg-card: #182126;
+      --bg-card-hover: #202b30;
+      --bg-control: #202a2f;
+      --bg-control-hover: #253138;
+      --border-subtle: #2d393f;
+      --border-default: #3a484f;
+      --border-strong: #526169;
+      --text-primary: #f2f5f6;
+      --text-secondary: #bcc5ca;
+      --text-muted: #7f8c93;
+      --text-disabled: #59656b;
+      --accent: #e9489f;
+      --accent-hover: #f15bad;
+      --accent-soft: rgba(233,72,159,.14);
+      --action: #29d3b0;
+      --action-hover: #4ce2c2;
+      --action-active: #1fb394;
+      --action-soft: rgba(41,211,176,.14);
+      --success: #45c98d;
+      --success-soft: rgba(69,201,141,.10);
+      --warning: #f0b84d;
+      --warning-soft: rgba(240,184,77,.12);
+      --danger: #ee6675;
+      --danger-soft: rgba(238,102,117,.12);
+      --radius-sm: 6px;
+      --radius-md: 9px;
+      --radius-lg: 14px;
+      --font-ui: "Inter", "Geist", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --studio-bg: var(--bg-app);
+      --studio-surface: var(--bg-elevated);
+      --studio-surface-2: var(--bg-panel);
+      --studio-line: var(--border-subtle);
+      --studio-text: var(--text-primary);
+      --studio-muted: var(--text-muted);
+      --studio-accent: var(--action);
+      --studio-pink: var(--accent);
+      --studio-amber: var(--warning);
     }}
     body {{
       margin: 0;
-      font-family: Inter, Segoe UI, Arial, sans-serif;
+      font-family: var(--font-ui);
       background:
-        radial-gradient(circle at 18% 0%, rgba(53,224,179,.14), transparent 26%),
-        radial-gradient(circle at 78% 0%, rgba(255,79,139,.12), transparent 28%),
-        linear-gradient(180deg, #0b0d12, #07080b);
+        radial-gradient(ellipse 60% 280px at 8% 0%, rgba(41,211,176,.07), transparent 72%),
+        radial-gradient(ellipse 55% 260px at 96% 0%, rgba(233,72,159,.055), transparent 72%),
+        var(--bg-app);
       color: var(--studio-text);
     }}
     main {{ max-width: none; margin: 0; padding: 24px; }}
@@ -661,18 +714,18 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       gap: 12px;
       margin-bottom: 18px;
       padding: 14px 16px;
-      border: 1px solid var(--studio-line);
-      border-radius: 20px;
-      background: rgba(8,9,13,.74);
-      backdrop-filter: blur(18px);
+      border: 1px solid rgba(255,255,255,.055);
+      border-radius: var(--radius-lg);
+      background: var(--bg-header);
+      color: var(--text-primary);
     }}
-    .studio-brand {{ font-size: 23px; font-weight: 950; letter-spacing: 0; }}
-    .studio-tagline {{ color: var(--studio-muted); font-weight: 750; }}
+    .studio-brand {{ font-size: 23px; font-weight: 750; letter-spacing: -.02em; }}
+    .studio-tagline {{ color: var(--studio-muted); font-weight: 650; }}
     .studio-spacer {{ flex: 1; }}
     .studio-panel {{
-      border: 1px solid var(--studio-line);
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(255,255,255,.065), rgba(255,255,255,.026));
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      background: var(--bg-panel);
       overflow: hidden;
       box-shadow: 0 24px 80px rgba(0,0,0,.24);
     }}
@@ -682,53 +735,68 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      border-bottom: 1px solid var(--studio-line);
+      border-bottom: 1px solid var(--border-subtle);
     }}
     .studio-chip {{
-      border: 1px solid var(--studio-line);
+      border: 1px solid var(--border-default);
       border-radius: 999px;
       padding: 8px 11px;
-      background: rgba(255,255,255,.05);
-      color: #cbd5e1;
+      background: var(--bg-control);
+      color: var(--text-secondary);
       font-size: 12px;
       font-weight: 850;
       white-space: nowrap;
     }}
     .studio-chip-green {{
-      border-color: rgba(53,224,179,.42);
-      background: rgba(53,224,179,.1);
-      color: #dcfff6;
+      border-color: rgba(69,201,141,.42);
+      background: var(--success-soft);
+      color: #d7ffeb;
     }}
     .studio-chip-pink {{
-      border-color: rgba(255,79,139,.4);
-      background: rgba(255,79,139,.1);
+      border-color: rgba(233,72,159,.4);
+      background: var(--accent-soft);
       color: #ffd7e5;
     }}
     .studio-button {{
-      border: 0;
+      border: 1px solid var(--action);
       border-radius: 12px;
-      background: var(--studio-accent);
-      color: #06100d;
+      background: var(--action);
+      color: #07120f;
       padding: 10px 13px;
-      font-weight: 950;
+      font-weight: 750;
       cursor: pointer;
       text-decoration: none;
       display: inline-block;
     }}
+    .studio-button:hover, .studio-button:focus {{ background: var(--action-hover); border-color: var(--action-hover); outline: none; }}
     .studio-button-secondary {{
-      border: 1px solid var(--studio-line);
-      background: rgba(255,255,255,.055);
-      color: #e7edf7;
+      border: 1px solid var(--border-default);
+      background: #263238;
+      color: #d8dfe2;
     }}
     .studio-button-danger, .danger-button {{
-      border: 1px solid rgba(255,79,139,.42);
-      background: rgba(255,79,139,.12);
+      border: 1px solid rgba(238,102,117,.48);
+      background: var(--danger-soft);
       color: #ffd7e5;
     }}
     h1 {{ font-size: 28px; margin: 0; }}
-    form, .panel {{ background: #fff; border: 1px solid #d8d3c8; color: #1c2526; border-radius: 8px; padding: 16px; margin-bottom: 16px; }}
-    label {{ display: block; font-size: 13px; font-weight: 650; margin-top: 10px; }}
-    input, textarea, select {{ box-sizing: border-box; width: 100%; border: 1px solid #b9c0bd; border-radius: 6px; padding: 8px; font: inherit; }}
+    form, .panel {{ background: var(--bg-panel); border: 1px solid var(--border-subtle); color: var(--text-primary); border-radius: var(--radius-md); padding: 16px; margin-bottom: 16px; }}
+    label {{ display: block; color: #c8d0d4; font-size: 12px; font-weight: 650; margin-top: 10px; margin-bottom: 6px; }}
+    input, textarea, select {{
+      box-sizing: border-box;
+      width: 100%;
+      border: 1px solid var(--border-default);
+      border-radius: 7px;
+      background: var(--bg-control);
+      color: var(--text-primary);
+      padding: 8px;
+      font: inherit;
+      transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+    }}
+    input:hover, textarea:hover, select:hover {{ background: var(--bg-control-hover); border-color: var(--border-strong); }}
+    input:focus, textarea:focus, select:focus {{ outline: none; border-color: var(--action); box-shadow: 0 0 0 3px var(--action-soft); }}
+    input:disabled, select:disabled, textarea:disabled, input[readonly], textarea[readonly] {{ background: #192126; color: var(--text-disabled); border-color: #2b363c; }}
+    ::placeholder {{ color: #69777e; }}
     textarea {{ min-height: 80px; }}
     .prompt-textarea {{ min-width: 260px; min-height: 250px; resize: vertical; }}
     .prompt-actions {{ display: flex; gap: 8px; margin: 6px 0 10px; }}
@@ -744,25 +812,45 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .section-form select {{ min-width: 104px; }}
     .approval-label {{ display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 650; }}
     .approval-label input {{ width: auto; }}
-    button, .button {{ border: 0; border-radius: 12px; background: var(--studio-accent); color: #06100d; padding: 10px 13px; font-weight: 950; cursor: pointer; text-decoration: none; display: inline-block; }}
+    button, .button {{
+      border: 1px solid var(--action);
+      border-radius: 12px;
+      background: var(--action);
+      color: #07120f;
+      padding: 10px 13px;
+      font-weight: 750;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+      transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+    }}
+    button:hover, .button:hover, button:focus, .button:focus {{ background: var(--action-hover); border-color: var(--action-hover); outline: none; }}
+    button:active, .button:active {{ transform: translateY(0); }}
     .icon-button {{ width: 34px; height: 34px; padding: 0; border-radius: 50%; line-height: 34px; text-align: center; }}
-    .wip-button {{ background: #e53d91; box-shadow: inset 0 -2px 0 rgba(0,0,0,.16); }}
-    .wip-button:hover, .wip-button:focus {{ background: #c92878; }}
-    .used-button {{ background: #555; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
-    .used-button:hover, .used-button:focus {{ background: #444; }}
-    .danger-panel {{ margin-top: 24px; border-color: rgba(255,79,139,.42); background: transparent; color: #ff4f8b; }}
+    .actions button {{ border: 1px solid #3a454b; background: #293136; color: #c8d0d4; font-weight: 700; }}
+    .actions button:hover, .actions button:focus {{ border-color: rgba(41,211,176,.58); background: #303b40; color: var(--text-primary); }}
+    .wip-button {{ border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.16); }}
+    .wip-button:hover, .wip-button:focus {{ background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }}
+    .used-button {{ border-color: #3a454b; background: #263238; color: #d8dfe2; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
+    .used-button::after {{ content: " ✓"; color: var(--success); }}
+    .used-button:hover, .used-button:focus {{ background: #303b40; border-color: var(--border-strong); }}
+    .actions .wip-button {{ border-color: var(--accent); background: var(--accent); color: #fff; }}
+    .actions .wip-button:hover, .actions .wip-button:focus {{ background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }}
+    .actions .used-button {{ border-color: #3a454b; background: #263238; color: #d8dfe2; }}
+    .actions .danger-button {{ border-color: rgba(238,102,117,.48); background: var(--danger-soft); color: #ffd7dc; }}
+    .danger-panel {{ margin-top: 24px; border-color: rgba(238,102,117,.48); background: transparent; color: var(--danger); }}
     .danger-panel[open] {{ background: transparent; }}
     .danger-panel .compact-form {{ background: transparent; }}
-    .danger-button {{ border: 1px solid rgba(255,79,139,.42); background: rgba(255,79,139,.12); color: #ffd7e5; }}
-    .danger-button:hover, .danger-button:focus {{ background: rgba(255,79,139,.18); }}
+    .danger-button {{ border: 1px solid rgba(238,102,117,.48); background: var(--danger-soft); color: #ffd7dc; }}
+    .danger-button:hover, .danger-button:focus {{ background: rgba(238,102,117,.2); border-color: var(--danger); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; justify-content: center; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
     .start-dashboard {{ display: grid; gap: 18px; }}
     .start-hero {{ display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 18px; align-items: stretch; }}
     .start-hero > div, .production-status {{
-      border: 1px solid var(--studio-line);
-      border-radius: 20px;
-      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.028));
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      background: var(--bg-panel);
       padding: 22px;
       box-shadow: 0 24px 80px rgba(0,0,0,.22);
     }}
@@ -770,37 +858,63 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .start-hero p {{ max-width: 720px; margin: 0; color: var(--studio-muted); font-size: 17px; line-height: 1.5; }}
     .production-status h2 {{ margin: 0 0 14px; }}
     .stat-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }}
-    .stat {{ border: 1px solid var(--studio-line); border-radius: 12px; background: rgba(255,255,255,.055); padding: 12px; }}
+    .stat {{ border: 1px solid var(--border-subtle); border-radius: 12px; background: var(--bg-elevated); padding: 12px; }}
     .stat strong {{ display: block; font-size: 24px; line-height: 1.1; }}
     .stat span {{ display: block; margin-top: 4px; color: var(--studio-muted); font-size: 12px; font-weight: 800; text-transform: uppercase; }}
     .start-layout {{ display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }}
+    .project-panel-head {{ flex-wrap: wrap; }}
+    .project-browser-controls {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }}
+    .project-browser-controls input, .project-browser-controls select {{ width: auto; min-width: 150px; padding: 8px 10px; }}
+    .project-browser-controls input {{ min-width: 220px; }}
     .project-grid {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px; }}
-    .project-card {{ min-width: 0; border: 1px solid var(--studio-line); border-radius: 8px; background: rgba(255,255,255,.045); overflow: hidden; }}
-    .project-card-link {{ display: grid; grid-template-columns: 86px minmax(0, 1fr); min-height: 112px; color: var(--studio-text); text-decoration: none; }}
-    .project-card-art {{ background: linear-gradient(135deg, rgba(53,224,179,.42), rgba(255,79,139,.28)); }}
-    .project-card-body {{ padding: 14px; min-width: 0; }}
-    .project-card-body h3 {{ margin: 0 0 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
-    .project-card-body p {{ margin: 0; color: var(--studio-muted); }}
-    .project-card-done {{ border-color: rgba(53,224,179,.45); }}
-    .project-card-done .project-card-art {{ background: linear-gradient(135deg, rgba(53,224,179,.72), rgba(53,224,179,.18)); }}
-    .project-done-label {{ display: inline-flex; margin-top: 12px; padding: 4px 8px; border-radius: 999px; background: rgba(53,224,179,.12); color: #dcfff6; font-size: 12px; font-weight: 900; text-transform: uppercase; }}
+    .project-card {{ position: relative; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); overflow: hidden; transition: border-color 160ms ease, transform 160ms ease, box-shadow 160ms ease; }}
+    .project-card:hover, .project-card:focus-within {{ border-color: rgba(41,211,176,.55); transform: translateY(-1px); box-shadow: 0 18px 50px rgba(0,0,0,.28); }}
+    .project-card-link {{ display: grid; grid-template-rows: auto minmax(0, 1fr); color: var(--studio-text); text-decoration: none; }}
+    .project-card-art {{ position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: linear-gradient(135deg, rgba(41,211,176,.32), rgba(233,72,159,.22)); }}
+    .project-card-art img, .project-card-art video {{ width: 100%; height: 100%; object-fit: cover; display: block; background: #050708; }}
+    .project-card-art video {{ pointer-events: none; }}
+    .project-card-art::after {{ content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 58%, rgba(0,0,0,.38)); pointer-events: none; }}
+    .project-card-placeholder {{ position: absolute; inset: 0; display: grid; place-items: center; overflow: hidden; color: rgba(242,245,246,.82); background:
+      radial-gradient(circle at 22% 18%, rgba(41,211,176,.42), transparent 28%),
+      radial-gradient(circle at 78% 72%, rgba(233,72,159,.34), transparent 30%),
+      linear-gradient(135deg, #172126, #0c1114); }}
+    .project-card-placeholder::before {{ content: ""; position: absolute; inset: 12px; border: 1px solid rgba(255,255,255,.12); border-radius: var(--radius-md); }}
+    .project-card-placeholder-mark {{ position: relative; z-index: 1; display: grid; place-items: center; width: 64px; height: 64px; border: 1px solid rgba(255,255,255,.18); border-radius: 18px; background: rgba(8,13,15,.56); color: #eaf4f1; box-shadow: 0 16px 40px rgba(0,0,0,.25); }}
+    .project-card-placeholder-mark::before {{ content: ""; width: 30px; height: 22px; border: 2px solid rgba(234,244,241,.88); border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(41,211,176,.18); }}
+    .project-card-placeholder-mark::after {{ content: ""; position: absolute; width: 0; height: 0; border-top: 7px solid transparent; border-bottom: 7px solid transparent; border-left: 11px solid var(--action); transform: translateX(2px); }}
+    .project-card-body {{ padding: 12px 14px 14px; min-width: 0; }}
+    .project-card-body h3 {{ margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }}
+    .project-card-done {{ border-color: rgba(69,201,141,.58); background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); }}
+    .project-card-done .project-card-art {{ background: linear-gradient(135deg, rgba(69,201,141,.38), rgba(69,201,141,.12)); }}
+    .project-done-badge {{ position: absolute; right: 10px; top: 10px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; border: 1px solid rgba(69,201,141,.58); background: rgba(218,255,236,.94); color: #0b6d45; font-size: 22px; font-weight: 950; box-shadow: 0 10px 26px rgba(0,0,0,.28); pointer-events: none; }}
+    .project-progress-badge {{ position: absolute; left: 10px; top: 10px; z-index: 2; display: inline-flex; align-items: center; min-width: 48px; justify-content: center; border-radius: 999px; border: 1px solid rgba(255,255,255,.24); background: rgba(9,14,16,.76); color: var(--text-primary); padding: 6px 9px; font-size: 12px; font-weight: 850; font-variant-numeric: tabular-nums; box-shadow: 0 10px 26px rgba(0,0,0,.25); pointer-events: none; }}
+    .project-card-hidden {{ display: none; }}
+    .project-empty-state {{ display: none; padding: 26px 16px 32px; color: var(--text-muted); text-align: center; font-weight: 750; }}
+    .project-empty-state.visible {{ display: block; }}
     .queue-panel {{ display: grid; gap: 14px; }}
     .queue-panel-head {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: end; justify-content: space-between; padding: 16px 16px 0; }}
     .queue-panel-head h2 {{ margin: 0; }}
     .queue-panel-head p {{ margin: 4px 0 0; color: var(--studio-muted); }}
     .queue-summary-grid {{ display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; padding: 0 16px; }}
-    .queue-summary-card {{ border: 1px solid var(--studio-line); border-radius: 8px; background: rgba(255,255,255,.045); padding: 12px; min-width: 0; }}
-    .queue-summary-card-active {{ border-color: rgba(53,224,179,.42); background: rgba(53,224,179,.08); }}
+    .queue-summary-card {{ border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); padding: 12px; min-width: 0; }}
+    .queue-summary-card-active {{ border-color: rgba(41,211,176,.42); background: var(--action-soft); }}
     .queue-summary-card strong {{ display: block; color: var(--studio-text); font-size: 22px; line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
     .queue-summary-card span {{ display: block; margin-top: 5px; color: var(--studio-muted); font-size: 11px; font-weight: 900; text-transform: uppercase; }}
     .jobs-table-wrap {{ overflow-x: auto; padding: 0 16px; }}
-    .queue-admin-controls {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 0 16px 16px; }}
+    .queue-admin-controls {{ display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; justify-content: space-between; padding: 0 16px 16px; }}
     .queue-admin-controls .compact-form {{ margin: 0; }}
-    .queue-admin-controls .job-options {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
-    .queue-admin-controls .job-options label {{ margin: 0; }}
-    .modal-content {{ position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible; border-radius: 8px; background: #fff; color: #1c2526; box-shadow: 0 28px 90px rgba(0,0,0,.45); }}
+    .queue-cleanup-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .queue-settings-line {{ display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; color: var(--text-muted); font-size: 12px; }}
+    .queue-settings-line label {{ margin: 0; color: var(--text-muted); font-size: 12px; font-weight: 650; }}
+    .queue-settings-line input {{ width: auto; }}
+    .queue-job-row[data-href] {{ cursor: pointer; }}
+    .queue-job-row[data-href]:hover {{ background: var(--bg-card-hover); }}
+    .queue-job-row .queue-job-link-hint {{ color: var(--text-muted); font-size: 11px; }}
+    .initial-setup-banner {{ display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(41,211,176,.32); border-radius: var(--radius-md); background: var(--action-soft); color: #d8fff4; padding: 12px 14px; font-weight: 750; }}
+    .initial-setup-banner span {{ color: var(--text-secondary); font-size: 12px; font-weight: 700; }}
+    .modal-content {{ position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible; border: 1px solid #344149; border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text-primary); box-shadow: 0 24px 70px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.025); }}
     .modal-content > form {{ max-height: calc(88vh - 74px); overflow: auto; }}
-    .modal-content .studio-panel-head {{ color: #1c2526; border-bottom: 1px solid #d8d3c8; }}
+    .modal-content .studio-panel-head {{ background: #1b2429; color: var(--text-primary); border-bottom: 1px solid #303c43; }}
     .modal-content h2 {{ margin: 0; }}
     .new-project-form {{ margin: 0; border: 0; border-radius: 0; }}
     .project-list {{ display: grid; grid-template-columns: 1fr; gap: 6px 18px; padding: 8px 10px 4px 26px; }}
@@ -819,10 +933,10 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       .studio-spacer {{ display: none; }}
       .start-hero h1 {{ font-size: 32px; }}
       .stat-grid, .project-grid, .queue-summary-grid {{ grid-template-columns: 1fr; }}
-      .project-card-link {{ grid-template-columns: 72px minmax(0, 1fr); }}
+      .project-card-link {{ grid-template-rows: auto minmax(0, 1fr); }}
     }}
     .open-count-label {{ align-self: center; font-weight: 750; color: var(--studio-text); white-space: nowrap; }}
-    .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(12,18,20,.94); border-bottom: 1px solid var(--studio-line); color: var(--studio-text); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.18); }}
+    .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(13,19,22,.96); border-bottom: 1px solid rgba(255,255,255,.055); color: var(--text-primary); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.22); }}
     .project-title-row h1 {{ color: var(--studio-text); text-shadow: 0 1px 18px rgba(0,0,0,.35); }}
     .project-title-row {{ display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); gap: 12px; align-items: center; margin-bottom: 12px; }}
     .project-title-left, .project-title-center, .project-title-right {{ display: flex; align-items: center; gap: 10px; min-width: 0; }}
@@ -830,81 +944,88 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .project-title-center {{ justify-content: center; }}
     .project-title-right {{ justify-content: flex-end; }}
     .project-title-row .button {{ margin-left: 0; }}
-    .project-icon-button {{ width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 12px; border: 1px solid var(--studio-line); background: rgba(255,255,255,.075); color: var(--studio-text); font-size: 18px; }}
-    .project-icon-button:hover, .project-icon-button:focus {{ background: rgba(53,224,179,.16); border-color: rgba(53,224,179,.42); }}
-    .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 6px; background: #555; color: white; font-size: 18px; font-weight: 900; line-height: 1; text-decoration: none; }}
-    .project-nav-button:hover, .project-nav-button:focus {{ background: #444; }}
+    .project-icon-button {{ width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 12px; border: 1px solid var(--border-default); background: #263238; color: var(--text-primary); font-size: 18px; }}
+    .project-icon-button:hover, .project-icon-button:focus {{ background: var(--bg-control-hover); border-color: var(--action); color: var(--text-primary); }}
+    .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: #263238; color: var(--text-primary); font-size: 18px; font-weight: 800; line-height: 1; text-decoration: none; }}
+    .project-nav-button:hover, .project-nav-button:focus {{ background: var(--bg-control-hover); border-color: var(--border-strong); }}
     .project-nav-disabled {{ opacity: .32; cursor: default; }}
     .project-nav-disabled:hover, .project-nav-disabled:focus {{ background: #555; }}
     .project-studio {{ display: grid; gap: 18px; }}
-    .view-switch {{ display: inline-flex; gap: 4px; width: fit-content; padding: 4px; border: 1px solid #c7cdc9; border-radius: 8px; background: #eef1ed; }}
-    .view-switch button {{ margin: 0; border-radius: 6px; background: transparent; color: #20302d; }}
-    .view-switch button.active {{ background: #20302d; color: #fff; }}
+    .view-switch {{ display: inline-flex; gap: 4px; width: fit-content; padding: 4px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-control); }}
+    .view-switch button {{ margin: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); }}
+    .view-switch button.active {{ background: var(--action); color: #07120f; }}
     .project-storyboard {{ display: grid; gap: 12px; }}
     .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
-    .storyboard-card {{ position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid #d8d3c8; border-radius: 8px; background: #fff; color: #1c2526; overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }}
-    .storyboard-card-approved {{ background: #dff3e8; border-color: rgba(24,151,108,.5); }}
-    .storyboard-card-locked {{ cursor: not-allowed; background: #dfe4e2; }}
+    .storyboard-card {{ position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary); overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background-color .15s ease; }}
+    .storyboard-card-approved {{ background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); border-color: rgba(69,201,141,.22); }}
+    .storyboard-card-locked {{ cursor: not-allowed; background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); }}
     .storyboard-card-locked > *:not(.storyboard-lock-overlay) {{ pointer-events: none; filter: grayscale(1); opacity: .52; }}
-    .storyboard-lock-overlay {{ position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(214,220,218,.68); color: #fff; font-size: 12px; font-weight: 950; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: grayscale(1) blur(1px); }}
+    .storyboard-lock-overlay {{ position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(11,16,18,.62); color: var(--text-primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: grayscale(1) blur(1px); }}
     .storyboard-lock-overlay span {{ border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(8,9,13,.7); padding: 7px 11px; }}
-    .storyboard-card:hover, .storyboard-card:focus {{ border-color: rgba(53,224,179,.58); box-shadow: 0 0 0 3px rgba(53,224,179,.14); outline: none; }}
+    .storyboard-card:hover, .storyboard-card:focus {{ background: var(--bg-card-hover); border-color: var(--border-default); box-shadow: 0 0 0 3px var(--action-soft); outline: none; }}
     @property --storyboard-ring-angle {{ syntax: "<angle>"; inherits: false; initial-value: 0deg; }}
     @keyframes storyboardActiveRing {{ to {{ --storyboard-ring-angle: 360deg; }} }}
     .storyboard-card-active {{ border-color: transparent; box-shadow: 0 0 0 3px rgba(53,224,179,.18), 0 18px 48px rgba(255,79,139,.16); transform: translateY(-2px); }}
     .storyboard-card-active::before {{ --storyboard-ring-angle: 0deg; content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: inherit; padding: 3px; background: conic-gradient(from var(--storyboard-ring-angle), var(--studio-accent) 0 23%, transparent 23% 27%, var(--studio-pink) 27% 50%, transparent 50% 54%, var(--studio-accent) 54% 77%, transparent 77% 81%, var(--studio-pink) 81% 100%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; animation: storyboardActiveRing 2.2s linear infinite; }}
-    .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #e9efe9, #f7f2e8); color: #5b6462; font-weight: 800; overflow: hidden; }}
+    .storyboard-card-media {{ position: relative; display: flex; align-items: center; justify-content: center; min-height: 132px; aspect-ratio: 16 / 9; background: linear-gradient(135deg, #202a2f, #12191d); color: var(--text-muted); font-weight: 700; overflow: hidden; }}
     .storyboard-card-media button {{ width: 100%; height: 100%; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }}
     .storyboard-card-image {{ display: block; width: 100%; height: 100%; object-fit: cover; }}
-    .storyboard-card-media-clip {{ background: linear-gradient(135deg, #23312f, #53605b); color: #fff; }}
+    .storyboard-card-media-clip {{ background: linear-gradient(135deg, #152024, #253238); color: #fff; }}
     .storyboard-card-video {{ display: block; width: 100%; height: 100%; object-fit: cover; background: #111; }}
-    .storyboard-video-toggle {{ position: absolute; left: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.78) !important; color: #fff; box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
-    .storyboard-video-toggle:hover, .storyboard-video-toggle:focus {{ background: rgba(53,224,179,.88) !important; color: #10201c; outline: none; }}
-    .storyboard-video-expand {{ position: absolute; right: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.78) !important; color: #fff; font-size: 15px; box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
-    .storyboard-video-expand:hover, .storyboard-video-expand:focus {{ background: rgba(255,79,139,.9) !important; color: #fff; outline: none; }}
+    .storyboard-video-toggle {{ position: absolute; left: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.82) !important; color: #fff; border: 1px solid rgba(255,255,255,.2); box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
+    .storyboard-video-toggle:hover, .storyboard-video-toggle:focus {{ background: rgba(41,211,176,.9) !important; color: #07120f; outline: none; }}
+    .storyboard-video-expand {{ position: absolute; right: 8px; bottom: 8px; z-index: 2; display: inline-flex; align-items: center; justify-content: center; width: 30px !important; height: 30px !important; border-radius: 999px !important; background: rgba(11,18,20,.82) !important; color: #fff; border: 1px solid rgba(255,255,255,.2); font-size: 15px; box-shadow: 0 8px 18px rgba(0,0,0,.24); }}
+    .storyboard-video-expand:hover, .storyboard-video-expand:focus {{ background: var(--accent) !important; color: #fff; outline: none; }}
     .storyboard-play-icon {{ font-size: 0; line-height: 1; }}
     .storyboard-video-toggle[aria-label="Play clip"] .storyboard-play-icon::before {{ content: "\\25b6"; font-size: 13px; }}
     .storyboard-video-toggle[aria-label="Pause clip"] .storyboard-play-icon::before {{ content: "II"; font-size: 12px; letter-spacing: -1px; }}
     .storyboard-card-media-empty {{ padding: 14px; text-align: center; }}
     .storyboard-empty-mark {{ display: grid; gap: 4px; }}
-    .storyboard-empty-mark strong {{ color: #20302d; }}
-    .storyboard-empty-mark span {{ color: #69736f; font-size: 12px; font-weight: 650; }}
-    .storyboard-select-wrap {{ position: absolute; top: 8px; left: 8px; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: 0; border: 1px solid rgba(11,18,20,.14); border-radius: 999px; background: #fff; box-shadow: 0 8px 18px rgba(0,0,0,.16); cursor: pointer; }}
+    .storyboard-empty-mark strong {{ color: var(--text-secondary); }}
+    .storyboard-empty-mark span {{ color: var(--text-muted); font-size: 12px; font-weight: 650; }}
+    .storyboard-select-wrap {{ position: absolute; top: 8px; left: 8px; z-index: 5; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin: 0; border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(12,18,21,.88); color: var(--text-primary); box-shadow: 0 8px 18px rgba(0,0,0,.22); cursor: pointer; }}
+    .storyboard-select-wrap:has(.storyboard-select:checked) {{ background: var(--action); border-color: var(--action); color: #07120f; }}
     .storyboard-select {{ width: 18px; height: 18px; margin: 0; accent-color: var(--studio-accent); cursor: pointer; }}
-    .storyboard-ok-badge {{ position: absolute; top: 8px; right: 8px; z-index: 3; pointer-events: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid rgba(24,151,108,.42); border-radius: 999px; background: rgba(239,255,247,.94); color: #0b6d51; font-size: 23px; font-weight: 950; line-height: 1; box-shadow: 0 8px 18px rgba(0,0,0,.16); }}
+    .storyboard-ok-badge {{ position: absolute; top: 8px; right: 8px; z-index: 3; pointer-events: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid rgba(69,201,141,.42); border-radius: 999px; background: rgba(219,255,238,.94); color: #167552; font-size: 23px; font-weight: 900; line-height: 1; box-shadow: 0 8px 18px rgba(0,0,0,.18); }}
     .storyboard-card-body {{ display: grid; grid-template-rows: auto auto 1fr; gap: 8px; padding: 12px; }}
-    .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: #44504d; font-size: 12px; font-weight: 800; text-transform: uppercase; }}
-    .storyboard-card-text {{ margin: 0; overflow-wrap: anywhere; }}
+    .storyboard-card-title {{ display: flex; justify-content: space-between; gap: 8px; color: var(--text-secondary); font-size: 12px; font-weight: 700; text-transform: uppercase; font-variant-numeric: tabular-nums; }}
+    .storyboard-card-meta {{ display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; color: var(--text-muted); }}
+    .storyboard-section-badge {{ display: inline-flex; align-items: center; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255,255,255,.035); color: var(--text-secondary); padding: 2px 6px; font-size: 10px; font-weight: 850; letter-spacing: .04em; }}
+    .storyboard-section-badge-refrain {{ border-color: rgba(233,72,159,.38); background: var(--accent-soft); color: #ffd7e5; }}
+    .storyboard-section-badge-verse {{ border-color: rgba(41,211,176,.32); background: var(--action-soft); color: #cdfbf1; }}
+    .storyboard-section-badge-bridge {{ border-color: rgba(240,184,77,.34); background: var(--warning-soft); color: #ffe7b2; }}
+    .storyboard-card-text {{ margin: 0; color: var(--text-primary); overflow-wrap: anywhere; font-size: 14px; line-height: 1.45; font-weight: 450; }}
     .storyboard-progress-strip {{ display: flex; flex-wrap: wrap; gap: 5px; }}
-    .progress-step {{ border-radius: 999px; border: 1px solid #d8d3c8; padding: 3px 7px; color: #6a7470; background: #f2f4ef; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
-    .progress-step-done {{ border-color: rgba(53,224,179,.45); background: rgba(53,224,179,.14); color: #0c5d4a; }}
-    .segment-inspector {{ position: sticky; z-index: 70; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid #c7cdc9; border-radius: 8px; background: #fff; color: #1c2526; padding: 14px; }}
-    .segment-inspector h3 {{ margin: 0; color: #20302d; }}
+    .progress-step {{ border-radius: 999px; border: 1px solid var(--border-default); padding: 3px 7px; color: var(--text-muted); background: #202a2f; font-size: 10px; font-weight: 750; text-transform: uppercase; }}
+    .progress-step-done {{ border-color: rgba(41,211,176,.42); background: var(--action-soft); color: #aef8e6; }}
+    .segment-inspector {{ position: sticky; z-index: 70; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text-primary); padding: 14px; }}
+    .segment-inspector h3 {{ margin: 0; color: var(--text-primary); }}
     .segment-inspector-nav {{ display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 10px; align-items: center; margin: -2px 0 0; }}
-    .segment-inspector-title {{ color: #44504d; font-size: 24px; font-weight: 900; letter-spacing: .02em; line-height: 1; text-align: center; text-transform: uppercase; }}
+    .segment-inspector-title {{ color: var(--text-primary); font-size: 24px; font-weight: 800; letter-spacing: .02em; line-height: 1; text-align: center; text-transform: uppercase; }}
     .segment-nav-button {{ border: 0; padding: 0; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
-    .segment-inspector-label {{ color: #5b6462; font-size: 12px; font-weight: 850; text-transform: uppercase; }}
+    .segment-inspector-label {{ color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }}
     .segment-inspector-label-row {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; }}
-    .segment-inspector-meta {{ color: #5b6462; font-size: 12px; font-weight: 750; white-space: nowrap; }}
+    .segment-inspector-meta {{ color: var(--text-muted); font-size: 12px; font-weight: 650; white-space: nowrap; font-variant-numeric: tabular-nums; }}
     .segment-inspector-text {{ margin: 0; overflow-wrap: anywhere; }}
     .segment-inspector-actions {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
     .segment-inspector-actions .compact-form {{ width: 100%; }}
     .inspector-generation-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .inspector-generation-actions .compact-form {{ margin: 0; }}
-    .segment-inspector .storyboard-card-media {{ border-radius: 6px; border: 1px solid #d8d3c8; }}
+    .segment-inspector .storyboard-card-media {{ border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); }}
     .inspector-prompt-preview {{ display: grid; gap: 8px; align-items: start; }}
     .inspector-prompt-media-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }}
     .inspector-prompt-media {{ display: grid; gap: 5px; min-width: 0; }}
-    .inspector-prompt-media span {{ color: #5b6462; font-size: 11px; font-weight: 850; text-transform: uppercase; }}
+    .inspector-prompt-media span {{ color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }}
     .inspector-prompt-media .preview-button {{ display: block; width: 100%; padding: 0; border: 0; background: transparent; }}
-    .inspector-prompt-image {{ display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; background: #eef1ed; }}
+    .inspector-prompt-image {{ display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-control); }}
     .inspector-prompt-actions {{ display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .finish-toggle {{ display: flex; width: 100%; align-items: center; justify-content: center; gap: 10px; border-radius: 8px; }}
     .finish-toggle-check {{ margin-left: auto; font-size: 23px; font-weight: 950; line-height: 1; }}
-    .finish-toggle-inactive {{ background: #eef1ed; color: #20302d; border: 1px solid #c7cdc9; }}
-    .finish-toggle-active {{ background: #178a68; color: #fff; border: 1px solid #178a68; }}
+    .finish-toggle-inactive {{ background: #263238; color: #d8dfe2; border: 1px solid #3b494f; }}
+    .finish-toggle-inactive:hover, .finish-toggle-inactive:focus {{ background: var(--warning-soft); color: #ffe9bc; border-color: rgba(240,184,77,.42); }}
+    .finish-toggle-active {{ background: var(--success); color: #07120f; border: 1px solid var(--success); }}
     .prompt-modal.lightbox {{ z-index: 120; }}
     .image-prompt-modal-content {{ width: min(760px, 94vw); }}
     .image-prompt-modal-content .prompt-textarea {{ min-height: 144px; }}
@@ -916,7 +1037,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} }}
     .project-table-view[hidden] {{ display: none; }}
     .queue-control {{ display: inline-flex; }}
-    .queue-estimate {{ padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d; font-weight: 750; white-space: nowrap; cursor: pointer; }}
+    .queue-estimate {{ padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: #202a2f; color: var(--text-secondary); font-weight: 700; white-space: nowrap; cursor: pointer; }}
     .queue-modal {{ z-index: 180; }}
     .queue-modal-content {{ width: min(1120px, 96vw); height: 75vh; max-height: 75vh; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: visible; }}
     .queue-modal-body {{ min-height: 0; overflow: auto; padding-bottom: 16px; }}
@@ -924,31 +1045,31 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .queue-modal-content .jobs-table-wrap {{ padding-top: 16px; }}
     .danger-panel .actions {{ padding-top: 12px; }}
     .scroll-top-button {{ position: fixed; right: 18px; bottom: 18px; z-index: 30; width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(0,0,0,.18); }}
-    table {{ width: 100%; border-collapse: collapse; background: white; color: #1c2526; border: 1px solid #d8d3c8; }}
-    th, td {{ padding: 8px; border-bottom: 1px solid #e7e1d6; text-align: left; vertical-align: top; font-size: 13px; }}
-    th {{ background: #e9efe9; }}
+    table {{ width: 100%; border-collapse: collapse; background: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border-subtle); }}
+    th, td {{ padding: 8px; border-bottom: 1px solid var(--border-subtle); text-align: left; vertical-align: top; font-size: 13px; }}
+    th {{ background: #202a2f; color: var(--text-secondary); }}
     .status {{ font-weight: 700; }}
-    .status-error {{ margin-top: 4px; color: #9b1c1c; font-weight: 500; max-width: 260px; overflow-wrap: anywhere; }}
-    .error {{ color: #9b1c1c; max-width: 220px; overflow-wrap: anywhere; }}
-    .low-confidence {{ background: #ffe5f2; }}
-    tr.section-gap {{ background: #eeeeee; }}
-    tr.section-verse {{ background: lightyellow; }}
-    tr.section-bridge {{ background: #eeeeee; }}
-    tr.section-chorus {{ background: #e5f0ff; }}
-    tr.approved-row {{ background: #7ed67e; box-shadow: inset 5px 0 0 #168a16; }}
-    tr.low-confidence {{ box-shadow: inset 4px 0 0 #e53d91; }}
+    .status-error {{ margin-top: 4px; color: #ffadb6; font-weight: 500; max-width: 260px; overflow-wrap: anywhere; }}
+    .error {{ color: #ffadb6; max-width: 220px; overflow-wrap: anywhere; }}
+    .low-confidence {{ background: var(--warning-soft); }}
+    tr.section-gap {{ background: #1a2226; }}
+    tr.section-verse {{ background: #1d2724; }}
+    tr.section-bridge {{ background: #1a2226; }}
+    tr.section-chorus {{ background: #1a2430; }}
+    tr.approved-row {{ background: rgba(69,201,141,.12); box-shadow: inset 5px 0 0 var(--success); }}
+    tr.low-confidence {{ box-shadow: inset 4px 0 0 var(--warning); }}
     tr.locked-row {{ position: relative; opacity: .58; pointer-events: none; }}
-    .row-lock-overlay {{ position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(128,128,128,.25); color: #17201e; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; pointer-events: none; }}
-    .confidence {{ font-weight: 700; color: #9b1c64; }}
-    .timing-confidence {{ margin-top: 4px; font-weight: 700; color: #9b1c64; }}
+    .row-lock-overlay {{ position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(11,16,18,.62); color: var(--text-primary); font-weight: 800; text-transform: uppercase; letter-spacing: .04em; pointer-events: none; }}
+    .confidence {{ font-weight: 700; color: var(--warning); }}
+    .timing-confidence {{ margin-top: 4px; font-weight: 700; color: var(--warning); }}
     .select-cell {{ width: 44px; text-align: center; }}
-    .section-legend {{ display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 10px 0 18px; font-size: 13px; color: #44504d; }}
-    .legend-swatch {{ width: 18px; height: 12px; border: 1px solid #ccd4d1; display: inline-block; margin-right: 6px; vertical-align: -2px; }}
-    .legend-swatch.section-gap {{ background: #eeeeee; }}
-    .legend-swatch.section-verse {{ background: lightyellow; }}
-    .legend-swatch.section-bridge {{ background: #eeeeee; }}
-    .legend-swatch.section-chorus {{ background: #e5f0ff; }}
-    .preview-image {{ width: 292px; height: 164px; object-fit: cover; border-radius: 6px; border: 1px solid #d8d3c8; display: block; }}
+    .section-legend {{ display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 10px 0 18px; font-size: 13px; color: var(--text-muted); }}
+    .legend-swatch {{ width: 18px; height: 12px; border: 1px solid var(--border-default); display: inline-block; margin-right: 6px; vertical-align: -2px; }}
+    .legend-swatch.section-gap {{ background: #1a2226; }}
+    .legend-swatch.section-verse {{ background: #1d2724; }}
+    .legend-swatch.section-bridge {{ background: #1a2226; }}
+    .legend-swatch.section-chorus {{ background: #1a2430; }}
+    .preview-image {{ width: 292px; height: 164px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); display: block; }}
     .preview-button {{ padding: 0; border: 0; background: transparent; color: inherit; }}
     .assets-column {{ min-width: 608px; }}
     .assets-stack {{ display: grid; gap: 8px; align-content: start; }}
@@ -957,17 +1078,33 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     .image-choice-inline {{ display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }}
     .image-choice label {{ display: flex; gap: 6px; align-items: center; margin: 0; font-weight: 500; }}
     .image-choice input {{ width: auto; }}
-    .asset-path {{ display: block; max-width: 140px; margin-top: 4px; color: #5b6462; overflow-wrap: anywhere; font-size: 11px; }}
+    .asset-path {{ display: block; max-width: 140px; margin-top: 4px; color: var(--text-muted); overflow-wrap: anywhere; font-size: 11px; }}
     .lyrics-lines div + div {{ margin-top: 4px; }}
     .redo-cell {{ text-align: center; min-width: 72px; }}
-    .redo-action {{ margin-top: 4px; color: #44504d; font-size: 11px; overflow-wrap: anywhere; }}
+    .redo-action {{ margin-top: 4px; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }}
     .inline-player {{ width: 180px; max-width: 100%; margin-left: 8px; vertical-align: middle; }}
-    .lightbox {{ position: fixed; inset: 0; z-index: 120; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.78); padding: 24px; }}
+    .lightbox {{ position: fixed; inset: 0; z-index: 120; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.72); backdrop-filter: blur(2px); padding: 24px; }}
     .lightbox.open {{ display: flex; }}
     .lightbox-content {{ position: relative; width: min(960px, 94vw); }}
     .lightbox video, .lightbox img {{ width: 100%; max-height: 82vh; object-fit: contain; background: #000; border-radius: 8px; }}
-    .lightbox-close {{ position: absolute; top: -14px; right: -14px; z-index: 3; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border-radius: 999px; background: #e53d91; color: #fff; font-size: 18px; font-weight: 950; line-height: 1; box-shadow: 0 10px 24px rgba(0,0,0,.32); }}
-    .lightbox-close:hover, .lightbox-close:focus {{ background: #c92878; outline: none; }}
+    .lightbox-close {{ position: absolute; top: -14px; right: -14px; z-index: 3; display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border-radius: 999px; border: 1px solid #3d4a50; background: #29343a; color: #dbe2e5; font-size: 18px; font-weight: 850; line-height: 1; box-shadow: 0 10px 24px rgba(0,0,0,.32); }}
+    .lightbox-close:hover, .lightbox-close:focus {{ background: var(--accent); color: #fff; border-color: var(--accent); outline: none; }}
+    .segment-inspector, .project-settings-body, .queue-modal-body, textarea {{
+      scrollbar-color: #536168 #182126;
+      scrollbar-width: thin;
+    }}
+    .segment-inspector::-webkit-scrollbar, .project-settings-body::-webkit-scrollbar, .queue-modal-body::-webkit-scrollbar, textarea::-webkit-scrollbar {{ width: 10px; height: 10px; }}
+    .segment-inspector::-webkit-scrollbar-track, .project-settings-body::-webkit-scrollbar-track, .queue-modal-body::-webkit-scrollbar-track, textarea::-webkit-scrollbar-track {{ background: #182126; }}
+    .segment-inspector::-webkit-scrollbar-thumb, .project-settings-body::-webkit-scrollbar-thumb, .queue-modal-body::-webkit-scrollbar-thumb, textarea::-webkit-scrollbar-thumb {{ background: #536168; border: 2px solid #182126; border-radius: 10px; }}
+    .segment-inspector::-webkit-scrollbar-thumb:hover, .project-settings-body::-webkit-scrollbar-thumb:hover, .queue-modal-body::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {{ background: #68777f; }}
+    @media (prefers-reduced-motion: reduce) {{
+      *, *::before, *::after {{
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+        scroll-behavior: auto !important;
+      }}
+    }}
   </style>
   <script>
     const projectRowServerHtml = new Map();
@@ -1177,17 +1314,20 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       return value > 0 ? count + ' ~' + formatDuration(value) : count + ' ~?s';
     }}
     function updateQueueEstimate(seconds, queueCount) {{
-      const element = document.getElementById('queue-estimate');
-      if (!element || seconds === undefined || seconds === null) return;
+      const elements = document.querySelectorAll('[data-queue-estimate="1"]');
+      if (!elements.length || seconds === undefined || seconds === null) return;
       const value = Math.max(0, Number(seconds) || 0);
-      const count = queueCount === undefined || queueCount === null ? Number(element.dataset.count || 0) : Math.max(0, Number(queueCount) || 0);
-      element.dataset.seconds = String(Math.round(value));
-      element.dataset.count = String(Math.round(count));
-      element.textContent = queueEstimateLabel(value, count);
+      const firstElement = elements[0];
+      const count = queueCount === undefined || queueCount === null ? Number(firstElement.dataset.count || 0) : Math.max(0, Number(queueCount) || 0);
+      elements.forEach((element) => {{
+        element.dataset.seconds = String(Math.round(value));
+        element.dataset.count = String(Math.round(count));
+        element.textContent = queueEstimateLabel(value, count);
+      }});
     }}
     function setupQueueEstimateCountdown() {{
       window.setInterval(() => {{
-        const element = document.getElementById('queue-estimate');
+        const element = document.querySelector('[data-queue-estimate="1"]');
         if (!element) return;
         const value = Math.max(0, Number(element.dataset.seconds || 0) - 1);
         updateQueueEstimate(value, Number(element.dataset.count || 0));
@@ -1213,6 +1353,54 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       const box = document.getElementById('new-project-modal');
       if (!box) return;
       box.classList.remove('open');
+    }}
+    function normalizeSearchText(value) {{
+      return String(value || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
+    }}
+    function applyProjectBrowserControls() {{
+      const grid = document.getElementById('project-grid');
+      if (!grid) return;
+      const search = normalizeSearchText(document.getElementById('project-search')?.value || '');
+      const filter = document.getElementById('project-filter')?.value || 'all';
+      const sort = document.getElementById('project-sort')?.value || 'newest';
+      const cards = Array.from(grid.querySelectorAll('.project-card'));
+      cards.sort((a, b) => {{
+        if (sort === 'oldest') return Number(a.dataset.projectId || 0) - Number(b.dataset.projectId || 0);
+        if (sort === 'name-asc') return String(a.dataset.title || '').localeCompare(String(b.dataset.title || ''));
+        if (sort === 'name-desc') return String(b.dataset.title || '').localeCompare(String(a.dataset.title || ''));
+        return Number(b.dataset.projectId || 0) - Number(a.dataset.projectId || 0);
+      }}).forEach((card) => grid.appendChild(card));
+      let visible = 0;
+      cards.forEach((card) => {{
+        const titleMatches = normalizeSearchText(card.dataset.title || '').includes(search);
+        const filterMatches = filter === 'all' || card.dataset.status === filter;
+        const show = titleMatches && filterMatches;
+        card.classList.toggle('project-card-hidden', !show);
+        if (show) visible += 1;
+      }});
+      const empty = document.getElementById('project-empty-state');
+      if (empty) empty.classList.toggle('visible', visible === 0);
+    }}
+    function setupProjectBrowserControls() {{
+      ['project-search', 'project-filter', 'project-sort'].forEach((id) => {{
+        const element = document.getElementById(id);
+        if (!element) return;
+        element.addEventListener('input', applyProjectBrowserControls);
+        element.addEventListener('change', applyProjectBrowserControls);
+      }});
+      document.querySelectorAll('.project-card video').forEach((video) => {{
+        const card = video.closest('.project-card');
+        if (!card) return;
+        card.addEventListener('mouseenter', () => {{
+          video.muted = true;
+          video.play().catch(() => {{}});
+        }});
+        card.addEventListener('mouseleave', () => {{
+          video.pause();
+          video.currentTime = 0;
+        }});
+      }});
+      applyProjectBrowserControls();
     }}
     function openProjectSettingsModal() {{
       const box = document.getElementById('project-settings-modal');
@@ -1303,6 +1491,15 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
       rememberProjectStoryboardSelection();
       sessionStorage.setItem(scrollStorageKey(), String(window.scrollY));
     }}
+    function openQueueJobRow(row) {{
+      const href = row.dataset.href;
+      if (!href) return;
+      const templateId = row.dataset.templateId || '';
+      if (templateId) {{
+        sessionStorage.setItem('musicvideogen-storyboard-selection:' + href, templateId);
+      }}
+      window.location.href = href;
+    }}
     function confirmProjectSettingsSave(form) {{
       rememberScrollPosition();
       return true;
@@ -1311,6 +1508,7 @@ def _page(title: str, body: str, queue_count: int = 0) -> str:
     document.addEventListener('DOMContentLoaded', () => {{
       rememberProjectRows();
       rememberProjectStoryboard();
+      setupProjectBrowserControls();
       const storyboard = document.getElementById('project-storyboard');
       const storedStoryboardTemplate = sessionStorage.getItem(storyboardSelectionStorageKey());
       if (storyboard && storedStoryboardTemplate) {{
@@ -1442,22 +1640,43 @@ def _projects_html(
     average_durations: dict[str, float] | None = None,
     queue_estimate_seconds: float | None = None,
     job_options: JobOptions | None = None,
+    project_previews: dict[int, list] | None = None,
 ) -> str:
     average_durations = average_durations or {}
     job_options = job_options or JobOptions()
-    rows = "".join(_project_list_item_html(p) for p in projects)
+    project_previews = project_previews or {}
+    active_project_ids = {int(job.project_id) for job in jobs if job.project_id and job.status in {"queued", "running"}}
+    rows = "".join(_project_list_item_html(p, project_previews.get(int(p["id"]), []), int(p["id"]) in active_project_ids) for p in projects)
     active_count = len([job for job in jobs if job.status in {"queued", "running"}])
+    queue_modal = _queue_modal_html(jobs, average_durations, queue_estimate_seconds, job_options)
     return f"""
 <div class="start-dashboard">
 {_start_topbar_html(queue_estimate_seconds, active_count)}
-{_start_hero_html(projects, jobs, queue_estimate_seconds)}
+{_start_hero_html(projects, jobs, queue_estimate_seconds, active_count)}
 <div class="start-layout">
 <section class="studio-panel">
-  <div class="studio-panel-head"><h2>Projects</h2></div>
-  <div class="project-grid">{rows}</div>
+  <div class="studio-panel-head project-panel-head">
+    <h2>Projects</h2>
+    <div class="project-browser-controls">
+      <input id="project-search" type="search" placeholder="Search projects" aria-label="Search projects">
+      <select id="project-filter" aria-label="Filter projects">
+        <option value="all" selected>All</option>
+        <option value="in-progress">In progress</option>
+        <option value="done">Done</option>
+      </select>
+      <select id="project-sort" aria-label="Sort projects">
+        <option value="newest" selected>Newest</option>
+        <option value="oldest">Oldest</option>
+        <option value="name-asc">Name asc</option>
+        <option value="name-desc">Name desc</option>
+      </select>
+    </div>
+  </div>
+  <div id="project-grid" class="project-grid">{rows}</div>
+  <div id="project-empty-state" class="project-empty-state">No projects match this view.</div>
 </section>
-{_queue_section_html(jobs, average_durations, queue_estimate_seconds, job_options)}
 </div>
+{queue_modal}
 {_new_project_modal_html()}
 </div>
 <script>setupQueueEstimateCountdown(); pollJobsStatus();</script>
@@ -1470,9 +1689,8 @@ def _start_topbar_html(queue_estimate_seconds: float | None, queue_count: int = 
   <div class="studio-brand">VocaVid</div>
   <div class="studio-tagline">Local AI music-video studio</div>
   <div class="studio-spacer"></div>
-  {_queue_estimate_html(queue_estimate_seconds, queue_count, open_modal=False)}
+  {_queue_estimate_html(queue_estimate_seconds, queue_count)}
   <button class="studio-button" type="button" onclick="openNewProjectModal()">New Project</button>
-  <a class="studio-button studio-button-secondary" href="#jobs-panel">Jobs</a>
 </div>
 """
 
@@ -1489,10 +1707,15 @@ def _new_project_modal_html() -> str:
       <label>Name</label><input name="name" required>
       <label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>
       <label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>
+      <label>Genre</label><input name="genre" required>
+      <label>Avatar</label><input name="avatar" type="file" accept="image/*">
+      <label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">
       <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="2">
       <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="1">
-      <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5">
-      <label>Whisper Model</label>{_whisper_model_select_html("small")}
+      <input name="output_resolution" type="hidden" value="1280x720">
+      <input name="fps" type="hidden" value="24">
+      <input name="transition_handle_seconds" type="hidden" value="0.5">
+      <input name="whisper_model_size" type="hidden" value="large-v3">
       <p><button>Create Project</button></p>
     </form>
   </div>
@@ -1500,7 +1723,7 @@ def _new_project_modal_html() -> str:
 """
 
 
-def _start_hero_html(projects, jobs, queue_estimate_seconds: float | None) -> str:
+def _start_hero_html(projects, jobs, queue_estimate_seconds: float | None, queue_count: int = 0) -> str:
     open_jobs = len([job for job in jobs if job.status in {"queued", "running"}])
     return f"""
 <section class="start-hero">
@@ -1624,9 +1847,11 @@ def _queue_admin_html(job_options: JobOptions) -> str:
     shutdown_checked = " checked" if job_options.shutdown_after_queue else ""
     return f"""
   <div class="queue-admin-controls">
-    <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
-    <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
-    <form class="compact-form job-options" action="/jobs/options" method="post">
+    <div class="queue-cleanup-actions">
+      <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
+      <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
+    </div>
+    <form class="compact-form queue-settings-line" action="/jobs/options" method="post">
       <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
       <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
     </form>
@@ -1635,29 +1860,97 @@ def _queue_admin_html(job_options: JobOptions) -> str:
 
 
 def _jobs_table_body_html(jobs, average_durations: dict[str, float]) -> str:
-    return "".join(
-        f"<tr><td>{job.id}</td><td>{_text(job.name)}</td><td>{_text(job.status)}</td><td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td><td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
-        for job in jobs
+    return "".join(_job_table_row_html(job, average_durations) for job in jobs)
+
+
+def _job_table_row_html(job, average_durations: dict[str, float]) -> str:
+    row_attrs = _job_row_attrs(job)
+    link_hint = '<div class="queue-job-link-hint">Open target</div>' if row_attrs else ""
+    return (
+        f"<tr{row_attrs}><td>{job.id}</td><td>{_text(job.name)}{link_hint}</td><td>{_text(job.status)}</td>"
+        f"<td>{_text(job.created_at)}</td><td class='error'>{_text(job.error)}</td>"
+        f"<td>{_duration_html(_job_average_seconds(job, average_durations))}</td><td>{_job_delete_html(job)}</td></tr>"
     )
 
 
-def _project_list_item_html(project) -> str:
+def _job_row_attrs(job) -> str:
+    if not job.project_id:
+        return ""
+    href = f"/projects/{int(job.project_id)}"
+    template_id = ""
+    if job.item_kind and job.selected_indices:
+        template_id = f"segment-inspector-template-{job.item_kind}-{int(job.selected_indices[0])}"
+    return (
+        f' class="queue-job-row" data-href="{_attr(href)}" data-template-id="{_attr(template_id)}" '
+        'onclick="if (!event.target.closest(\'button, a, form, input, label\')) openQueueJobRow(this)"'
+    )
+
+
+def _project_list_item_html(project, preview_rows=None, has_active_jobs: bool = False) -> str:
+    preview_rows = preview_rows or []
     done = _is_kdenlive_project_done(project)
     css_class = "project-card project-card-done" if done else "project-card"
-    done_label = '<span class="project-done-label">done</span>' if done else ""
-    status = "Final assembled" if done else "Open project"
+    status = "done" if done else "in-progress"
+    done_label = '<span class="project-done-badge" aria-label="Done">&#10003;</span>' if done else ""
+    media_html = _project_card_media_html(project, preview_rows)
+    approved, total = _project_progress_counts(preview_rows)
+    progress = f"{approved}/{total}"
+    active_attr = ' data-active="1"' if has_active_jobs else ""
     return f"""
-<article class="{css_class}">
+<article class="{css_class}" data-project-id="{_attr(project["id"])}" data-title="{_attr(project["name"])}" data-status="{status}"{active_attr}>
   <a class="project-card-link" href="/projects/{project["id"]}">
-    <div class="project-card-art"></div>
+    {media_html}
+    <span class="project-progress-badge">{_text(progress)}</span>
     <div class="project-card-body">
       <h3>{_text(project["name"])}</h3>
-      <p>{_text(status)}</p>
-      {done_label}
     </div>
+    {done_label}
   </a>
 </article>
 """
+
+
+def _project_card_media_html(project, rows) -> str:
+    row = _project_preview_row(rows)
+    if row is None:
+        return _project_card_placeholder_html(project)
+    clip_path = _row_value(row, "clip_path", "")
+    if clip_path:
+        url = _generated_asset_url(project, clip_path)
+        return f'<div class="project-card-art"><video src="{_attr(url)}" preload="metadata" muted playsinline></video></div>'
+    image_path = _row_value(row, "avatar_image_path", "") or _row_value(row, "image_path", "")
+    if image_path:
+        url = _generated_asset_url(project, image_path)
+        return f'<div class="project-card-art"><img src="{_attr(url)}" alt="{_attr(project["name"])} preview"></div>'
+    return _project_card_placeholder_html(project)
+
+
+def _project_card_placeholder_html(project) -> str:
+    return '<div class="project-card-art"><span class="project-card-placeholder"><span class="project-card-placeholder-mark" aria-label="No preview yet"></span></span></div>'
+
+
+def _project_progress_counts(rows) -> tuple[int, int]:
+    rows = list(rows or [])
+    total = len(rows)
+    approved = len([row for row in rows if bool(_row_value(row, "video_approved", 0))])
+    return approved, total
+
+
+def _project_preview_row(rows):
+    rows = list(rows or [])
+    media_rows = [row for row in rows if _row_value(row, "clip_path", "") or _row_value(row, "avatar_image_path", "") or _row_value(row, "image_path", "")]
+    if not media_rows:
+        return None
+    chorus_rows = [row for row in media_rows if bool(_row_value(row, "is_chorus", 0)) or _section_type(_row_value(row, "section", ""), False) == "refrain"]
+    clip_chorus = [row for row in chorus_rows if _row_value(row, "clip_path", "")]
+    if clip_chorus:
+        return clip_chorus[0]
+    clip_rows = [row for row in media_rows if _row_value(row, "clip_path", "")]
+    if clip_rows:
+        return clip_rows[0]
+    if chorus_rows:
+        return chorus_rows[0]
+    return media_rows[0]
 
 
 def _is_kdenlive_project_done(project) -> bool:
@@ -1758,6 +2051,7 @@ def _project_html(
     queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
     previous_project_nav = _project_nav_html(previous_project_id, "previous")
     next_project_nav = _project_nav_html(next_project_id, "next")
+    initial_setup_banner = _initial_setup_banner_html(active_jobs)
     storyboard = _storyboard_html(project, work_items, item_kind, locked)
     table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
@@ -1781,6 +2075,7 @@ def _project_html(
     <div class="actions">{actions}</div>
   </div>
   {queue_modal}
+  {initial_setup_banner}
   {storyboard}
   <section id="project-table-view" class="project-table-view" hidden>
     {table}
@@ -1791,6 +2086,21 @@ def _project_html(
 {_image_lightbox_html()}
 {_scroll_top_button_html()}
 <script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus();</script>
+"""
+
+
+def _initial_setup_banner_html(active_jobs) -> str:
+    setup_actions = {"global-style-prompt", "align", "segments", "scene-plan"}
+    setup_jobs = [job for job in active_jobs if job.action in setup_actions]
+    if not setup_jobs:
+        return ""
+    count = len(setup_jobs)
+    label = "job" if count == 1 else "jobs"
+    return f"""
+  <div class="initial-setup-banner">
+    <strong>Initial setup running</strong>
+    <span>{count} setup {label} queued or running. You can already inspect the project while the foundation is built.</span>
+  </div>
 """
 
 
@@ -1967,7 +2277,7 @@ def _storyboard_card_html(project, row, item_kind: str, active: bool = False, lo
     text = _row_value(row, "clean_text", "") or "(empty)"
     timing = _timing_text(_row_value(row, "start_sec", None), _row_value(row, "end_sec", None))
     status = _row_value(row, "status", "") or "pending"
-    timing_html = f'<span>{_text(timing)}</span>' if timing else ""
+    meta_html = _storyboard_card_meta_html(row, timing)
     text_html = _multiline_text_html(text) or _text(text)
     media_html = _storyboard_card_media_html(project, row)
     effective_locked_status = locked_status
@@ -1985,13 +2295,35 @@ def _storyboard_card_html(project, row, item_kind: str, active: bool = False, lo
         </label>
         {media_html}
         <div class="storyboard-card-body">
-          <div class="storyboard-card-title"><span>{_text(display_label)}</span>{timing_html}</div>
+          <div class="storyboard-card-title"><span>{_text(display_label)}</span>{meta_html}</div>
           {progress}
           <div class="storyboard-card-text">{text_html}</div>
         </div>
         {lock_overlay}
       </article>
 """
+
+
+def _storyboard_card_meta_html(row, timing: str) -> str:
+    section_label, section_class = _storyboard_section_badge(row)
+    timing_html = f"<span>{_text(timing)}</span>" if timing else ""
+    section_html = f'<span class="storyboard-section-badge storyboard-section-badge-{_attr(section_class)}">{_text(section_label)}</span>'
+    return f'<span class="storyboard-card-meta">{timing_html}{section_html}</span>'
+
+
+def _storyboard_section_badge(row) -> tuple[str, str]:
+    section = str(_row_value(row, "section", "") or "")
+    section_type = _section_type(section, bool(_row_value(row, "is_chorus", 0)))
+    if section_type == "refrain":
+        return "Refrain", "refrain"
+    if section_type == "bridge":
+        return "Bridge", "bridge"
+    if section_type == "verse":
+        return "Verse", "verse"
+    normalized = section.strip()
+    if normalized:
+        return normalized, "other"
+    return "Other", "other"
 
 
 def _storyboard_item_display_label(item_kind: str, item_index: int) -> str:
@@ -2382,14 +2714,14 @@ def _open_filter_html(rows) -> str:
     return f"""<span class="open-count-label">{open_count}/{total}</span>"""
 
 
-def _queue_estimate_html(seconds: float | None, queue_count: int = 0, open_modal: bool = True) -> str:
+def _queue_estimate_html(seconds: float | None, queue_count: int = 0, open_modal: bool = True, element_id: str = "queue-estimate") -> str:
     value = max(0.0, float(seconds or 0.0))
     count = max(0, int(queue_count or 0))
     label = _queue_estimate_label(value, count)
     onclick = ' onclick="openQueueModal()"' if open_modal else ""
     return (
-        f'<button id="queue-estimate" class="queue-estimate" type="button" data-seconds="{int(round(value))}" '
-        f'data-count="{count}"{onclick}>{_text(label)}</button>'
+        f'<button id="{_attr(element_id)}" class="queue-estimate" type="button" data-seconds="{int(round(value))}" '
+        f'data-queue-estimate="1" data-count="{count}"{onclick}>{_text(label)}</button>'
     )
 
 

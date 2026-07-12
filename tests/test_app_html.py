@@ -40,13 +40,21 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".studio-panel", html)
         self.assertIn(".studio-button", html)
         self.assertIn(".studio-chip", html)
-        self.assertIn("form, .panel { background: #fff; border: 1px solid #d8d3c8; color: #1c2526;", html)
-        self.assertIn("table { width: 100%; border-collapse: collapse; background: white; color: #1c2526;", html)
-        self.assertIn("button, .button { border: 0; border-radius: 12px; background: var(--studio-accent);", html)
-        self.assertIn(".danger-panel { margin-top: 24px; border-color: rgba(255,79,139,.42); background: transparent; color: #ff4f8b;", html)
+        self.assertIn("--bg-app: #0b1012;", html)
+        self.assertIn("--action: #29d3b0;", html)
+        self.assertIn("--accent: #e9489f;", html)
+        self.assertIn("radial-gradient(ellipse 60% 280px at 8% 0%, rgba(41,211,176,.07), transparent 72%)", html)
+        self.assertIn("form, .panel { background: var(--bg-panel); border: 1px solid var(--border-subtle); color: var(--text-primary);", html)
+        self.assertIn("table { width: 100%; border-collapse: collapse; background: var(--bg-card); color: var(--text-primary);", html)
+        self.assertIn("button, .button {", html)
+        self.assertIn("background: var(--action);", html)
+        self.assertIn(".actions button { border: 1px solid #3a454b; background: #293136; color: #c8d0d4;", html)
+        self.assertIn(".wip-button { border-color: var(--accent); background: var(--accent);", html)
+        self.assertIn(".actions .wip-button { border-color: var(--accent); background: var(--accent); color: #fff;", html)
+        self.assertIn(".danger-panel { margin-top: 24px; border-color: rgba(238,102,117,.48); background: transparent; color: var(--danger);", html)
         self.assertIn(".danger-panel[open] { background: transparent;", html)
         self.assertIn(".project-title-right { justify-content: flex-end;", html)
-        self.assertIn(".queue-estimate { padding: 6px 10px; border: 1px solid #b9c0bd; border-radius: 6px; background: #fff; color: #20302d;", html)
+        self.assertIn(".queue-estimate { padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: #202a2f; color: var(--text-secondary);", html)
         self.assertIn(".queue-modal { z-index: 180;", html)
         self.assertIn(".queue-modal-content { width: min(1120px, 96vw); height: 75vh; max-height: 75vh;", html)
         self.assertIn(".queue-modal-body { min-height: 0; overflow: auto; padding-bottom: 16px;", html)
@@ -55,7 +63,6 @@ class AppHtmlTests(unittest.TestCase):
         html = _projects_html([], [])
 
         self.assertNotIn("Workflow JSON Path", html)
-        self.assertNotIn("Comfy Base URL", html)
         self.assertNotIn("workflows/image.json", html)
         self.assertNotIn("workflows/image_reference.json", html)
 
@@ -70,28 +77,31 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<label>Name</label><input name="name" required>', html)
         self.assertIn('<label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>', html)
         self.assertIn('<label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>', html)
+        self.assertIn('<label>Genre</label><input name="genre" required>', html)
+        self.assertIn('<label>Avatar</label><input name="avatar" type="file" accept="image/*">', html)
+        self.assertIn('<label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">', html)
         self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
         self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
-        self.assertIn('name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5"', html)
-        self.assertIn('name="whisper_model_size"', html)
+        self.assertIn('name="output_resolution" type="hidden" value="1280x720"', html)
+        self.assertIn('name="fps" type="hidden" value="24"', html)
+        self.assertIn('name="transition_handle_seconds" type="hidden" value="0.5"', html)
+        self.assertIn('name="whisper_model_size" type="hidden" value="large-v3"', html)
         self.assertNotIn("SUNO Lyrics", html)
         self.assertNotIn("Global Style Prompt", html)
         self.assertNotIn('name="global_style_prompt"', html)
         self.assertNotIn("Reference Images", html)
         self.assertNotIn('name="references"', html)
-        self.assertNotIn("Resolution", html)
-        self.assertNotIn('name="fps"', html)
+        self.assertNotIn("<label>Resolution</label>", html)
+        self.assertNotIn("<label>FPS</label>", html)
+        self.assertNotIn("<label>Whisper Model</label>", html)
 
     def test_project_form_includes_clip_group_defaults(self):
         html = _projects_html([], [])
 
         self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
         self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
-        self.assertIn('name="transition_handle_seconds" type="number" min="0" step="0.1" value="0.5"', html)
-        self.assertIn('name="whisper_model_size"', html)
-        self.assertIn('<option value="small" selected>small</option>', html)
-        self.assertIn('<option value="medium">medium</option>', html)
-        self.assertIn('<option value="large-v3">large-v3</option>', html)
+        self.assertIn('name="transition_handle_seconds" type="hidden" value="0.5"', html)
+        self.assertIn('name="whisper_model_size" type="hidden" value="large-v3"', html)
         self.assertLess(html.index('name="lyrics"'), html.index('name="lyric_group_size"'))
         self.assertLess(html.index('name="lyric_group_size"'), html.index('name="chorus_group_size"'))
         self.assertLess(html.index('name="chorus_group_size"'), html.index('name="transition_handle_seconds"'))
@@ -110,10 +120,55 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="project-card project-card-done"', body)
         self.assertIn('<a class="project-card-link" href="/projects/2">', body)
         self.assertIn("Finished Song", body)
-        self.assertIn('<span class="project-done-label">done</span>', body)
+        self.assertIn('class="project-done-badge" aria-label="Done"', body)
+        self.assertIn("&#10003;", body)
         self.assertIn('<a class="project-card-link" href="/projects/1">', body)
+        self.assertIn('data-project-id="2"', body)
+        self.assertIn('data-status="done"', body)
+        self.assertIn('data-status="in-progress"', body)
+        self.assertIn('class="project-progress-badge">0/0</span>', body)
+        self.assertNotIn("Open project", body)
+        self.assertNotIn(">DONE<", body)
         self.assertIn(".project-grid", html)
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", html)
+        self.assertIn("aspect-ratio: 16 / 9", html)
+        self.assertIn(".project-done-badge", html)
+        self.assertIn('id="project-search"', body)
+        self.assertIn('id="project-filter"', body)
+        self.assertIn('id="project-sort"', body)
+        self.assertIn("function applyProjectBrowserControls", html)
+        self.assertIn("setupProjectBrowserControls();", html)
+        self.assertIn('class="project-card-placeholder-mark" aria-label="No preview yet"', body)
+        self.assertNotIn(">FS<", body)
+        self.assertNotIn(">OS<", body)
+
+    def test_project_cards_use_chorus_clip_preview_before_other_media(self):
+        projects = [{"id": 7, "name": "Demo Song", "final_video_path": None}]
+        previews = {
+            7: [
+                {
+                    "section": "Verse",
+                    "is_chorus": 0,
+                    "clip_path": "outputs/demo/clips/verse.mp4",
+                    "image_path": "outputs/demo/images/verse.png",
+                    "avatar_image_path": None,
+                },
+                {
+                    "section": "Refrain",
+                    "is_chorus": 1,
+                    "clip_path": "outputs/demo/clips/refrain.mp4",
+                    "image_path": "outputs/demo/images/refrain.png",
+                    "avatar_image_path": None,
+                },
+            ]
+        }
+
+        body = _projects_html(projects, [], project_previews=previews)
+
+        self.assertIn('<video src="/assets/outputs/demo/clips/refrain.mp4', body)
+        self.assertIn('preload="metadata" muted playsinline', body)
+        self.assertNotIn("verse.mp4", body)
+        self.assertIn('class="project-progress-badge">0/2</span>', body)
 
     def test_jobs_table_has_delete_actions_except_running_and_clear_queued_button(self):
         jobs = [
@@ -131,6 +186,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<button>Delete finished</button>", html)
         self.assertIn('class="queue-summary-grid"', html)
         self.assertIn('class="queue-admin-controls"', html)
+        self.assertIn('class="queue-cleanup-actions"', html)
+        self.assertIn('class="compact-form queue-settings-line"', html)
         self.assertIn("generate prompts: Demo Song", html)
         self.assertIn("<th>Avg</th>", html)
         self.assertIn("<td>12s</td>", html)
@@ -143,6 +200,28 @@ class AppHtmlTests(unittest.TestCase):
         self.assertGreater(html.index('action="/jobs/delete-finished"'), html.index("</table>"))
         self.assertGreater(html.index('class="queue-admin-controls"'), html.index("</table>"))
 
+    def test_queue_jobs_with_project_targets_are_clickable(self):
+        jobs = [
+            Job(
+                id=5,
+                name="generate clips: Demo Song (segment 3)",
+                status="queued",
+                created_at="2026-06-27T19:15:24",
+                project_id=7,
+                action="clips",
+                item_kind="segments",
+                selected_indices=[2],
+            )
+        ]
+
+        html = _projects_html([], jobs)
+
+        self.assertIn('class="queue-job-row"', html)
+        self.assertIn('data-href="/projects/7"', html)
+        self.assertIn('data-template-id="segment-inspector-template-segments-2"', html)
+        self.assertIn("openQueueJobRow(this)", html)
+        self.assertIn("Open target", html)
+
     def test_start_page_queue_summary_shows_status_counts_and_estimate(self):
         jobs = [
             Job(id=4, name="queued", status="queued", created_at="2026-06-27T19:15:24"),
@@ -153,7 +232,9 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _projects_html([], jobs, queue_estimate_seconds=70.0)
 
-        self.assertIn('class="queue-panel-head"', html)
+        self.assertNotIn('id="jobs-panel"', html)
+        self.assertIn('id="queue-modal"', html)
+        self.assertIn('class="queue-modal-body"', html)
         self.assertIn('class="queue-summary-card queue-summary-card-active"', html)
         self.assertIn("<strong>1</strong><span>queued</span>", html)
         self.assertIn("<strong>1</strong><span>running</span>", html)
@@ -174,8 +255,13 @@ class AppHtmlTests(unittest.TestCase):
         html = _page("Projects", _projects_html([], jobs, queue_estimate_seconds=70.0), queue_count=2)
 
         self.assertIn('id="queue-estimate"', html)
+        self.assertNotIn('id="production-queue-estimate"', html)
+        self.assertIn('data-queue-estimate="1"', html)
         self.assertIn('data-count="2"', html)
         self.assertIn(">2 ~1m 10s</button>", html)
+        self.assertIn('onclick="openQueueModal()"', html)
+        self.assertNotIn('href="#jobs-panel"', html)
+        self.assertNotIn('id="jobs-panel"', html)
         self.assertIn('id="queue-summary"', html)
         self.assertIn('id="jobs-table-body"', html)
         self.assertIn('name="autodelete_finished"', html)
@@ -509,6 +595,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('title="Segment markieren"', html)
         self.assertIn("!event.target.closest('.storyboard-select-wrap')", html)
         self.assertIn('<div class="storyboard-card-title"><span># 00</span>', html)
+        self.assertIn('<span class="storyboard-card-meta"><span class="storyboard-section-badge storyboard-section-badge-verse">Verse</span></span>', html)
+        self.assertIn(".storyboard-section-badge-verse", html)
         self.assertNotIn("Segment 0", html)
         self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
         self.assertIn('<template id="segment-inspector-template-segments-1">', html)
@@ -648,11 +736,12 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".inspector-prompt-actions { display: flex; justify-content: space-between;", html)
         self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
         self.assertIn(".finish-toggle { display: flex; width: 100%;", html)
-        self.assertIn(".storyboard-card-approved { background: #dff3e8;", html)
-        self.assertIn(".storyboard-card-locked { cursor: not-allowed; background: #dfe4e2;", html)
+        self.assertIn(".storyboard-card { position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary);", html)
+        self.assertIn(".storyboard-card-approved { background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card);", html)
+        self.assertIn(".storyboard-card-locked { cursor: not-allowed; background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card);", html)
         self.assertIn(".storyboard-card-locked > *:not(.storyboard-lock-overlay) { pointer-events: none; filter: grayscale(1); opacity: .52;", html)
         self.assertIn(".storyboard-lock-overlay { position: absolute; inset: 0; z-index: 20;", html)
-        self.assertIn("background: rgba(214,220,218,.68);", html)
+        self.assertIn("background: rgba(11,16,18,.62);", html)
         self.assertIn("@keyframes storyboardActiveRing", html)
         self.assertIn("--storyboard-ring-angle: 0deg;", html)
         self.assertIn("to { --storyboard-ring-angle: 360deg;", html)
@@ -664,26 +753,31 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn(".storyboard-card-status", html)
         self.assertIn(".storyboard-select-wrap { position: absolute; top: 8px; left: 8px;", html)
         self.assertIn("width: 32px; height: 32px; margin: 0;", html)
-        self.assertIn("background: #fff;", html)
+        self.assertIn("background: rgba(12,18,21,.88);", html)
+        self.assertIn(".storyboard-select-wrap:has(.storyboard-select:checked) { background: var(--action);", html)
         self.assertIn(".storyboard-select { width: 18px; height: 18px;", html)
         self.assertIn(".storyboard-video-expand { position: absolute; right: 8px; bottom: 8px;", html)
-        self.assertIn(".modal-content { position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible;", html)
+        self.assertIn(".modal-content { position: relative; width: min(560px, 94vw); max-height: 88vh; overflow: visible; border: 1px solid #344149; border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text-primary);", html)
         self.assertIn(".modal-content > form { max-height: calc(88vh - 74px); overflow: auto;", html)
         self.assertIn(".lightbox { position: fixed; inset: 0; z-index: 120;", html)
         self.assertIn(".lightbox-close { position: absolute;", html)
-        self.assertIn("background: #e53d91;", html)
+        self.assertIn("background: #29343a;", html)
+        self.assertIn(".lightbox-close:hover, .lightbox-close:focus { background: var(--accent);", html)
         self.assertIn(".storyboard-ok-badge { position: absolute;", html)
         self.assertIn("width: 32px; height: 32px;", html)
         self.assertIn(".finish-toggle-check { margin-left: auto; font-size: 23px;", html)
         self.assertIn("pointer-events: none;", html)
         self.assertIn(".segment-inspector { position: sticky; z-index: 70;", html)
+        self.assertIn("background: var(--bg-panel); color: var(--text-primary);", html)
         self.assertIn(".prompt-modal.lightbox { z-index: 120;", html)
         self.assertIn(".image-prompt-modal-content .prompt-textarea { min-height: 144px;", html)
         self.assertIn(".project-settings-body { max-height: calc(88vh - 74px); overflow: auto;", html)
         self.assertIn(".project-settings-body > form { max-height: none; overflow: visible;", html)
         self.assertIn(".segment-inspector-nav { display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px;", html)
-        self.assertIn(".segment-inspector-title { color: #44504d; font-size: 24px;", html)
+        self.assertIn(".segment-inspector-title { color: var(--text-primary); font-size: 24px;", html)
         self.assertIn(".segment-nav-button { border: 0;", html)
+        self.assertIn("scrollbar-color: #536168 #182126;", html)
+        self.assertIn("@media (prefers-reduced-motion: reduce)", html)
 
     def test_project_polling_does_not_replace_storyboard_while_prompt_modal_is_open(self):
         html = _page("Demo", "body")
@@ -1843,7 +1937,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("function scrollToTop", html)
         self.assertIn(".project-topbar", html)
         self.assertIn("position: sticky", html)
-        self.assertIn("background: rgba(12,18,20,.94)", html)
+        self.assertIn("background: rgba(13,19,22,.96)", html)
         self.assertIn(".project-title-row h1 { color: var(--studio-text);", html)
         self.assertIn(".segment-inspector { position: sticky;", html)
         self.assertIn("top: 156px", html)
