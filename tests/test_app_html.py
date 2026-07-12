@@ -653,11 +653,11 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="inspector-generation-actions"', html)
         self.assertIn('action="/projects/7/images"', html)
         self.assertIn('<input type="hidden" name="selected_lines" value="3">', html)
-        self.assertIn("<button>Generate Image</button>", html)
+        self.assertIn("<button>Gen Image</button>", html)
         self.assertIn('action="/projects/7/avatar-image"', html)
-        self.assertIn("<button>Generate Avatars</button>", html)
+        self.assertIn("<button>Gen Avatar</button>", html)
         self.assertIn('action="/projects/7/clips"', html)
-        self.assertIn("<button>Generate Clip</button>", html)
+        self.assertIn("<button>Gen Clip</button>", html)
 
     def test_segment_inspector_uses_compact_prompt_lightboxes_and_hides_noise(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -733,8 +733,10 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _segment_inspector_html(project, "segments", segment)
 
-        self.assertLess(html.index("Next renders"), html.index("Image source"))
         self.assertLess(html.index("Image source"), html.index("Preview"))
+        self.assertLess(html.index("Preview"), html.index("Prompts"))
+        self.assertLess(html.index("Prompts"), html.index("Next renders"))
+        self.assertLess(html.index("Next renders"), html.index("Mark as finished"))
         self.assertIn('class="compact-form image-choice image-choice-inline"', html)
         self.assertIn('class="finish-toggle finish-toggle-inactive"', html)
         self.assertIn("Mark as finished", html)
@@ -745,6 +747,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".inspector-prompt-media-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));", html)
         self.assertIn(".inspector-prompt-actions { display: flex; justify-content: space-between;", html)
         self.assertIn(".segment-inspector-actions .compact-form { width: 100%;", html)
+        self.assertIn(".inspector-generation-actions .compact-form { flex: 1 1 0; min-width: 0; width: auto;", html)
+        self.assertIn(".inspector-generation-actions button { width: 100%;", html)
         self.assertIn(".finish-toggle { display: flex; width: 100%;", html)
         self.assertIn(".storyboard-card { position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary);", html)
         self.assertIn(".storyboard-card-approved { background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card);", html)
