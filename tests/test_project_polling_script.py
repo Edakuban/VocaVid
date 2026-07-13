@@ -26,8 +26,26 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("projectStoryboardServerHtml || storyboard.outerHTML", app_source)
         self.assertIn("return previousHtml !== replacement.outerHTML", app_source)
         self.assertIn("if (!projectStoryboardChanged(storyboard, replacement)) return", app_source)
-        self.assertIn("projectStoryboardServerHtml = replacement.outerHTML", app_source)
+        self.assertIn("const replacementHtml = replacement.outerHTML", app_source)
+        self.assertIn("projectStoryboardServerHtml = replacementHtml", app_source)
         self.assertLess(app_source.index("if (!projectStoryboardChanged(storyboard, replacement)) return"), app_source.index("storyboard.replaceWith(replacement)"))
+
+    def test_storyboard_polling_patches_changed_cards_in_place(self):
+        app_source = self.app_source()
+
+        self.assertIn("const projectStoryboardCardServerHtml = new Map()", app_source)
+        self.assertIn("const projectStoryboardTemplateServerHtml = new Map()", app_source)
+        self.assertIn("function storyboardCanPatchInPlace(storyboard, replacement)", app_source)
+        self.assertIn("function patchStoryboardCard(currentCard, replacementCard)", app_source)
+        self.assertIn("function patchChangedStoryboardCards(storyboard, replacement)", app_source)
+        self.assertIn("function replaceChangedStoryboardTemplates(storyboard, replacement)", app_source)
+        self.assertIn("function storyboardMediaEquivalent(currentMedia, replacementMedia)", app_source)
+        self.assertIn("selector === '.storyboard-card-media' && storyboardMediaEquivalent(currentChild, replacementChild)", app_source)
+        self.assertIn("copyStoryboardCardAttributes(currentCard, replacementCard)", app_source)
+        self.assertIn("replaceStoryboardCardChildIfChanged(currentCard, replacementCard, '.storyboard-card-media')", app_source)
+        self.assertIn("replaceStoryboardCardChildIfChanged(currentCard, replacementCard, '.storyboard-lock-overlay')", app_source)
+        self.assertIn("patchChangedStoryboardCards(storyboard, replacement)", app_source)
+        self.assertLess(app_source.index("if (storyboardCanPatchInPlace(storyboard, replacement))"), app_source.index("storyboard.replaceWith(replacement)"))
 
     def test_project_actions_refresh_queue_estimate_after_submit_and_poll_callback(self):
         app_source = self.app_source()
@@ -103,7 +121,9 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("restoreSegmentInspectorWidth();", app_source)
         self.assertIn("document.addEventListener('pointerdown'", app_source)
         self.assertIn("document.addEventListener('keydown'", app_source)
-        self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreSegmentInspectorWidth();"))
+        fallback_replace = app_source.index("storyboard.replaceWith(replacement)")
+        restore_after_fallback = app_source.index("restoreSegmentInspectorWidth();", fallback_replace)
+        self.assertLess(fallback_replace, restore_after_fallback)
 
 
 if __name__ == "__main__":

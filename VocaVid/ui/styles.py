@@ -313,8 +313,9 @@ STYLES = f"""
     .storyboard-card-approved {{ background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); border-color: rgba(69,201,141,.58); }}
     .storyboard-card-unfinished {{ background: linear-gradient(180deg, rgba(233,72,159,.07), rgba(233,72,159,.025)), var(--bg-card); border-color: rgba(233,72,159,.58); }}
     .storyboard-card-locked {{ cursor: not-allowed; background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); }}
-    .storyboard-card-locked > *:not(.storyboard-lock-overlay) {{ pointer-events: none; filter: grayscale(1); opacity: .52; }}
-    .storyboard-lock-overlay {{ position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(11,16,18,.62); color: var(--text-primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; backdrop-filter: grayscale(1) blur(1px); }}
+    .storyboard-card-locked > .storyboard-select-wrap, .storyboard-card-locked > .storyboard-card-body {{ pointer-events: none; opacity: .58; }}
+    .storyboard-card-locked > .storyboard-card-media {{ pointer-events: none; }}
+    .storyboard-lock-overlay {{ position: absolute; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(11,16,18,.34); color: var(--text-primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; pointer-events: none; }}
     .storyboard-lock-overlay span {{ border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(8,9,13,.7); padding: 7px 11px; }}
     .storyboard-card:hover, .storyboard-card:focus {{ background: var(--bg-card-hover); border-color: var(--border-default); box-shadow: 0 0 0 3px var(--action-soft); outline: none; }}
     .storyboard-card-approved:hover, .storyboard-card-approved:focus {{ border-color: rgba(69,201,141,.72); box-shadow: 0 0 0 3px rgba(69,201,141,.14); }}

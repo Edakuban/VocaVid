@@ -3,6 +3,8 @@ from __future__ import annotations
 SCRIPTS = f"""
     const projectRowServerHtml = new Map();
     let projectStoryboardServerHtml = '';
+    const projectStoryboardCardServerHtml = new Map();
+    const projectStoryboardTemplateServerHtml = new Map();
     function rememberProjectRows() {{
       document.querySelectorAll('tr[id^="line-row-"], tr[id^="segment-row-"]').forEach((row) => {{
         projectRowServerHtml.set(row.id, row.outerHTML);
@@ -12,6 +14,14 @@ SCRIPTS = f"""
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard) return;
       projectStoryboardServerHtml = storyboard.outerHTML;
+      projectStoryboardCardServerHtml.clear();
+      projectStoryboardTemplateServerHtml.clear();
+      storyboard.querySelectorAll('.storyboard-card[data-inspector-template]').forEach((card) => {{
+        projectStoryboardCardServerHtml.set(card.dataset.inspectorTemplate, card.outerHTML);
+      }});
+      storyboard.querySelectorAll('template[id^="segment-inspector-template-"]').forEach((template) => {{
+        projectStoryboardTemplateServerHtml.set(template.id, template.outerHTML);
+      }});
     }}
     function copySelectedLines(form) {{
       form.querySelectorAll('input[name="selected_lines"]').forEach((input) => input.remove());
@@ -100,6 +110,99 @@ SCRIPTS = f"""
       const previousHtml = projectStoryboardServerHtml || storyboard.outerHTML;
       return previousHtml !== replacement.outerHTML;
     }}
+    function storyboardElementIds(root, selector, keyFn) {{
+      return Array.from(root.querySelectorAll(selector)).map(keyFn).filter(Boolean);
+    }}
+    function sameStoryboardElementIds(current, replacement, selector, keyFn) {{
+      const currentIds = storyboardElementIds(current, selector, keyFn);
+      const replacementIds = storyboardElementIds(replacement, selector, keyFn);
+      return currentIds.length === replacementIds.length && currentIds.every((id, index) => id === replacementIds[index]);
+    }}
+    function storyboardCanPatchInPlace(storyboard, replacement) {{
+      if (!storyboard.querySelector('.storyboard-workspace') || !replacement.querySelector('.storyboard-workspace')) return false;
+      return (
+        sameStoryboardElementIds(storyboard, replacement, '.storyboard-card[data-inspector-template]', (card) => card.dataset.inspectorTemplate) &&
+        sameStoryboardElementIds(storyboard, replacement, 'template[id^="segment-inspector-template-"]', (template) => template.id)
+      );
+    }}
+    function directStoryboardChild(parent, selector) {{
+      return Array.from(parent.children).find((child) => child.matches && child.matches(selector)) || null;
+    }}
+    function storyboardMediaKey(media) {{
+      if (!media) return '';
+      const video = media.querySelector('video');
+      if (video) return 'video:' + (video.getAttribute('src') || '') + ':ok=' + String(!!media.querySelector('.storyboard-ok-badge'));
+      const image = media.querySelector('img');
+      if (image) return 'image:' + (image.getAttribute('src') || '') + ':ok=' + String(!!media.querySelector('.storyboard-ok-badge'));
+      return 'empty:' + media.className + ':ok=' + String(!!media.querySelector('.storyboard-ok-badge'));
+    }}
+    function storyboardMediaEquivalent(currentMedia, replacementMedia) {{
+      return storyboardMediaKey(currentMedia) === storyboardMediaKey(replacementMedia);
+    }}
+    function replaceStoryboardCardChildIfChanged(currentCard, replacementCard, selector) {{
+      const currentChild = directStoryboardChild(currentCard, selector);
+      const replacementChild = directStoryboardChild(replacementCard, selector);
+      if (!currentChild && replacementChild) {{
+        currentCard.appendChild(replacementChild);
+      }} else if (currentChild && !replacementChild) {{
+        currentChild.remove();
+      }} else if (selector === '.storyboard-card-media' && storyboardMediaEquivalent(currentChild, replacementChild)) {{
+        return;
+      }} else if (currentChild && replacementChild && currentChild.outerHTML !== replacementChild.outerHTML) {{
+        currentChild.replaceWith(replacementChild);
+      }}
+    }}
+    function copyStoryboardCardAttributes(currentCard, replacementCard) {{
+      Array.from(currentCard.attributes).forEach((attribute) => {{
+        if (!replacementCard.hasAttribute(attribute.name)) currentCard.removeAttribute(attribute.name);
+      }});
+      Array.from(replacementCard.attributes).forEach((attribute) => {{
+        currentCard.setAttribute(attribute.name, attribute.value);
+      }});
+    }}
+    function patchStoryboardCard(currentCard, replacementCard) {{
+      const wasActive = currentCard.classList.contains('storyboard-card-active');
+      const currentCheckbox = currentCard.querySelector('.storyboard-select');
+      const wasChecked = !!(currentCheckbox && currentCheckbox.checked);
+      copyStoryboardCardAttributes(currentCard, replacementCard);
+      currentCard.classList.toggle('storyboard-card-active', wasActive);
+      replaceStoryboardCardChildIfChanged(currentCard, replacementCard, '.storyboard-select-wrap');
+      const replacementCheckbox = currentCard.querySelector('.storyboard-select');
+      if (replacementCheckbox) replacementCheckbox.checked = wasChecked;
+      replaceStoryboardCardChildIfChanged(currentCard, replacementCard, '.storyboard-card-media');
+      replaceStoryboardCardChildIfChanged(currentCard, replacementCard, '.storyboard-card-body');
+      replaceStoryboardCardChildIfChanged(currentCard, replacementCard, '.storyboard-lock-overlay');
+    }}
+    function patchChangedStoryboardCards(storyboard, replacement) {{
+      replacement.querySelectorAll('.storyboard-card[data-inspector-template]').forEach((replacementCard) => {{
+        const templateId = replacementCard.dataset.inspectorTemplate;
+        const currentCard = storyboard.querySelector('[data-inspector-template="' + templateId + '"]');
+        if (!currentCard) return;
+        const previousHtml = projectStoryboardCardServerHtml.get(templateId) || currentCard.outerHTML;
+        projectStoryboardCardServerHtml.set(templateId, replacementCard.outerHTML);
+        if (previousHtml === replacementCard.outerHTML) return;
+        patchStoryboardCard(currentCard, replacementCard);
+      }});
+    }}
+    function replaceChangedStoryboardTemplates(storyboard, replacement) {{
+      let activeTemplateChanged = false;
+      const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
+      replacement.querySelectorAll('template[id^="segment-inspector-template-"]').forEach((replacementTemplate) => {{
+        const currentTemplate = storyboard.querySelector('template#' + CSS.escape(replacementTemplate.id));
+        if (!currentTemplate) return;
+        const previousHtml = projectStoryboardTemplateServerHtml.get(replacementTemplate.id) || currentTemplate.outerHTML;
+        projectStoryboardTemplateServerHtml.set(replacementTemplate.id, replacementTemplate.outerHTML);
+        if (previousHtml === replacementTemplate.outerHTML) return;
+        if (replacementTemplate.id === activeTemplateId) activeTemplateChanged = true;
+        currentTemplate.replaceWith(replacementTemplate);
+      }});
+      return activeTemplateChanged;
+    }}
+    function refreshActiveStoryboardInspector(storyboard) {{
+      const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
+      if (!activeTemplateId) return;
+      selectStoryboardTemplate(activeTemplateId);
+    }}
     function activeProjectStoryboardTemplateId(storyboard) {{
       const activeCard = storyboard.querySelector('.storyboard-card-active');
       return activeCard ? activeCard.dataset.inspectorTemplate : '';
@@ -167,16 +270,26 @@ SCRIPTS = f"""
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard || html === undefined) return;
       if (!shouldReplaceProjectStoryboard(storyboard)) return;
-      const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
-      const checkedValues = checkedProjectStoryboardValues(storyboard);
       const template = document.createElement('template');
       template.innerHTML = html.trim();
       const replacement = template.content.firstElementChild;
       if (!replacement) return;
       if (!projectStoryboardChanged(storyboard, replacement)) return;
-      projectStoryboardServerHtml = replacement.outerHTML;
+      const replacementHtml = replacement.outerHTML;
+      if (storyboardCanPatchInPlace(storyboard, replacement)) {{
+        const activeTemplateChanged = replaceChangedStoryboardTemplates(storyboard, replacement);
+        patchChangedStoryboardCards(storyboard, replacement);
+        projectStoryboardServerHtml = replacementHtml;
+        if (activeTemplateChanged) refreshActiveStoryboardInspector(storyboard);
+        restoreSegmentInspectorWidth();
+        return;
+      }}
+      const activeTemplateId = activeProjectStoryboardTemplateId(storyboard);
+      const checkedValues = checkedProjectStoryboardValues(storyboard);
+      projectStoryboardServerHtml = replacementHtml;
       replacement.hidden = storyboard.hidden;
       storyboard.replaceWith(replacement);
+      rememberProjectStoryboard();
       restoreProjectStoryboardCheckedValues(replacement, checkedValues);
       restoreProjectStoryboardSelection(replacement, activeTemplateId);
       restoreSegmentInspectorWidth();
@@ -191,7 +304,7 @@ SCRIPTS = f"""
       updateQueueEstimate(data.queue_estimate_seconds, data.queue_count);
       updateBrowserTitle(data.queue_count);
       const progress = document.getElementById('project-progress-pill');
-      if (progress && data.progress_html !== undefined) progress.outerHTML = data.progress_html;
+      if (progress && data.progress_html !== undefined && progress.outerHTML !== data.progress_html) progress.outerHTML = data.progress_html;
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
         const row = document.getElementById(rowId);
         if (row) replaceProjectRow(row, html);
