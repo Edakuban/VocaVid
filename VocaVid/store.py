@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -97,6 +98,40 @@ CREATE TABLE IF NOT EXISTS job_runs (
     duration_seconds REAL NOT NULL,
     status TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS reel_analyses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    source_video_path TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    transcript_json TEXT NOT NULL DEFAULT '{}',
+    lyric_alignment_json TEXT NOT NULL DEFAULT '[]',
+    audio_features_json TEXT NOT NULL DEFAULT '[]',
+    scene_json TEXT NOT NULL DEFAULT '[]',
+    detections_json TEXT NOT NULL DEFAULT '[]',
+    focus_tracks_json TEXT NOT NULL DEFAULT '[]',
+    manual_keyframes_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS reel_candidates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    analysis_id INTEGER NOT NULL,
+    label TEXT NOT NULL,
+    start_sec REAL NOT NULL,
+    end_sec REAL NOT NULL,
+    score REAL NOT NULL DEFAULT 0,
+    reasons_json TEXT NOT NULL DEFAULT '[]',
+    preview_path TEXT,
+    export_path TEXT,
+    crop_json TEXT NOT NULL DEFAULT '{}',
+    selected INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT NOT NULL DEFAULT ''
 );
 """
 
@@ -424,6 +459,11 @@ class Store:
 
     def delete_project(self, project_id: int) -> None:
         with self._connect() as conn:
+            analysis_ids = [row["id"] for row in conn.execute("SELECT id FROM reel_analyses WHERE project_id = ?", (project_id,))]
+            if analysis_ids:
+                placeholders = ",".join("?" for _ in analysis_ids)
+                conn.execute(f"DELETE FROM reel_candidates WHERE analysis_id IN ({placeholders})", analysis_ids)
+            conn.execute("DELETE FROM reel_analyses WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM render_segments WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM lyric_lines WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM project_actions WHERE project_id = ?", (project_id,))
@@ -502,3 +542,92 @@ class Store:
     def set_final_video(self, project_id: int, path: Path) -> None:
         with self._connect() as conn:
             conn.execute("UPDATE projects SET final_video_path = ? WHERE id = ?", (str(path), project_id))
+
+    def create_reel_analysis(self, project_id: int, source_video_path: str) -> int:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO reel_analyses (project_id, source_video_path)
+                VALUES (?, ?)
+                """,
+                (project_id, source_video_path),
+            )
+            return int(cursor.lastrowid)
+
+    def get_reel_analysis(self, analysis_id: int) -> sqlite3.Row:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM reel_analyses WHERE id = ?", (analysis_id,)).fetchone()
+            if row is None:
+                raise KeyError(f"Reel analysis {analysis_id} not found")
+            return row
+
+    def latest_reel_analysis(self, project_id: int) -> sqlite3.Row | None:
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT * FROM reel_analyses WHERE project_id = ? ORDER BY id DESC LIMIT 1",
+                (project_id,),
+            ).fetchone()
+
+    def list_reel_analyses(self, project_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return list(conn.execute("SELECT * FROM reel_analyses WHERE project_id = ? ORDER BY id DESC", (project_id,)))
+
+    def update_reel_analysis(self, analysis_id: int, **fields: Any) -> None:
+        if not fields:
+            return
+        fields = dict(fields)
+        fields["updated_at"] = _current_timestamp()
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        values = list(fields.values()) + [analysis_id]
+        with self._connect() as conn:
+            conn.execute(f"UPDATE reel_analyses SET {assignments} WHERE id = ?", values)
+
+    def replace_reel_candidates(self, analysis_id: int, candidates) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM reel_candidates WHERE analysis_id = ?", (analysis_id,))
+            conn.executemany(
+                """
+                INSERT INTO reel_candidates (
+                    analysis_id, label, start_sec, end_sec, score, reasons_json, crop_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        analysis_id,
+                        candidate.label,
+                        candidate.start_sec,
+                        candidate.end_sec,
+                        candidate.score,
+                        json.dumps(candidate.reasons),
+                        json.dumps(candidate.crop),
+                    )
+                    for candidate in candidates
+                ],
+            )
+
+    def list_reel_candidates(self, analysis_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return list(conn.execute("SELECT * FROM reel_candidates WHERE analysis_id = ? ORDER BY score DESC, id", (analysis_id,)))
+
+    def get_reel_candidate(self, candidate_id: int) -> sqlite3.Row:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM reel_candidates WHERE id = ?", (candidate_id,)).fetchone()
+            if row is None:
+                raise KeyError(f"Reel candidate {candidate_id} not found")
+            return row
+
+    def update_reel_candidate(self, candidate_id: int, **fields: Any) -> None:
+        if not fields:
+            return
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        values = list(fields.values()) + [candidate_id]
+        with self._connect() as conn:
+            conn.execute(f"UPDATE reel_candidates SET {assignments} WHERE id = ?", values)
+
+    def delete_reel_candidate(self, candidate_id: int) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM reel_candidates WHERE id = ?", (candidate_id,))
+
+
+def _current_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()

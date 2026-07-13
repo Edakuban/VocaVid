@@ -1152,6 +1152,153 @@ class AppEndpointTests(unittest.TestCase):
             app_module.UPLOADS = old_uploads
             app_module.DB_PATH = old_db_path
 
+    def test_reels_analyze_endpoint_accepts_upload_fallback_and_queues_job(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_reels_pipeline = app_module.ReelsPipeline
+        calls = []
+
+        class FakeReelsPipeline:
+            def __init__(self, store, app_root):
+                self.store = store
+                self.app_root = app_root
+
+            def analyze(self, project_id, source_video_path):
+                calls.append(("analyze", project_id, source_video_path))
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                app_module.ReelsPipeline = FakeReelsPipeline
+                store = Store(app_module.DB_PATH)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": "song.wav",
+                        "lyrics_path": "lyrics.txt",
+                        "global_style_prompt": "cinematic",
+                    },
+                    parse_suno_lyrics("[Verse]\nHello\n"),
+                )
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.post(
+                    f"/projects/{project_id}/reels/analyze",
+                    files={"source_video": ("upload.mp4", b"mp4", "video/mp4")},
+                    follow_redirects=False,
+                )
+                app.state.jobs.executor.shutdown(wait=True)
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(response.headers["location"], f"/projects/{project_id}")
+                analyses = Store(app_module.DB_PATH).list_reel_analyses(project_id)
+                self.assertEqual(len(analyses), 1)
+                self.assertEqual(analyses[0]["source_video_path"], "outputs/demo/reels/source/upload.mp4")
+                self.assertEqual(calls, [("analyze", project_id, "outputs/demo/reels/source/upload.mp4")])
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.ReelsPipeline = old_reels_pipeline
+
+    def test_reels_analyze_uses_project_finished_mp4_when_present(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_reels_pipeline = app_module.ReelsPipeline
+        calls = []
+
+        class FakeReelsPipeline:
+            def __init__(self, store, app_root):
+                self.store = store
+                self.app_root = app_root
+
+            def analyze(self, project_id, source_video_path):
+                calls.append(("analyze", project_id, source_video_path))
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                app_module.ReelsPipeline = FakeReelsPipeline
+                store = Store(app_module.DB_PATH)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": "song.wav",
+                        "lyrics_path": "lyrics.txt",
+                        "global_style_prompt": "cinematic",
+                    },
+                    parse_suno_lyrics("[Verse]\nHello\n"),
+                )
+                finished = app_module.APP_ROOT / "outputs" / "demo" / "finished.mp4"
+                finished.parent.mkdir(parents=True)
+                finished.write_bytes(b"mp4")
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.post(
+                    f"/projects/{project_id}/reels/analyze",
+                    data={"source_video_path": "outputs/demo/final.kdenlive"},
+                    follow_redirects=False,
+                )
+                app.state.jobs.executor.shutdown(wait=True)
+
+                self.assertEqual(response.status_code, 303)
+                analyses = Store(app_module.DB_PATH).list_reel_analyses(project_id)
+                self.assertEqual(analyses[0]["source_video_path"], "outputs/demo/finished.mp4")
+                self.assertEqual(calls, [("analyze", project_id, "outputs/demo/finished.mp4")])
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.ReelsPipeline = old_reels_pipeline
+
+    def test_reels_status_endpoint_returns_modal_snippet(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                store = Store(app_module.DB_PATH)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": "song.wav",
+                        "lyrics_path": "lyrics.txt",
+                        "global_style_prompt": "cinematic",
+                    },
+                    parse_suno_lyrics("[Verse]\nHello\n"),
+                )
+                analysis_id = store.create_reel_analysis(project_id, "D:/exports/final.mp4")
+                store.update_reel_analysis(analysis_id, status="done", metadata_json='{"duration": 60, "width": 1920, "height": 1080, "fps": 25}')
+
+                app = app_module.create_app()
+                client = TestClient(app)
+                response = client.get(f"/projects/{project_id}/reels/status")
+
+                self.assertEqual(response.status_code, 200)
+                payload = response.json()
+                self.assertIn("reels_html", payload)
+                self.assertIn("Source MP4", payload["reels_html"])
+                self.assertIn("Candidates", payload["reels_html"])
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
 
 def _write_wav(path: Path) -> None:
     import wave

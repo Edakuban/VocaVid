@@ -463,6 +463,45 @@ STYLES = f"""
     .redo-cell {{ text-align: center; min-width: 72px; }}
     .redo-action {{ margin-top: 4px; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }}
     .inline-player {{ width: 180px; max-width: 100%; margin-left: 8px; vertical-align: middle; }}
+    .reels-open-button {{ border-color: rgba(41,211,176,.42) !important; background: rgba(41,211,176,.12) !important; color: #cdfbf1 !important; }}
+    .reels-modal {{ z-index: 190; }}
+    .reels-modal-content {{ width: min(1500px, 98vw); height: min(980px, 94vh); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }}
+    .reels-modal-content .lightbox-close {{ top: 12px; right: 12px; }}
+    .reels-modal-content .studio-panel-head p {{ margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }}
+    .reels-body {{ min-height: 0; overflow: auto; padding: 16px; }}
+    .reels-grid {{ display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }}
+    .reels-panel {{ border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-panel); padding: 14px; color: var(--text-primary); }}
+    .reels-panel h3 {{ margin: 0 0 12px; font-size: 15px; }}
+    .reels-source-form {{ display: grid; grid-template-columns: minmax(280px, 420px) minmax(260px, 1fr) auto; gap: 14px; align-items: center; margin: 0; padding: 0; border: 0; background: transparent; }}
+    .reels-source-upload, .reels-source-info {{ display: grid; gap: 7px; min-width: 0; }}
+    .reels-source-form input {{ width: 100%; }}
+    .reels-upload-name {{ margin: 0; color: var(--text-primary); font-size: 13px; font-weight: 850; overflow-wrap: anywhere; }}
+    .reels-help {{ margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }}
+    .reels-source-path {{ display: inline-block; max-width: 100%; padding: 2px 6px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: rgba(255,255,255,.035); color: var(--text-primary); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; overflow-wrap: anywhere; vertical-align: middle; }}
+    .reels-source-form button {{ justify-self: end; min-width: 150px; }}
+    .reels-metrics {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }}
+    .reels-metrics span {{ border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: rgba(255,255,255,.035); padding: 10px; min-width: 0; }}
+    .reels-metrics strong {{ display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }}
+    .reels-metrics small {{ display: block; margin-top: 4px; color: var(--text-muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }}
+    .reels-error {{ color: #ffadb6; overflow-wrap: anywhere; }}
+    .reels-candidates-panel {{ grid-column: 1; }}
+    .reels-candidate-list {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }}
+    .reels-candidate-card {{ display: grid; grid-template-rows: auto minmax(260px, 1fr) auto; gap: 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); padding: 12px; }}
+    .reels-candidate-card.reels-candidate-processing {{ border-color: rgba(41,211,176,.58); box-shadow: 0 0 0 3px rgba(41,211,176,.12); }}
+    .reels-preview-frame {{ aspect-ratio: 9 / 16; width: min(100%, 320px); min-height: 260px; justify-self: center; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: #11181c; overflow: hidden; }}
+    .reels-preview-frame video {{ width: 100%; height: 100%; object-fit: cover; background: #000; }}
+    .reels-preview-placeholder {{ height: 100%; display: grid; place-items: center; color: var(--text-muted); font-size: 12px; font-weight: 850; text-transform: uppercase; }}
+    .reels-candidate-body {{ min-width: 0; }}
+    .reels-candidate-head {{ display: flex; gap: 8px; align-items: center; justify-content: space-between; }}
+    .reels-candidate-body h4 {{ margin: 0 0 6px; }}
+    .reels-candidate-body p {{ margin: 0 0 8px; }}
+    .reels-status-pill {{ flex: 0 0 auto; border: 1px solid var(--border-subtle); border-radius: 999px; background: rgba(255,255,255,.045); color: var(--text-muted); padding: 3px 7px; font-size: 10px; font-weight: 850; text-transform: uppercase; }}
+    .reels-status-running, .reels-status-queued {{ border-color: rgba(41,211,176,.42); background: rgba(41,211,176,.12); color: #cdfbf1; }}
+    .reels-status-done {{ border-color: rgba(69,201,141,.42); background: rgba(69,201,141,.12); color: #d8f8e8; }}
+    .reels-status-failed {{ border-color: rgba(255,102,120,.5); background: rgba(255,102,120,.12); color: #ffd4da; }}
+    .reels-candidate-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
+    .reels-candidate-actions form {{ margin: 0; padding: 0; border: 0; background: transparent; }}
+    @media (max-width: 760px) {{ .reels-source-form {{ grid-template-columns: 1fr; align-items: stretch; }} .reels-source-form button {{ justify-self: stretch; }} .reels-preview-frame {{ max-width: 260px; }} }}
     .lightbox {{ position: fixed; inset: 0; z-index: 120; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.72); backdrop-filter: blur(2px); padding: 24px; }}
     .lightbox.open {{ display: flex; }}
     .lightbox-content {{ position: relative; width: min(960px, 94vw); }}

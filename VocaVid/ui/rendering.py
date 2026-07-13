@@ -109,6 +109,14 @@ from .queue import (
     _queue_summary_cards_html,
     _queue_summary_html,
 )
+from .reels import (
+    _reels_analysis_panel_html,
+    _reels_candidate_card_html,
+    _reels_candidates_html,
+    _reels_input_html,
+    _reels_modal_html,
+    _reels_status_html,
+)
 from .storyboard import (
     _inspector_action_form_html,
     _inspector_generation_actions_html,
@@ -187,6 +195,12 @@ __all__ = [
     "_queue_estimate_label",
     "_queue_estimate_seconds",
     "_job_delete_html",
+    "_reels_modal_html",
+    "_reels_status_html",
+    "_reels_input_html",
+    "_reels_analysis_panel_html",
+    "_reels_candidates_html",
+    "_reels_candidate_card_html",
     "_segment_settings_html",
     "_work_items_html",
     "_lyrics_html",

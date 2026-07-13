@@ -19,6 +19,8 @@ from .lyrics import parse_suno_lyrics
 from .alignment import normalize_whisper_model_size
 from .paths import slug_folder_name, storage_relative_path
 from .pipeline import Pipeline
+from .reels import ReelsPipeline
+from .reels.storage import ensure_reels_dirs, project_finished_video_path
 from .store import Store
 from .worker import JobQueue
 
@@ -69,6 +71,7 @@ def create_app() -> FastAPI:
     if interrupted_items:
         logger.warning("marked %s interrupted running project items as failed", interrupted_items)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
+    reels_pipeline = ReelsPipeline(store, APP_ROOT)
     job_options = JobOptions()
     shutdown_controller = ShutdownController()
 
@@ -89,6 +92,7 @@ def create_app() -> FastAPI:
     jobs = JobQueue(max_workers=1, on_finish=record_finished_job)
     app = FastAPI(title="VocaVid")
     app.state.jobs = jobs
+    app.state.reels_pipeline = reels_pipeline
     app.state.job_options = job_options
     app.state.shutdown_controller = shutdown_controller
     app.mount("/assets", StaticFiles(directory=str(APP_ROOT)), name="assets")
@@ -319,6 +323,11 @@ def create_app() -> FastAPI:
         lines = store.list_lines(project_id)
         segments = store.list_segments(project_id)
         used_actions = store.list_used_project_actions(project_id)
+        reel_analyses = store.list_reel_analyses(project_id)
+        reel_candidates_by_analysis = {
+            int(analysis["id"]): store.list_reel_candidates(int(analysis["id"]))
+            for analysis in reel_analyses
+        }
         active_jobs = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
         listed_jobs = jobs.list_jobs()
@@ -338,6 +347,8 @@ def create_app() -> FastAPI:
                 job_options=job_options,
                 previous_project_id=previous_project_id,
                 next_project_id=next_project_id,
+                reel_analyses=reel_analyses,
+                reel_candidates_by_analysis=reel_candidates_by_analysis,
             ),
             queue_count=len(queue_jobs),
         )
@@ -351,6 +362,85 @@ def create_app() -> FastAPI:
         active = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
         return _project_status_payload(project, lines, segments, active, store.average_job_durations(), used_actions=used_actions, queue_jobs=queue_jobs)
+
+    @app.get("/projects/{project_id}/reels/status")
+    def reels_status(project_id: int):
+        project = store.get_project(project_id)
+        analyses = store.list_reel_analyses(project_id)
+        candidates_by_analysis = {
+            int(analysis["id"]): store.list_reel_candidates(int(analysis["id"]))
+            for analysis in analyses
+        }
+        return {
+            "reels_html": _reels_status_html(project, analyses, candidates_by_analysis),
+        }
+
+    @app.post("/projects/{project_id}/reels/analyze")
+    async def analyze_reels(
+        project_id: int,
+        source_video_path: str = Form(""),
+        source_video: UploadFile | None = File(None),
+    ):
+        project = store.get_project(project_id)
+        _ = source_video_path
+        video_path = ""
+        if source_video is not None and source_video.filename:
+            source_dir = ensure_reels_dirs(APP_ROOT, project)["root"] / "source"
+            video_path = storage_relative_path(APP_ROOT, await _save_upload(source_video, source_dir))
+        else:
+            default_video_path = project_finished_video_path(APP_ROOT, project)
+            video_path = storage_relative_path(APP_ROOT, default_video_path) if default_video_path.exists() else ""
+        if not video_path:
+            analysis_id = store.create_reel_analysis(project_id, "")
+            store.update_reel_analysis(analysis_id, status="failed", error="Add finished.mp4 to the project output folder or upload a source video")
+            return RedirectResponse(f"/projects/{project_id}", status_code=303)
+        analysis_id = store.create_reel_analysis(project_id, video_path)
+        shutdown_controller.cancel_pending()
+        jobs.submit(
+            f"analyze reels: {project['name']}",
+            lambda: reels_pipeline.analyze(project_id, video_path),
+            project_id=project_id,
+            action="reels-analyze",
+            item_kind="reels",
+            selected_indices=[analysis_id],
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/reels/{analysis_id}/candidates/{candidate_id}/preview")
+    def preview_reel(project_id: int, analysis_id: int, candidate_id: int):
+        project = store.get_project(project_id)
+        jobs.submit(
+            f"preview reel: {project['name']} (candidate {candidate_id})",
+            lambda: reels_pipeline.render_preview(project_id, analysis_id, candidate_id),
+            project_id=project_id,
+            action="reels-preview",
+            item_kind="reels",
+            selected_indices=[candidate_id],
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/reels/{analysis_id}/candidates/{candidate_id}/export")
+    def export_reel(project_id: int, analysis_id: int, candidate_id: int):
+        project = store.get_project(project_id)
+        jobs.submit(
+            f"export reel: {project['name']} (candidate {candidate_id})",
+            lambda: reels_pipeline.export(project_id, analysis_id, candidate_id),
+            project_id=project_id,
+            action="reels-export",
+            item_kind="reels",
+            selected_indices=[candidate_id],
+        )
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/reels/{analysis_id}/candidates/{candidate_id}/clear")
+    def clear_reel_candidate(project_id: int, analysis_id: int, candidate_id: int):
+        reels_pipeline.clear_candidate_outputs(project_id, analysis_id, candidate_id)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/reels/{analysis_id}/candidates/{candidate_id}/delete")
+    def delete_reel_candidate(project_id: int, analysis_id: int, candidate_id: int):
+        reels_pipeline.delete_candidate(project_id, analysis_id, candidate_id)
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/align")
     def align(project_id: int, selected_lines: list[int] = Form(default=[])):

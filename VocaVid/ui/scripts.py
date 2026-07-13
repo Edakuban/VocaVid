@@ -5,6 +5,7 @@ SCRIPTS = f"""
     let projectStoryboardServerHtml = '';
     const projectStoryboardCardServerHtml = new Map();
     const projectStoryboardTemplateServerHtml = new Map();
+    let reelsUploadInteractionUntil = 0;
     function rememberProjectRows() {{
       document.querySelectorAll('tr[id^="line-row-"], tr[id^="segment-row-"]').forEach((row) => {{
         projectRowServerHtml.set(row.id, row.outerHTML);
@@ -477,6 +478,128 @@ SCRIPTS = f"""
       if (!box) return;
       box.classList.remove('open');
     }}
+    function openReelsModal() {{
+      const box = document.getElementById('reels-modal');
+      if (!box) return;
+      box.classList.add('open');
+      const projectId = currentProjectId();
+      if (projectId) refreshReelsStatus(projectId);
+    }}
+    function closeReelsModal() {{
+      const box = document.getElementById('reels-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
+    function hasActiveReelsVideo() {{
+      return Array.from(document.querySelectorAll('#reels-modal video')).some((video) => {{
+        return !video.paused || (video.currentTime && !video.ended);
+      }});
+    }}
+    function preserveReelsVideos(replacement) {{
+      const currentVideos = new Map();
+      document.querySelectorAll('#reels-status video[src]').forEach((video) => {{
+        currentVideos.set(video.getAttribute('src'), video);
+      }});
+      replacement.querySelectorAll('video[src]').forEach((video) => {{
+        const current = currentVideos.get(video.getAttribute('src'));
+        if (current) video.replaceWith(current);
+      }});
+    }}
+    function preserveReelsUploadInput(replacement) {{
+      const currentInput = document.querySelector('#reels-status input[name="source_video"]');
+      if (!currentInput || !currentInput.files || !currentInput.files.length) return;
+      const nextInput = replacement.querySelector('input[name="source_video"]');
+      if (!nextInput) return;
+      nextInput.replaceWith(currentInput);
+    }}
+    function pauseReelsUploadRefresh(milliseconds = 60000) {{
+      reelsUploadInteractionUntil = Date.now() + milliseconds;
+    }}
+    function hasActiveReelsUploadInteraction() {{
+      return Date.now() < reelsUploadInteractionUntil;
+    }}
+    function updateReelsStatus(data, force = false) {{
+      const box = document.getElementById('reels-status');
+      if (!box || data.reels_html === undefined) return;
+      if (box.innerHTML === data.reels_html) return;
+      if (!force && hasActiveReelsUploadInteraction()) return;
+      if (!force && hasPendingReelsUpload()) return;
+      if (!force && hasActiveReelsVideo()) return;
+      const template = document.createElement('template');
+      template.innerHTML = data.reels_html.trim();
+      preserveReelsVideos(template.content);
+      preserveReelsUploadInput(template.content);
+      box.replaceChildren(template.content);
+    }}
+    function hasPendingReelsUpload() {{
+      const input = document.querySelector('#reels-modal input[name="source_video"]');
+      return !!(input && input.files && input.files.length);
+    }}
+    function updateReelsUploadLabel(input) {{
+      pauseReelsUploadRefresh();
+      const form = input ? input.closest('.reels-source-form') : null;
+      const label = form ? form.querySelector('.reels-upload-name') : null;
+      if (!label) return;
+      const file = input && input.files && input.files.length ? input.files[0] : null;
+      label.textContent = file ? 'Selected: ' + file.name : 'No upload selected';
+    }}
+    function markReelsFormProcessing(form, button) {{
+      const card = form.closest('.reels-candidate-card');
+      if (card) {{
+        card.classList.add('reels-candidate-processing');
+        const pill = card.querySelector('.reels-status-pill');
+        if (pill) {{
+          pill.textContent = 'queued';
+          pill.className = 'reels-status-pill reels-status-queued';
+        }}
+      }}
+      if (button) {{
+        button.dataset.originalText = button.textContent;
+        button.textContent = 'Processing...';
+      }}
+    }}
+    async function refreshReelsStatus(projectId, force = false) {{
+      if (!projectId) return;
+      if (!force && hasActiveReelsUploadInteraction()) return;
+      if (!force && hasPendingReelsUpload()) return;
+      const response = await fetch('/projects/' + projectId + '/reels/status');
+      if (!response.ok) return;
+      if (!force && hasActiveReelsUploadInteraction()) return;
+      if (!force && hasPendingReelsUpload()) return;
+      updateReelsStatus(await response.json(), force);
+    }}
+    async function submitReelsForm(event) {{
+      const form = event.target.closest('form[data-reels-form="1"]');
+      if (!form) return;
+      event.preventDefault();
+      rememberScrollPosition();
+      const button = event.submitter || form.querySelector('button');
+      if (button) button.disabled = true;
+      markReelsFormProcessing(form, button);
+      try {{
+        await fetch(form.action, {{
+          method: form.method || 'post',
+          body: new FormData(form),
+        }});
+        const projectId = currentProjectId();
+        if (projectId) await refreshReelsStatus(projectId, true);
+      }} finally {{
+        if (button) {{
+          button.disabled = false;
+          if (button.dataset.originalText) button.textContent = button.dataset.originalText;
+        }}
+      }}
+    }}
+    async function pollReelsStatus(projectId) {{
+      try {{
+        const box = document.getElementById('reels-modal');
+        if (box && box.classList.contains('open')) await refreshReelsStatus(projectId);
+      }} catch (error) {{
+        return;
+      }} finally {{
+        window.setTimeout(() => pollReelsStatus(projectId), 3500);
+      }}
+    }}
     function formatManualTimingTimestamp(seconds) {{
       const value = Math.max(0, Number(seconds) || 0);
       return value.toFixed(1);
@@ -595,7 +718,14 @@ SCRIPTS = f"""
       rememberScrollPosition();
       return true;
     }}
+    document.addEventListener('submit', submitReelsForm);
     document.addEventListener('submit', rememberScrollPosition);
+    document.addEventListener('pointerdown', (event) => {{
+      if (event.target.closest('#reels-modal input[name="source_video"]')) pauseReelsUploadRefresh();
+    }});
+    document.addEventListener('focusin', (event) => {{
+      if (event.target.closest('#reels-modal input[name="source_video"]')) pauseReelsUploadRefresh();
+    }});
     document.addEventListener('pointerdown', (event) => {{
       const handle = event.target.closest('.segment-inspector-resize-handle');
       if (handle) beginSegmentInspectorResize(event, handle);

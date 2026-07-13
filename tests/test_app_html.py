@@ -345,6 +345,111 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<button>6. Gen Clips</button>', html)
         self.assertNotIn('class="button wip-button"', html)
 
+    def test_project_page_includes_reels_button_and_modal(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
+
+        html = _page("Demo", _project_html(project, []))
+
+        self.assertIn('onclick="openReelsModal()"', html)
+        self.assertIn(">8. Make reels</button>", html)
+        self.assertIn('id="reels-modal"', html)
+        self.assertIn('id="reels-status"', html)
+        self.assertIn('action="/projects/7/reels/analyze"', html)
+        self.assertIn('data-reels-form="1"', html)
+        self.assertIn("If empty, VocaVid uses", html)
+        self.assertIn("outputs/demo/finished.mp4", html)
+        self.assertNotIn('name="source_video_path"', html)
+        self.assertIn('name="source_video" type="file" accept="video/mp4,.mp4" onchange="updateReelsUploadLabel(this)"', html)
+        self.assertIn('class="reels-upload-name" aria-live="polite">No upload selected</p>', html)
+        self.assertIn("If empty, VocaVid uses", html)
+        self.assertNotIn('name="lyrics"', html[html.index('id="reels-modal"') :])
+        self.assertIn("function openReelsModal", html)
+        self.assertIn("function submitReelsForm", html)
+        self.assertIn("function markReelsFormProcessing", html)
+        self.assertIn("button.textContent = 'Processing...'", html)
+        self.assertIn("function hasActiveReelsVideo", html)
+        self.assertIn("function preserveReelsVideos", html)
+        self.assertIn("function preserveReelsUploadInput", html)
+        self.assertIn("function pauseReelsUploadRefresh", html)
+        self.assertIn("function hasActiveReelsUploadInteraction", html)
+        self.assertIn("if (!force && hasActiveReelsUploadInteraction()) return", html)
+        self.assertIn("pauseReelsUploadRefresh()", html)
+        self.assertIn("preserveReelsVideos(template.content)", html)
+        self.assertIn("preserveReelsUploadInput(template.content)", html)
+        self.assertIn("box.replaceChildren(template.content)", html)
+        self.assertIn("if (box.innerHTML === data.reels_html) return", html)
+        self.assertIn("if (!force && hasPendingReelsUpload()) return", html)
+        self.assertIn("if (!force && hasActiveReelsVideo()) return", html)
+        self.assertIn("updateReelsStatus(await response.json(), force)", html)
+        self.assertIn("function updateReelsUploadLabel", html)
+        self.assertIn("Selected: ' + file.name", html)
+        self.assertIn("function hasPendingReelsUpload", html)
+        self.assertIn("if (!force && hasPendingReelsUpload()) return", html)
+        self.assertGreaterEqual(html.count("if (!force && hasPendingReelsUpload()) return"), 2)
+        self.assertIn("await refreshReelsStatus(projectId, true)", html)
+        self.assertIn("fetch('/projects/' + projectId + '/reels/status')", html)
+        self.assertIn("pollReelsStatus(7)", html)
+        self.assertIn(".reels-modal-content { width: min(1500px, 98vw); height: min(980px, 94vh);", html)
+        self.assertIn(".reels-modal-content .lightbox-close { top: 12px; right: 12px;", html)
+        self.assertIn(".reels-grid { display: grid; grid-template-columns: 1fr;", html)
+        self.assertIn(".reels-source-form { display: grid; grid-template-columns: minmax(280px, 420px) minmax(260px, 1fr) auto;", html)
+        self.assertIn(".reels-source-upload, .reels-source-info { display: grid; gap: 7px;", html)
+        self.assertIn(".reels-source-path { display: inline-block;", html)
+        self.assertIn(".reels-candidate-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));", html)
+        self.assertIn(".reels-candidate-card { display: grid; grid-template-rows: auto minmax(260px, 1fr) auto;", html)
+        self.assertIn(".reels-status-pill { flex: 0 0 auto;", html)
+        self.assertIn(".reels-candidate-card.reels-candidate-processing", html)
+
+    def test_reels_modal_renders_candidates_and_export_actions(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        analyses = [
+            {
+                "id": 3,
+                "project_id": 7,
+                "source_video_path": "D:/exports/final.mp4",
+                "status": "done",
+                "error": "",
+                "metadata_json": '{"duration": 95.0, "width": 1920, "height": 1080, "fps": 25.0}',
+            }
+        ]
+        candidates = {
+            3: [
+                {
+                    "id": 9,
+                    "analysis_id": 3,
+                    "label": "Final Chorus 2",
+                    "start_sec": 30.0,
+                    "end_sec": 58.5,
+                    "score": 1.92,
+                    "reasons_json": '["final chorus", "hook"]',
+                    "preview_path": "outputs/demo/reels/previews/reel-009-preview.mp4",
+                    "export_path": "",
+                }
+            ]
+        }
+
+        html = _project_html(project, [], reel_analyses=analyses, reel_candidates_by_analysis=candidates)
+
+        self.assertIn("Final Chorus 2", html)
+        self.assertIn('class="reels-status-pill reels-status-pending">pending</span>', html)
+        self.assertIn('src="/assets/outputs/demo/reels/previews/reel-009-preview.mp4', html)
+        self.assertIn('data-reels-form="1" action="/projects/7/reels/3/candidates/9/preview"', html)
+        self.assertIn('data-reels-form="1" action="/projects/7/reels/3/candidates/9/export"', html)
+        self.assertIn('data-reels-form="1" action="/projects/7/reels/3/candidates/9/clear"', html)
+        self.assertIn('data-reels-form="1" action="/projects/7/reels/3/candidates/9/delete"', html)
+        self.assertLess(html.index("<h4>Final Chorus 2</h4>"), html.index('class="reels-preview-frame"'))
+        self.assertLess(html.index('class="reels-preview-frame"'), html.index('class="reels-candidate-actions"'))
+        self.assertNotIn('aria-label="Export"', html)
+
+        candidates[3][0]["export_path"] = "outputs/demo/reels/reel-009-export.mp4"
+        html = _project_html(project, [], reel_analyses=analyses, reel_candidates_by_analysis=candidates)
+
+        self.assertIn('src="/assets/outputs/demo/reels/reel-009-export.mp4', html)
+        self.assertIn('aria-label="Export"', html)
+        self.assertNotIn('src="/assets/outputs/demo/reels/previews/reel-009-preview.mp4', html)
+        self.assertLess(html.index("<h3>Source MP4</h3>"), html.index("<h3>Analysis</h3>"))
+        self.assertLess(html.index("<h3>Analysis</h3>"), html.index("<h3>Candidates</h3>"))
+
     def test_project_header_has_previous_and_next_project_triangle_links(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 

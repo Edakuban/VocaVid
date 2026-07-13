@@ -29,6 +29,7 @@ from .queue import (
     _queue_estimate_seconds,
     _queue_modal_html,
 )
+from .reels import _reels_modal_html
 from .storyboard import _storyboard_html
 
 
@@ -254,6 +255,8 @@ def _project_html(
     job_options: JobOptions | None = None,
     previous_project_id: int | None = None,
     next_project_id: int | None = None,
+    reel_analyses=None,
+    reel_candidates_by_analysis=None,
 ) -> str:
     segments = segments or []
     used_actions = used_actions or set()
@@ -286,6 +289,7 @@ def _project_html(
         )
         for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
+    actions += f'<button class="reels-open-button" type="button" onclick="openReelsModal()">8. Make reels</button>'
     progress = _project_progress_html(work_items)
     queue_control = _queue_control_html(queue_jobs, average_durations, queue_estimate_seconds, queue_count, job_options)
     queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
@@ -322,10 +326,11 @@ def _project_html(
   </section>
 {_project_settings_modal_html(project)}
 {_manual_timing_modal_html(project, lines)}
+{_reels_modal_html(project, reel_analyses or [], reel_candidates_by_analysis or {})}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
-<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus();</script>
+<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus(); pollReelsStatus({project["id"]});</script>
 """
 
 
