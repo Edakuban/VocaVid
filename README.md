@@ -27,11 +27,14 @@ assembled from approved clips.
 - Review projects from a visual dashboard with searchable project cards and
   progress badges.
 - Work in a storyboard-first project view with segment cards, media previews,
-  status chips, and a focused inspector for prompts and approvals.
+  status chips, and a focused, resizable inspector for prompts and approvals.
 - Switch to the advanced table view when dense timing, line, and diagnostic
   editing is useful.
 - Rerun individual lines or segments instead of regenerating an entire video,
   while approved clips stay protected from later batch actions.
+- Create vertical reel candidates from a finished/uploaded MP4 with Whisper
+  lyric alignment plus beat/energy scoring, then render quick previews or final
+  exports.
 - Track the global render queue from the top bar, queue modal, and browser tab
   title.
 - Keep uploads, generated media, databases, logs, and caches out of Git.
@@ -55,6 +58,8 @@ Requirements:
 - A running ComfyUI instance, usually at `http://127.0.0.1:8188`.
 - ComfyUI workflows exported into the local `workflows/` folder.
 - `ffmpeg` available on `PATH` for audio splitting and final assembly.
+- Reels analysis also uses `librosa` from `requirements.txt` for beat/energy
+  scoring.
 - Optional but recommended: a CUDA-capable GPU for faster Whisper alignment.
 
 Install dependencies:
@@ -112,6 +117,9 @@ After the initial setup, the normal VocaVid workflow looks like this:
 9. Use the advanced table view when you need compact timing or line-level
    editing.
 10. Click `Assemble Final`.
+11. Optional: open `Make reels` on the project page to analyze a finished MP4,
+    review short-form candidates, render previews, and export final vertical
+    reels.
 
 Most actions can run on selected storyboard cards or advanced-table rows only.
 Failed or weak segments can be rerendered without losing the rest of the
@@ -175,13 +183,35 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 - Review segments as storyboard cards with image/video previews, timing, section
   labels, generation status, and locked/running overlays.
 - Use the inspector to edit prompts, compare selected media, approve clips, and
-  navigate between segments without losing context.
+  navigate between segments without losing context. The inspector can be
+  resized, and project polling avoids replacing actively reviewed media.
 - Choose whether each clip uses the base image or avatar image source.
 - Retry selected segments without restarting the whole render.
 - Mark generated videos as approved with `OK`; approved rows are protected and
   skipped by later batch, selected-row, and redo generation actions.
 - Track queued/running jobs in the project header, browser tab title, and queue
   modal.
+
+### Reels
+
+- Open `Make reels` from a project page to create vertical short-form cuts from
+  an existing MP4.
+- By default, VocaVid looks for `outputs/<project-slug>/finished.mp4`. You can
+  also upload a source MP4 directly in the Reels modal.
+- Reels analysis extracts audio, runs Whisper word alignment against the
+  project's lyrics, scores sections with `librosa` energy/onset/beat features,
+  and generates ranked candidates.
+- Candidate cards show the title, duration, score, scoring reasons, status, and
+  one video player. If an export exists, the player uses the export; otherwise
+  it uses the preview.
+- `Preview` renders a smaller 9:16 MP4 under
+  `.VocaVid/outputs/<project-slug>/reels/previews/`.
+- `Export` renders a final 1080x1920 MP4 directly under
+  `.VocaVid/outputs/<project-slug>/reels/`.
+- `Clear` removes preview/export files for a candidate while keeping the
+  candidate. `Delete` removes the candidate completely.
+- Reel filenames include the candidate title and id, for example
+  `reel-chorus-3-006-export.mp4`, so repeated titles stay unique.
 
 ## Workflow Files
 
@@ -283,9 +313,11 @@ inline tag:
 [me] I stand in the smoke
 ```
 
-The `[me]` tag is removed from the renderable lyric text. The first uploaded
-reference image is exposed as `reference_image_path`, and bundled fallback
-images under `images/` are used when no project reference image is available.
+The `[me]` tag is removed from the renderable lyric text. Additional lyric meta
+tags are stripped from renderable text where supported, so prompt/control hints
+do not leak into the final lyric line. The first uploaded reference image is
+exposed as `reference_image_path`, and bundled fallback images under `images/`
+are used when no project reference image is available.
 
 ## Local State and Outputs
 
@@ -353,6 +385,20 @@ manually.
 Make sure `ffmpeg` is available on `PATH` and that
 `templates/kdenlivetemplate.kdenlive` exists. Generated project media is stored
 under `.VocaVid/outputs/`.
+
+### Reels analysis seems stuck
+
+Reels analysis uses Whisper and can compete with ComfyUI video generation for
+GPU/VRAM. If ComfyUI is rendering clips at the same time, Reels analysis may
+appear idle while waiting on transcription. Let the queue finish, or run Reels
+when the GPU is less busy.
+
+### Reels preview/export fails
+
+VocaVid renders Reels with FFmpeg. On Windows, if the default FFmpeg lacks
+`libx264`, the Reels renderer uses an available H.264 encoder such as
+MediaFoundation (`h264_mf`) where possible. Check the candidate error text in
+the Reels card and the local `.vocavid-server-*.err.log` if a render fails.
 
 ### Push/commit hygiene
 
