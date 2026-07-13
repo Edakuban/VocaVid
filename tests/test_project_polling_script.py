@@ -90,6 +90,21 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("restoreProjectStoryboardSelection(storyboard, storedStoryboardTemplate)", app_source)
         self.assertLess(app_source.index("rememberProjectRows();"), app_source.index("restoreProjectStoryboardSelection(storyboard, storedStoryboardTemplate)"))
 
+    def test_segment_inspector_width_is_resizable_and_restored(self):
+        app_source = self.app_source()
+
+        self.assertIn("function inspectorWidthStorageKey()", app_source)
+        self.assertIn("'VocaVid-segment-inspector-width'", app_source)
+        self.assertIn("function beginSegmentInspectorResize(event, handle)", app_source)
+        self.assertIn("rect.right - moveEvent.clientX", app_source)
+        self.assertIn("workspace.style.setProperty('--segment-inspector-width'", app_source)
+        self.assertIn("sessionStorage.setItem(inspectorWidthStorageKey()", app_source)
+        self.assertIn("sessionStorage.getItem(inspectorWidthStorageKey())", app_source)
+        self.assertIn("restoreSegmentInspectorWidth();", app_source)
+        self.assertIn("document.addEventListener('pointerdown'", app_source)
+        self.assertIn("document.addEventListener('keydown'", app_source)
+        self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreSegmentInspectorWidth();"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -540,6 +540,7 @@ class AppHtmlTests(unittest.TestCase):
         inspector_html = html[html.index('<aside id="segment-inspector"') : html.index("</aside>", html.index('<aside id="segment-inspector"'))]
 
         self.assertIn('class="segment-inspector"', html)
+        self.assertIn('class="segment-inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0"', inspector_html)
         self.assertIn('<h3 class="segment-inspector-title"># 02</h3>', html)
         self.assertIn("Inspector lyric", html)
         self.assertIn('action="/projects/7/segments/2/prompts/image/save"', html)
@@ -560,6 +561,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn('<div class="segment-inspector-label">Status</div>', inspector_html)
         self.assertIn('class="storyboard-card-media storyboard-card-media-image"', html)
         self.assertIn(".segment-inspector", _page("Demo", ""))
+        self.assertIn("--segment-inspector-width: minmax(360px, 520px)", _page("Demo", ""))
         self.assertIn("minmax(360px, 520px)", _page("Demo", ""))
 
     def test_segment_inspector_can_play_segment_audio_next_to_timing(self):
@@ -826,6 +828,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".finish-toggle-check { margin-left: auto; font-size: 23px;", html)
         self.assertIn("pointer-events: none;", html)
         self.assertIn(".segment-inspector { position: sticky; z-index: 70;", html)
+        self.assertIn(".segment-inspector-resize-handle { position: absolute; inset: 0 auto 0 0;", html)
+        self.assertIn(".storyboard-workspace-resizing .segment-inspector-resize-handle::after", html)
         self.assertIn("background: var(--bg-panel); color: var(--text-primary);", html)
         self.assertIn(".prompt-modal.lightbox { z-index: 120;", html)
         self.assertIn(".image-prompt-modal-content .prompt-textarea { min-height: 144px;", html)
@@ -2017,6 +2021,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn("function scrollToTop", html)
         self.assertIn(".project-topbar", html)
         self.assertIn("position: sticky", html)
+        self.assertIn(".project-topbar { position: sticky; top: 0; z-index: 100;", html)
+        self.assertIn(".project-storyboard { position: relative; z-index: 0;", html)
         self.assertIn("background: rgba(13,19,22,.96)", html)
         self.assertIn(".project-title-row h1 { color: var(--studio-text);", html)
         self.assertIn(".segment-inspector { position: sticky;", html)

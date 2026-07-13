@@ -118,6 +118,51 @@ SCRIPTS = f"""
       if (!card) return;
       selectStoryboardCard(storyboard, card);
     }}
+    function inspectorWidthStorageKey() {{
+      return 'VocaVid-segment-inspector-width';
+    }}
+    function segmentInspectorWorkspace() {{
+      return document.querySelector('#project-storyboard .storyboard-workspace');
+    }}
+    function clampSegmentInspectorWidth(workspace, width) {{
+      const workspaceWidth = workspace.getBoundingClientRect().width;
+      const minWidth = 360;
+      const maxWidth = Math.max(minWidth, Math.min(920, workspaceWidth - 260));
+      return Math.min(Math.max(width, minWidth), maxWidth);
+    }}
+    function setSegmentInspectorWidth(width, persist) {{
+      const workspace = segmentInspectorWorkspace();
+      if (!workspace) return;
+      const nextWidth = clampSegmentInspectorWidth(workspace, width);
+      workspace.style.setProperty('--segment-inspector-width', nextWidth + 'px');
+      if (persist) sessionStorage.setItem(inspectorWidthStorageKey(), String(Math.round(nextWidth)));
+    }}
+    function restoreSegmentInspectorWidth() {{
+      const stored = sessionStorage.getItem(inspectorWidthStorageKey());
+      if (stored === null) return;
+      const width = Number(stored);
+      if (Number.isFinite(width)) setSegmentInspectorWidth(width, false);
+    }}
+    function beginSegmentInspectorResize(event, handle) {{
+      const workspace = handle.closest('.storyboard-workspace');
+      if (!workspace || event.button !== 0) return;
+      event.preventDefault();
+      handle.setPointerCapture(event.pointerId);
+      workspace.classList.add('storyboard-workspace-resizing');
+      const resize = (moveEvent) => {{
+        const rect = workspace.getBoundingClientRect();
+        setSegmentInspectorWidth(rect.right - moveEvent.clientX, true);
+      }};
+      const stop = () => {{
+        workspace.classList.remove('storyboard-workspace-resizing');
+        handle.removeEventListener('pointermove', resize);
+        handle.removeEventListener('pointerup', stop);
+        handle.removeEventListener('pointercancel', stop);
+      }};
+      handle.addEventListener('pointermove', resize);
+      handle.addEventListener('pointerup', stop);
+      handle.addEventListener('pointercancel', stop);
+    }}
     function replaceProjectStoryboard(html) {{
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard || html === undefined) return;
@@ -134,6 +179,7 @@ SCRIPTS = f"""
       storyboard.replaceWith(replacement);
       restoreProjectStoryboardCheckedValues(replacement, checkedValues);
       restoreProjectStoryboardSelection(replacement, activeTemplateId);
+      restoreSegmentInspectorWidth();
     }}
     const baseDocumentTitle = document.title.replace(/^\\(\\d+\\)\\s+/, '');
     function updateBrowserTitle(queueCount) {{
@@ -437,10 +483,25 @@ SCRIPTS = f"""
       return true;
     }}
     document.addEventListener('submit', rememberScrollPosition);
+    document.addEventListener('pointerdown', (event) => {{
+      const handle = event.target.closest('.segment-inspector-resize-handle');
+      if (handle) beginSegmentInspectorResize(event, handle);
+    }});
+    document.addEventListener('keydown', (event) => {{
+      const handle = event.target.closest('.segment-inspector-resize-handle');
+      if (!handle || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+      const workspace = handle.closest('.storyboard-workspace');
+      if (!workspace) return;
+      event.preventDefault();
+      const inspector = workspace.querySelector('.segment-inspector');
+      const currentWidth = inspector ? inspector.getBoundingClientRect().width : 520;
+      setSegmentInspectorWidth(currentWidth + (event.key === 'ArrowLeft' ? 24 : -24), true);
+    }});
     document.addEventListener('DOMContentLoaded', () => {{
       rememberProjectRows();
       rememberProjectStoryboard();
       setupProjectBrowserControls();
+      restoreSegmentInspectorWidth();
       const storyboard = document.getElementById('project-storyboard');
       const storedStoryboardTemplate = sessionStorage.getItem(storyboardSelectionStorageKey());
       if (storyboard && storedStoryboardTemplate) {{

@@ -124,6 +124,7 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
     navigation = _segment_inspector_navigation_html(item_kind, label, display_label, previous_index, next_index)
     return f"""
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
+        <div class="segment-inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0"></div>
         {navigation}
         {image_choice_section}
         <div class="segment-inspector-section">

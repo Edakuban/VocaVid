@@ -288,7 +288,7 @@ STYLES = f"""
       .project-card-link {{ grid-template-rows: auto minmax(0, 1fr); }}
     }}
     .project-title-left .progress-pill {{ align-self: center; }}
-    .project-topbar {{ position: sticky; top: 0; z-index: 20; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(13,19,22,.96); border-bottom: 1px solid rgba(255,255,255,.055); color: var(--text-primary); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.22); }}
+    .project-topbar {{ position: sticky; top: 0; z-index: 100; margin: -24px -24px 16px; padding: 14px 24px 0; background: rgba(13,19,22,.96); border-bottom: 1px solid rgba(255,255,255,.055); color: var(--text-primary); backdrop-filter: blur(12px); box-shadow: 0 18px 50px rgba(0,0,0,.22); }}
     .project-title-row h1 {{ color: var(--studio-text); text-shadow: 0 1px 18px rgba(0,0,0,.35); }}
     .project-title-row {{ display: grid; grid-template-columns: minmax(180px, 1fr) auto minmax(180px, 1fr); gap: 12px; align-items: center; margin-bottom: 12px; }}
     .project-title-left, .project-title-center, .project-title-right {{ display: flex; align-items: center; gap: 10px; min-width: 0; }}
@@ -306,8 +306,8 @@ STYLES = f"""
     .view-switch {{ display: inline-flex; gap: 4px; width: fit-content; padding: 4px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-control); }}
     .view-switch button {{ margin: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); }}
     .view-switch button.active {{ background: var(--action); color: #07120f; }}
-    .project-storyboard {{ display: grid; gap: 12px; }}
-    .storyboard-workspace {{ display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 520px); gap: 14px; align-items: start; }}
+    .project-storyboard {{ position: relative; z-index: 0; display: grid; gap: 12px; }}
+    .storyboard-workspace {{ --segment-inspector-width: minmax(360px, 520px); display: grid; grid-template-columns: minmax(0, 1fr) var(--segment-inspector-width); gap: 14px; align-items: start; }}
     .storyboard-rail {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }}
     .storyboard-card {{ position: relative; display: grid; grid-template-rows: auto 1fr; min-width: 0; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); color: var(--text-primary); overflow: hidden; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease, background-color .15s ease; }}
     .storyboard-card-approved {{ background: linear-gradient(180deg, rgba(69,201,141,.075), rgba(69,201,141,.025)), var(--bg-card); border-color: rgba(69,201,141,.58); }}
@@ -356,6 +356,9 @@ STYLES = f"""
     .progress-step {{ border-radius: 999px; border: 1px solid var(--border-default); padding: 3px 7px; color: var(--text-muted); background: #202a2f; font-size: 10px; font-weight: 750; text-transform: uppercase; }}
     .progress-step-done {{ border-color: rgba(41,211,176,.42); background: var(--action-soft); color: #aef8e6; }}
     .segment-inspector {{ position: sticky; z-index: 70; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text-primary); padding: 14px; }}
+    .segment-inspector-resize-handle {{ position: absolute; inset: 0 auto 0 0; z-index: 3; width: 14px; cursor: col-resize; touch-action: none; border-radius: 999px; }}
+    .segment-inspector-resize-handle::after {{ content: ""; position: absolute; top: 14px; bottom: 14px; left: 6px; width: 2px; border-radius: 999px; background: rgba(255,255,255,.10); opacity: 0; transition: opacity 120ms ease, background-color 120ms ease; }}
+    .segment-inspector-resize-handle:hover::after, .segment-inspector-resize-handle:focus-visible::after, .storyboard-workspace-resizing .segment-inspector-resize-handle::after {{ background: var(--action); opacity: 1; }}
     .segment-inspector h3 {{ margin: 0; color: var(--text-primary); }}
     .segment-inspector-nav {{ display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 10px; align-items: center; margin: -2px 0 0; }}
     .segment-inspector-title {{ color: var(--text-primary); font-size: 24px; font-weight: 800; letter-spacing: .02em; line-height: 1; text-align: center; text-transform: uppercase; }}
@@ -411,7 +414,7 @@ STYLES = f"""
     .manual-time-input {{ font-variant-numeric: tabular-nums; }}
     .manual-time-input.manual-time-filled {{ border-color: var(--action); box-shadow: 0 0 0 3px var(--action-soft); }}
     .manual-timing-actions {{ display: flex; justify-content: flex-end; margin-top: 14px; }}
-    @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} }}
+    @media (max-width: 980px) {{ .storyboard-workspace {{ grid-template-columns: 1fr; }} .segment-inspector {{ position: static; max-height: none; }} .segment-inspector-resize-handle {{ display: none; }} }}
     .project-table-view[hidden] {{ display: none; }}
     .queue-control {{ display: inline-flex; }}
     .queue-estimate {{ padding: 6px 10px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: #202a2f; color: var(--text-secondary); font-weight: 700; white-space: nowrap; cursor: pointer; }}
