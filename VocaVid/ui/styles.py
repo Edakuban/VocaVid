@@ -393,7 +393,7 @@ STYLES = f"""
     .prompt-modal.lightbox {{ z-index: 120; }}
     .image-prompt-modal-content {{ width: min(760px, 94vw); }}
     .image-prompt-modal-content .prompt-textarea {{ min-height: 144px; }}
-    .segment-inspector .prompt-textarea {{ width: 100%; min-height: 76px; }}
+    .segment-inspector .prompt-textarea {{ width: 100%; min-height: 250px; }}
     .project-modal-content {{ width: min(860px, 94vw); }}
     .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
     .project-settings-body {{ max-height: calc(88vh - 74px); overflow: auto; }}
