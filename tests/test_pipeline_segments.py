@@ -1546,7 +1546,7 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertTrue(result.exists())
             self.assertEqual(store.get_project(project_id)["final_video_path"], "outputs/demo/final.kdenlive")
             xml = result.read_text(encoding="utf-8")
-            self.assertIn('out="00:00:04.750"', xml)
+            self.assertIn('out="00:00:04.720"', xml)
             self.assertIn('<property name="kdenlive:docproperties.renderurl">finished.mp4</property>', xml)
             self.assertIn('<property name="kdenlive:docproperties.renderpath">finished.mp4</property>', xml)
             self.assertIn('producer="clip0"', xml)

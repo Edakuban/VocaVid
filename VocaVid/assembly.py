@@ -78,9 +78,10 @@ def assemble_kdenlive_project(
 
     fps = _profile_fps(root)
     handle = max(0.0, float(transition_handle_seconds))
-    timeline_clips = _clip_timings(clips)
-    transition_durations = _transition_durations(timeline_clips, handle)
+    timeline_clips = _clip_timings(clips, fps)
+    transition_durations = _transition_durations(timeline_clips, handle, fps)
     total_duration = max(float(clip["timeline_end_sec"]) for clip in timeline_clips)
+    total_frames = max(int(clip["timeline_end_frame"]) for clip in timeline_clips)
 
     audio_producer = _producer("audio0", audio_path, total_duration, playlist_id="main_bin", base_path=output_path.parent)
     root.insert(_producer_insert_index(root), audio_producer)
@@ -90,29 +91,38 @@ def assemble_kdenlive_project(
         _set_render_target(main_bin, render_target_path, output_path.parent)
 
     for index, clip in enumerate(timeline_clips):
-        visible_duration = max(0.0, float(clip["timeline_end_sec"]) - float(clip["timeline_start_sec"]))
-        outgoing_handle = transition_durations[index] if index < len(transition_durations) else 0.0
-        entry_duration = visible_duration + outgoing_handle
+        visible_frames = max(1, int(clip["timeline_end_frame"]) - int(clip["timeline_start_frame"]))
+        outgoing_handle_frames = transition_durations[index] if index < len(transition_durations) else 0
+        entry_frames = visible_frames + outgoing_handle_frames
         producer_id = f"clip{index}"
         clip_path = Path(clip["path"])
-        root.insert(_producer_insert_index(root), _producer(producer_id, clip_path, entry_duration, playlist_id="main_bin", base_path=output_path.parent))
+        root.insert(
+            _producer_insert_index(root),
+            _producer(
+                producer_id,
+                clip_path,
+                _frames_to_seconds(entry_frames, fps),
+                playlist_id="main_bin",
+                base_path=output_path.parent,
+            ),
+        )
         target_playlist = main_playlist if index % 2 == 0 else overlay_playlist
-        _append_blank_until(target_playlist, float(clip["timeline_start_sec"]))
-        ET.SubElement(target_playlist, "entry", {"producer": producer_id, "in": _timecode(0), "out": _timecode(entry_duration)})
-        _add_bin_entry(main_bin, producer_id, entry_duration)
+        _append_blank_until(target_playlist, _frames_to_seconds(int(clip["timeline_start_frame"]), fps))
+        ET.SubElement(target_playlist, "entry", {"producer": producer_id, "in": _timecode(0), "out": _frame_timecode(entry_frames, fps)})
+        _add_bin_entry(main_bin, producer_id, _frames_to_seconds(entry_frames, fps))
 
     for index, clip in enumerate(timeline_clips[:-1]):
         next_clip = timeline_clips[index + 1]
-        transition_duration = transition_durations[index]
-        start = max(float(clip["timeline_end_sec"]), float(next_clip["timeline_start_sec"]))
-        end = min(
-            float(clip["timeline_end_sec"]) + transition_duration,
-            float(next_clip["timeline_start_sec"]) + transition_duration,
-            total_duration,
+        transition_frames = transition_durations[index]
+        start_frame = max(int(clip["timeline_end_frame"]), int(next_clip["timeline_start_frame"]))
+        end_frame = min(
+            int(clip["timeline_end_frame"]) + transition_frames,
+            int(next_clip["timeline_start_frame"]) + transition_frames,
+            total_frames,
         )
         from_playlist = "playlist10" if index % 2 == 0 else "playlist12"
         to_playlist = "playlist10" if (index + 1) % 2 == 0 else "playlist12"
-        _add_transition(sequence, index, start, end, root, from_playlist, to_playlist, fps)
+        _add_transition(sequence, index, start_frame, end_frame, root, from_playlist, to_playlist, fps)
 
     sequence.set("out", _timecode(total_duration))
     _set_property(sequence, "kdenlive:duration", _timecode(total_duration))
@@ -297,26 +307,33 @@ def _set_render_target(main_bin: ET.Element, render_target_path: Path, base_path
     _set_property(main_bin, "kdenlive:docproperties.renderpath", render_target)
 
 
-def _clip_timings(clips: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+def _clip_timings(clips: Sequence[dict[str, Any]], fps: float) -> list[dict[str, Any]]:
     timed = []
     for clip in clips:
         start = float(clip["start_sec"])
         end = float(clip["end_sec"])
         if end < start:
             end = start
+        start_frame = _seconds_to_frame(start, fps)
+        end_frame = max(start_frame + 1, _seconds_to_frame(end, fps))
         updated = dict(clip)
-        updated["timeline_start_sec"] = start
-        updated["timeline_end_sec"] = end
+        updated["source_start_sec"] = start
+        updated["source_end_sec"] = end
+        updated["timeline_start_frame"] = start_frame
+        updated["timeline_end_frame"] = end_frame
+        updated["timeline_start_sec"] = _frames_to_seconds(start_frame, fps)
+        updated["timeline_end_sec"] = _frames_to_seconds(end_frame, fps)
         timed.append(updated)
     return timed
 
 
-def _transition_durations(clips: Sequence[dict[str, Any]], handle: float) -> list[float]:
+def _transition_durations(clips: Sequence[dict[str, Any]], handle: float, fps: float) -> list[int]:
     durations = []
+    handle_frames = _duration_to_frames(handle, fps)
     for current, next_clip in zip(clips, clips[1:]):
-        current_duration = max(0.0, float(current["timeline_end_sec"]) - float(current["timeline_start_sec"]))
-        next_duration = max(0.0, float(next_clip["timeline_end_sec"]) - float(next_clip["timeline_start_sec"]))
-        durations.append(max(0.0, min(handle, current_duration / 2.0, next_duration / 2.0)))
+        current_frames = max(1, int(current["timeline_end_frame"]) - int(current["timeline_start_frame"]))
+        next_frames = max(1, int(next_clip["timeline_end_frame"]) - int(next_clip["timeline_start_frame"]))
+        durations.append(max(0, min(handle_frames, current_frames // 2, next_frames // 2)))
     return durations
 
 
@@ -340,8 +357,8 @@ def _playlist_duration(playlist: ET.Element) -> float:
 def _add_transition(
     sequence: ET.Element,
     index: int,
-    start: float,
-    end: float,
+    start_frame: int,
+    end_frame: int,
     root: ET.Element,
     from_playlist: str,
     to_playlist: str,
@@ -352,11 +369,13 @@ def _add_transition(
     to_track = _sequence_track_producer_for_playlist(root, sequence, to_playlist)
     from_position = track_indices.get(from_track, 0)
     to_position = track_indices.get(to_track, 0)
-    frame = 1.0 / fps if fps > 0 else 0.040
-    if end - start <= frame:
+    if end_frame - start_frame <= 1:
         return
-    transition_end = max(start, end - frame)
-    transition = ET.SubElement(sequence, "transition", {"id": f"auto_transition{index}", "in": _timecode(start), "out": _timecode(transition_end)})
+    transition = ET.SubElement(
+        sequence,
+        "transition",
+        {"id": f"auto_transition{index}", "in": _frame_timecode(start_frame, fps), "out": _frame_timecode(end_frame - 1, fps)},
+    )
     _set_property(transition, "a_track", str(min(from_position, to_position)))
     _set_property(transition, "b_track", str(max(from_position, to_position)))
     _set_property(transition, "mlt_service", "luma")
@@ -402,6 +421,26 @@ def _profile_fps(root: ET.Element) -> float:
     numerator = float(profile.attrib.get("frame_rate_num", 25))
     denominator = float(profile.attrib.get("frame_rate_den", 1))
     return numerator / denominator if denominator else 25.0
+
+
+def _seconds_to_frame(seconds: float, fps: float) -> int:
+    frame_rate = fps if fps > 0 else 25.0
+    return max(0, int(float(seconds) * frame_rate + 0.5))
+
+
+def _duration_to_frames(seconds: float, fps: float) -> int:
+    frame_rate = fps if fps > 0 else 25.0
+    frames = int(float(seconds) * frame_rate + 1e-9)
+    return max(1, frames) if seconds > 0 else 0
+
+
+def _frames_to_seconds(frames: int, fps: float) -> float:
+    frame_rate = fps if fps > 0 else 25.0
+    return max(0, int(frames)) / frame_rate
+
+
+def _frame_timecode(frames: int, fps: float) -> str:
+    return _timecode(_frames_to_seconds(frames, fps))
 
 
 def _timecode(seconds: float) -> str:

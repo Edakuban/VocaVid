@@ -158,7 +158,7 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(audio_entries[0].attrib["out"], "00:00:07.000")
             self.assertEqual(main_entries[0].attrib["producer"], "clip0")
             self.assertEqual(main_entries[0].attrib["in"], "00:00:00.000")
-            self.assertEqual(main_entries[0].attrib["out"], "00:00:04.500")
+            self.assertEqual(main_entries[0].attrib["out"], "00:00:04.480")
             self.assertEqual(len(main_entries), 1)
             self.assertEqual(overlay_entries[0].tag, "blank")
             self.assertEqual(overlay_entries[0].attrib["length"], "00:00:04.000")
@@ -175,7 +175,7 @@ class AssemblyTests(unittest.TestCase):
             ]
             self.assertEqual(len(transitions), 1)
             self.assertEqual(transitions[0].attrib["in"], "00:00:04.000")
-            self.assertEqual(transitions[0].attrib["out"], "00:00:04.460")
+            self.assertEqual(transitions[0].attrib["out"], "00:00:04.440")
 
     def test_assemble_kdenlive_project_preserves_tiny_timing_gaps_and_shortens_transition(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -223,14 +223,14 @@ class AssemblyTests(unittest.TestCase):
             root = ET.parse(output).getroot()
             overlay_items = list(root.find(".//playlist[@id='playlist12']"))
             self.assertEqual(overlay_items[0].tag, "blank")
-            self.assertEqual(overlay_items[0].attrib["length"], "00:00:04.012")
+            self.assertEqual(overlay_items[0].attrib["length"], "00:00:04.000")
             transition = next(
                 transition
                 for transition in root.findall(".//transition")
                 if any(prop.text == "luma" for prop in transition.findall("property") if prop.attrib.get("name") == "mlt_service")
             )
-            self.assertEqual(transition.attrib["in"], "00:00:04.012")
-            self.assertEqual(transition.attrib["out"], "00:00:04.460")
+            self.assertEqual(transition.attrib["in"], "00:00:04.000")
+            self.assertEqual(transition.attrib["out"], "00:00:04.440")
 
     def test_assemble_kdenlive_project_adds_transitions_to_nested_video_tracks(self):
         with tempfile.TemporaryDirectory() as directory:
