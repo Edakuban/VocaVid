@@ -67,8 +67,26 @@ def is_instrumental_section(section: str) -> bool:
 
 
 def _strip_inline_tags(line: str) -> str:
-    return re.sub(r"\[[^\]]+\]", "", line).strip()
+    output: list[str] = []
+    index = 0
+    while index < len(line):
+        if line[index] == "[":
+            end = line.find("]", index + 1)
+            if end != -1:
+                index = end + 1
+                continue
+        output.append(line[index])
+        index += 1
+    return "".join(output).strip()
 
 
 def _inline_tags(line: str) -> set[str]:
-    return {tag.strip().lower() for tag in re.findall(r"\[([^\]]+)\]", line)}
+    tags: set[str] = set()
+    start = None
+    for index, char in enumerate(line):
+        if char == "[":
+            start = index + 1
+        elif char == "]" and start is not None:
+            tags.add(line[start:index].strip().lower())
+            start = None
+    return tags

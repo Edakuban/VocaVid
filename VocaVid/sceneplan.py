@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any
 
 from .prompt_templates import load_named_prompt_template, render_prompt_template
@@ -240,13 +239,36 @@ def parse_scene_plan_text(text: str, segment_indices: list[int]) -> dict[int, st
     wanted = set(segment_indices)
     parsed: dict[int, str] = {}
     for line in text.splitlines():
-        match = re.match(r"\s*(?:(?:segment(?:_index)?|segment\s+index)\s*[:#-]?\s*)?(\d+)\s*[:.)-]\s*(.+?)\s*$", line, flags=re.IGNORECASE)
-        if not match:
+        parsed_line = _parse_scene_plan_line(line)
+        if parsed_line is None:
             continue
-        index = int(match.group(1))
+        index, scene_plan = parsed_line
         if index in wanted:
-            parsed[index] = match.group(2).strip()
+            parsed[index] = scene_plan
     return parsed
+
+
+def _parse_scene_plan_line(line: str) -> tuple[int, str] | None:
+    stripped = line.strip()
+    lower = stripped.casefold()
+    for prefix in ("segment index", "segment_index", "segment"):
+        if lower.startswith(prefix):
+            stripped = stripped[len(prefix):].lstrip(" :#-")
+            break
+    digits = []
+    for char in stripped:
+        if not char.isdigit():
+            break
+        digits.append(char)
+    if not digits:
+        return None
+    rest = stripped[len(digits):].lstrip()
+    if not rest or rest[0] not in ":.)-":
+        return None
+    scene_plan = rest[1:].strip()
+    if not scene_plan:
+        return None
+    return int("".join(digits)), scene_plan
 
 
 def _act_name(index: int, total: int) -> str:

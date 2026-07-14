@@ -33,6 +33,20 @@ class PathStorageTests(unittest.TestCase):
 
             self.assertEqual(resolve_storage_path(app_root, "outputs/demo/clip.mp4"), app_root / "outputs" / "demo" / "clip.mp4")
 
+    def test_resolve_storage_path_rejects_internal_traversal(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            app_root = Path(directory) / ".VocaVid"
+
+            with self.assertRaises(ValueError):
+                resolve_storage_path(app_root, "outputs/../secret.txt")
+
+    def test_storage_relative_path_rejects_internal_traversal(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            app_root = Path(directory) / ".VocaVid"
+
+            with self.assertRaises(ValueError):
+                storage_relative_path(app_root, r"D:\old\VocaVid\.VocaVid\outputs\..\secret.txt")
+
     def test_project_output_file_stem_uses_episode_number_and_title(self):
         self.assertEqual(project_output_file_stem("Feuer und Stahl - 02 - Kampf und Ehre"), "02 - Kampf und Ehre")
 

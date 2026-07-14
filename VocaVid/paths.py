@@ -30,10 +30,10 @@ def storage_relative_path(app_root: Path, value: str | Path | None) -> str:
     for storage_dir in STORAGE_DIRS:
         marker = f"/{storage_dir}/"
         if marker in normalized:
-            return normalized.split(marker, 1)[1].lstrip("/")
+            return _clean_storage_suffix(normalized.split(marker, 1)[1])
         prefix = f"{storage_dir}/"
         if normalized.startswith(prefix):
-            return normalized[len(prefix):].lstrip("/")
+            return _clean_storage_suffix(normalized[len(prefix):])
     app_root = app_root.resolve()
     path = Path(raw)
     try:
@@ -49,12 +49,12 @@ def resolve_storage_path(app_root: Path, value: str | Path | None) -> Path:
     for storage_dir in STORAGE_DIRS:
         marker = f"/{storage_dir}/"
         if marker in normalized:
-            return app_root / normalized.split(marker, 1)[1].lstrip("/")
+            return app_root / _clean_storage_suffix(normalized.split(marker, 1)[1])
         prefix = f"{storage_dir}/"
         if normalized.startswith(prefix):
-            return app_root / normalized[len(prefix):].lstrip("/")
+            return app_root / _clean_storage_suffix(normalized[len(prefix):])
     if _is_internal_relative_path(normalized):
-        return app_root / normalized.lstrip("/")
+        return app_root / _clean_storage_suffix(normalized)
     return path
 
 
@@ -71,6 +71,17 @@ def is_internal_storage_path(value: str | Path | None) -> bool:
 
 def _is_internal_relative_path(normalized: str) -> bool:
     return normalized.startswith("uploads/") or normalized.startswith("outputs/")
+
+
+def _clean_storage_suffix(value: str) -> str:
+    parts: list[str] = []
+    for part in value.replace("\\", "/").split("/"):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            raise ValueError("Storage path must not escape the app root")
+        parts.append(part)
+    return "/".join(parts)
 
 
 def _windows_safe_filename(value: str, max_length: int = 120) -> str:

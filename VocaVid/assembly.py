@@ -214,6 +214,8 @@ def split_audio_segment(
         raise ValueError("Audio segment end must be after start")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    audio_arg = _command_path_arg(audio_path)
+    output_arg = _command_path_arg(output_path)
     command = [
         _ffmpeg_binary(),
         "-y",
@@ -222,11 +224,11 @@ def split_audio_segment(
         "-to",
         f"{end_sec:.3f}",
         "-i",
-        str(audio_path),
+        audio_arg,
         "-vn",
         "-acodec",
         "pcm_s16le",
-        str(output_path),
+        output_arg,
     ]
     try:
         runner(command, check=True, capture_output=True, text=True)
@@ -537,6 +539,10 @@ def _ffmpeg_binary() -> str:
     if bundled.exists():
         return str(bundled)
     return "ffmpeg"
+
+
+def _command_path_arg(path: Path) -> str:
+    return str(path.resolve(strict=False))
 
 
 def _melt_binary() -> str:
