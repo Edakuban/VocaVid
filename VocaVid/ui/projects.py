@@ -324,6 +324,7 @@ def _project_html(
     table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
 <div class="project-studio">
+  <div id="project-completion-celebration" class="project-completion-celebration" aria-hidden="true"></div>
   <div class="project-topbar">
     <div class="project-title-row">
       <div class="project-title-left">
@@ -443,7 +444,7 @@ def _progress_pill_html(approved: int, total: int, css_class: str = "", element_
     label = f"{approved}/{total}"
     title = f"{label} finished"
     return (
-        f'<span{id_attr} class="{_attr(class_attr)}" title="{_attr(title)}">'
+        f'<span{id_attr} class="{_attr(class_attr)}" title="{_attr(title)}" data-approved="{approved}" data-total="{total}">'
         f'<span class="progress-pill-fill" style="--progress: {percent}%"></span>'
         f'<span class="progress-pill-label">{_text(label)}</span>'
         "</span>"

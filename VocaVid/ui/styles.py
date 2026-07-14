@@ -238,6 +238,24 @@ STYLES = f"""
     .progress-pill {{ position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 82px; width: 92px; height: 30px; overflow: hidden; border-radius: 999px; border: 1px solid rgba(255,255,255,.20); background: rgba(9,14,16,.76); color: var(--text-primary); font-size: 12px; font-weight: 900; font-variant-numeric: tabular-nums; box-shadow: 0 10px 26px rgba(0,0,0,.25); }}
     .progress-pill-fill {{ position: absolute; inset: 0 auto 0 0; width: var(--progress, 0%); background: linear-gradient(90deg, rgba(41,211,176,.74), rgba(69,201,141,.76)); }}
     .progress-pill-label {{ position: relative; z-index: 1; text-shadow: 0 1px 8px rgba(0,0,0,.48); }}
+    #project-progress-pill.progress-pill-completed {{ animation: progressCompletionPop 860ms cubic-bezier(.18, 1.42, .24, 1); box-shadow: 0 0 0 1px rgba(255,255,255,.26), 0 0 28px rgba(41,211,176,.74), 0 0 54px rgba(233,72,159,.42); }}
+    #project-progress-pill.progress-pill-completed::after {{ content: ""; position: absolute; inset: -45%; z-index: 1; background: linear-gradient(105deg, transparent 36%, rgba(255,255,255,.72) 50%, transparent 64%); transform: translateX(-95%) rotate(8deg); animation: progressCompletionShine 880ms ease-out; pointer-events: none; }}
+    .project-studio {{ position: relative; }}
+    .project-completion-celebration {{ position: fixed; inset: 0; z-index: 115; pointer-events: none; overflow: hidden; opacity: 0; }}
+    .project-completion-celebration::before {{ content: ""; position: absolute; left: var(--origin-x, 50%); top: var(--origin-y, 84px); width: min(820px, 92vw); aspect-ratio: 1; border-radius: 50%; background: repeating-conic-gradient(from 8deg, rgba(41,211,176,.20) 0 5deg, transparent 5deg 12deg, rgba(233,72,159,.16) 12deg 16deg, transparent 16deg 25deg), radial-gradient(circle, rgba(41,211,176,.42), rgba(41,211,176,.13) 34%, transparent 66%); transform: translate(-50%, -50%) scale(.2); opacity: 0; filter: blur(.2px); }}
+    .project-completion-celebration::after {{ content: ""; position: absolute; left: var(--origin-x, 50%); top: var(--origin-y, 84px); width: min(960px, 96vw); height: 260px; background: radial-gradient(ellipse at center, rgba(41,211,176,.22), transparent 60%), linear-gradient(105deg, transparent 16%, rgba(233,72,159,.42) 18%, transparent 20% 35%, rgba(41,211,176,.36) 37%, transparent 39% 58%, rgba(233,72,159,.32) 60%, transparent 62%); transform: translate(-50%, -50%) scaleX(.15); opacity: 0; filter: blur(.6px); }}
+    .project-completion-celebration-active {{ opacity: 1; }}
+    .project-completion-celebration-active::before {{ animation: completionRing 1800ms cubic-bezier(.12,.82,.18,1) forwards; }}
+    .project-completion-celebration-active::after {{ animation: completionStreamers 1850ms cubic-bezier(.12,.82,.18,1) forwards; }}
+    .completion-particle {{ position: absolute; left: var(--origin-x, 50%); top: var(--origin-y, 84px); width: 10px; height: 10px; color: var(--color); background: var(--color); opacity: 0; transform: translate(-50%, -50%) scale(.18) rotate(0deg); animation: completionParticleBurst 1900ms cubic-bezier(.12,.82,.18,1) forwards; animation-delay: var(--delay); filter: drop-shadow(0 0 10px rgba(41,211,176,.34)); }}
+    .completion-particle-star {{ clip-path: polygon(50% 0%, 61% 34%, 98% 35%, 68% 56%, 79% 91%, 50% 70%, 21% 91%, 32% 56%, 2% 35%, 39% 34%); }}
+    .completion-particle-dot {{ border-radius: 50%; width: 7px; height: 7px; }}
+    .completion-particle-strip {{ width: 6px; height: 24px; border-radius: 999px; }}
+    .completion-particle-streamer {{ width: 42px; height: 8px; border-radius: 999px 4px 999px 4px; background: transparent; border-top: 3px solid currentColor; border-bottom: 3px solid currentColor; opacity: .86; }}
+    .completion-confetti {{ position: absolute; left: var(--left); top: -32px; width: 9px; height: 18px; border-radius: 3px 8px 3px 8px; color: var(--color); background: linear-gradient(135deg, currentColor, rgba(255,255,255,.72)); opacity: 0; transform: translate3d(0, -32px, 0) rotate(0deg) scale(var(--s)); animation: completionConfettiFall var(--duration) cubic-bezier(.18,.72,.18,1) forwards; animation-delay: var(--delay); box-shadow: 0 0 14px rgba(41,211,176,.18); }}
+    .completion-confetti:nth-child(3n) {{ width: 14px; height: 8px; border-radius: 999px; }}
+    .completion-confetti:nth-child(4n) {{ width: 7px; height: 7px; border-radius: 50%; }}
+    .completion-confetti:nth-child(5n) {{ width: 18px; height: 5px; border-radius: 999px 4px 999px 4px; }}
     .project-progress-badge {{ position: absolute; left: 10px; top: 10px; z-index: 2; pointer-events: none; }}
     .project-card-hidden {{ display: none; }}
     .project-empty-state {{ display: none; padding: 26px 16px 32px; color: var(--text-muted); text-align: center; font-weight: 750; }}
@@ -516,6 +534,38 @@ STYLES = f"""
     .segment-inspector::-webkit-scrollbar-track, .project-settings-body::-webkit-scrollbar-track, .queue-modal-body::-webkit-scrollbar-track, textarea::-webkit-scrollbar-track {{ background: #182126; }}
     .segment-inspector::-webkit-scrollbar-thumb, .project-settings-body::-webkit-scrollbar-thumb, .queue-modal-body::-webkit-scrollbar-thumb, textarea::-webkit-scrollbar-thumb {{ background: #536168; border: 2px solid #182126; border-radius: 10px; }}
     .segment-inspector::-webkit-scrollbar-thumb:hover, .project-settings-body::-webkit-scrollbar-thumb:hover, .queue-modal-body::-webkit-scrollbar-thumb:hover, textarea::-webkit-scrollbar-thumb:hover {{ background: #68777f; }}
+    @keyframes progressCompletionPop {{
+      0% {{ transform: scale(1); }}
+      34% {{ transform: scale(1.2); }}
+      62% {{ transform: scale(.96); }}
+      100% {{ transform: scale(1); }}
+    }}
+    @keyframes progressCompletionShine {{
+      to {{ transform: translateX(95%) rotate(8deg); }}
+    }}
+    @keyframes completionRing {{
+      0% {{ opacity: 0; transform: translate(-50%, -50%) scale(.18) rotate(0deg); }}
+      18% {{ opacity: 1; }}
+      72% {{ opacity: .7; }}
+      100% {{ opacity: 0; transform: translate(-50%, -50%) scale(1.08) rotate(18deg); }}
+    }}
+    @keyframes completionStreamers {{
+      0% {{ opacity: 0; transform: translate(-50%, -50%) scaleX(.12) scaleY(.5); }}
+      18% {{ opacity: 1; }}
+      100% {{ opacity: 0; transform: translate(-50%, -50%) scaleX(1.08) scaleY(1); }}
+    }}
+    @keyframes completionParticleBurst {{
+      0% {{ opacity: 0; transform: translate(-50%, -50%) scale(.18) rotate(0deg); }}
+      10% {{ opacity: 1; }}
+      76% {{ opacity: .95; }}
+      100% {{ opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(var(--s)) rotate(var(--r)); }}
+    }}
+    @keyframes completionConfettiFall {{
+      0% {{ opacity: 0; transform: translate3d(0, -32px, 0) rotate(0deg) scale(var(--s)); }}
+      10% {{ opacity: .95; }}
+      82% {{ opacity: .92; }}
+      100% {{ opacity: 0; transform: translate3d(var(--drift), var(--fall), 0) rotate(var(--r)) scale(var(--s)); }}
+    }}
     @media (prefers-reduced-motion: reduce) {{
       *, *::before, *::after {{
         animation-duration: .01ms !important;

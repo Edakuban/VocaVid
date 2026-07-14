@@ -663,6 +663,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn('action="/projects/7/segments/2/redo"', inspector_html)
         self.assertNotIn('<div class="redo-action">images</div>', inspector_html)
         self.assertIn('action="/projects/7/segments/2/approval"', html)
+        self.assertIn('onsubmit="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition()"', html)
         self.assertIn('name="video_approved" value="0"', html)
         self.assertIn('class="finish-toggle finish-toggle-active"', html)
         self.assertIn("Mark as unfinished", html)
@@ -2622,7 +2623,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<th>Redo</th><th>OK</th><th>Status</th>", html)
         self.assertIn('action="/projects/7/lines/3/approval"', html)
         self.assertIn(
-            'type="checkbox" name="video_approved" value="1" checked onchange="rememberScrollPosition(); this.form.submit()"',
+            'type="checkbox" name="video_approved" value="1" checked onchange="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition(); this.form.submit()"',
             html,
         )
         self.assertLess(html.index("<th>Redo</th>"), html.index("<th>OK</th>"))
@@ -2696,10 +2697,16 @@ class AppHtmlTests(unittest.TestCase):
         html = _page("Demo", _project_html(project, [], segments))
 
         self.assertIn('id="project-progress-pill" class="progress-pill"', html)
+        self.assertIn('data-approved="1" data-total="2"', html)
+        self.assertIn('id="project-completion-celebration" class="project-completion-celebration"', html)
         self.assertIn('<span class="progress-pill-fill" style="--progress: 50%"></span>', html)
         self.assertIn('<span class="progress-pill-label">1/2</span>', html)
         self.assertNotIn("1/2 offen", html)
         self.assertIn(".progress-pill { position: relative;", html)
+        self.assertIn(".project-completion-celebration", html)
+        self.assertIn("@keyframes completionParticleBurst", html)
+        self.assertIn("@keyframes completionConfettiFall", html)
+        self.assertIn("rememberApprovalProgressBeforeSubmit(); rememberScrollPosition()", html)
         self.assertNotIn("open-filter-button", html)
         self.assertNotIn("open-filter-info", html)
         self.assertIn('data-work-item="1" data-video-approved="0"', html)

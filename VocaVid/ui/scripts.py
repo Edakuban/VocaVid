@@ -301,11 +301,101 @@ SCRIPTS = f"""
       const count = Math.max(0, Number(queueCount) || 0);
       document.title = count > 0 ? '(' + count + ') ' + baseDocumentTitle : baseDocumentTitle;
     }}
+    function progressState(progress) {{
+      if (!progress) return {{ approved: 0, total: 0, done: false }};
+      const approved = Math.max(0, Number(progress.dataset.approved) || 0);
+      const total = Math.max(0, Number(progress.dataset.total) || 0);
+      return {{ approved, total, done: total > 0 && approved >= total }};
+    }}
+    function progressFromHtml(html) {{
+      const template = document.createElement('template');
+      template.innerHTML = html || '';
+      return template.content.firstElementChild;
+    }}
+    function launchProjectCompletionCelebration(progress) {{
+      const layer = document.getElementById('project-completion-celebration');
+      if (!layer || !progress || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+      layer.innerHTML = '';
+      layer.classList.remove('project-completion-celebration-active');
+      progress.classList.remove('progress-pill-completed');
+      const progressRect = progress.getBoundingClientRect();
+      layer.style.setProperty('--origin-x', (progressRect.left + progressRect.width / 2) + 'px');
+      layer.style.setProperty('--origin-y', (progressRect.top + progressRect.height / 2) + 'px');
+      const colors = ['#29d3b0', '#4ce2c2', '#e9489f', '#f15bad', '#f2f5f6'];
+      const shapes = ['star', 'dot', 'strip', 'streamer'];
+      const count = 76;
+      for (let index = 0; index < count; index += 1) {{
+        const particle = document.createElement('span');
+        const shape = shapes[index % shapes.length];
+        const angle = (Math.PI * 2 * index) / count + (Math.random() - .5) * .62;
+        const distance = 110 + Math.random() * 430;
+        particle.className = 'completion-particle completion-particle-' + shape;
+        particle.style.setProperty('--x', (Math.cos(angle) * distance) + 'px');
+        particle.style.setProperty('--y', (Math.sin(angle) * distance - Math.random() * 120) + 'px');
+        particle.style.setProperty('--r', (Math.random() * 720 - 360) + 'deg');
+        particle.style.setProperty('--s', (.62 + Math.random() * 1.2).toFixed(2));
+        particle.style.setProperty('--delay', (Math.random() * 190).toFixed(0) + 'ms');
+        particle.style.setProperty('--color', colors[index % colors.length]);
+        layer.appendChild(particle);
+      }}
+      const confettiCount = 116;
+      for (let index = 0; index < confettiCount; index += 1) {{
+        const confetti = document.createElement('span');
+        confetti.className = 'completion-confetti';
+        confetti.style.setProperty('--left', (Math.random() * 100).toFixed(2) + 'vw');
+        confetti.style.setProperty('--fall', (72 + Math.random() * 42).toFixed(2) + 'vh');
+        confetti.style.setProperty('--drift', ((Math.random() - .5) * 160).toFixed(1) + 'px');
+        confetti.style.setProperty('--r', (Math.random() * 900 - 450).toFixed(0) + 'deg');
+        confetti.style.setProperty('--s', (.66 + Math.random() * .72).toFixed(2));
+        confetti.style.setProperty('--delay', (Math.random() * 520).toFixed(0) + 'ms');
+        confetti.style.setProperty('--duration', (5200 + Math.random() * 1000).toFixed(0) + 'ms');
+        confetti.style.setProperty('--color', colors[index % colors.length]);
+        layer.appendChild(confetti);
+      }}
+      progress.classList.add('progress-pill-completed');
+      requestAnimationFrame(() => layer.classList.add('project-completion-celebration-active'));
+      window.setTimeout(() => {{
+        layer.classList.remove('project-completion-celebration-active');
+        progress.classList.remove('progress-pill-completed');
+        layer.innerHTML = '';
+      }}, 6800);
+    }}
+    function progressCompletionStorageKey() {{
+      return 'VocaVid-progress-before-approval:' + window.location.pathname;
+    }}
+    function rememberApprovalProgressBeforeSubmit() {{
+      const progress = document.getElementById('project-progress-pill');
+      if (!progress) return;
+      sessionStorage.setItem(progressCompletionStorageKey(), JSON.stringify(progressState(progress)));
+    }}
+    function launchStoredProjectCompletionCelebration() {{
+      const stored = sessionStorage.getItem(progressCompletionStorageKey());
+      if (stored === null) return;
+      sessionStorage.removeItem(progressCompletionStorageKey());
+      const progress = document.getElementById('project-progress-pill');
+      if (!progress) return;
+      try {{
+        const previousState = JSON.parse(stored);
+        const nextState = progressState(progress);
+        if (!previousState.done && nextState.done) requestAnimationFrame(() => launchProjectCompletionCelebration(progress));
+      }} catch (error) {{
+        return;
+      }}
+    }}
+    function replaceProjectProgress(html) {{
+      const progress = document.getElementById('project-progress-pill');
+      if (!progress || html === undefined || progress.outerHTML === html) return;
+      const previousState = progressState(progress);
+      const replacement = progressFromHtml(html);
+      if (!replacement) return;
+      const nextState = progressState(replacement);
+      progress.replaceWith(replacement);
+      if (!previousState.done && nextState.done) launchProjectCompletionCelebration(replacement);
+    }}
     function updateProjectStatus(data) {{
       updateQueueEstimate(data.queue_estimate_seconds, data.queue_count);
       updateBrowserTitle(data.queue_count);
-      const progress = document.getElementById('project-progress-pill');
-      if (progress && data.progress_html !== undefined && progress.outerHTML !== data.progress_html) progress.outerHTML = data.progress_html;
+      replaceProjectProgress(data.progress_html);
       const actions = document.querySelector('.project-topbar .actions');
       if (actions && data.actions_html !== undefined && actions.innerHTML !== data.actions_html) actions.innerHTML = data.actions_html;
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
@@ -767,6 +857,7 @@ SCRIPTS = f"""
       rememberProjectStoryboard();
       setupProjectBrowserControls();
       restoreSegmentInspectorWidth();
+      launchStoredProjectCompletionCelebration();
       const storyboard = document.getElementById('project-storyboard');
       const storedStoryboardTemplate = sessionStorage.getItem(storyboardSelectionStorageKey());
       if (storyboard && storedStoryboardTemplate) {{

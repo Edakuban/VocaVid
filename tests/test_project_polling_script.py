@@ -61,6 +61,35 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("function updateBrowserTitle(queueCount)", app_source)
         self.assertIn('onsubmit="return projectActionSubmitted(this)"', app_source)
 
+    def test_project_progress_completion_celebrates_only_on_done_transition(self):
+        app_source = self.app_source()
+
+        self.assertIn("function progressState(progress)", app_source)
+        self.assertIn("total > 0 && approved >= total", app_source)
+        self.assertIn("function launchProjectCompletionCelebration(progress)", app_source)
+        self.assertIn("project-completion-celebration", app_source)
+        self.assertIn("progressRect.left + progressRect.width / 2", app_source)
+        self.assertIn("const confettiCount = 116", app_source)
+        self.assertIn("completion-confetti", app_source)
+        self.assertIn("function replaceProjectProgress(html)", app_source)
+        self.assertIn("const previousState = progressState(progress)", app_source)
+        self.assertIn("const nextState = progressState(replacement)", app_source)
+        self.assertIn("if (!previousState.done && nextState.done) launchProjectCompletionCelebration(replacement)", app_source)
+        self.assertIn("replaceProjectProgress(data.progress_html)", app_source)
+        self.assertNotIn("progress.outerHTML = data.progress_html", app_source)
+
+    def test_project_progress_completion_survives_approval_form_reload(self):
+        app_source = self.app_source()
+
+        self.assertIn("function progressCompletionStorageKey()", app_source)
+        self.assertIn("'VocaVid-progress-before-approval:' + window.location.pathname", app_source)
+        self.assertIn("function rememberApprovalProgressBeforeSubmit()", app_source)
+        self.assertIn("JSON.stringify(progressState(progress))", app_source)
+        self.assertIn("function launchStoredProjectCompletionCelebration()", app_source)
+        self.assertIn("sessionStorage.removeItem(progressCompletionStorageKey())", app_source)
+        self.assertIn("if (!previousState.done && nextState.done) requestAnimationFrame(() => launchProjectCompletionCelebration(progress))", app_source)
+        self.assertIn("launchStoredProjectCompletionCelebration();", app_source)
+
     def test_project_page_no_longer_registers_scroll_top_button(self):
         app_source = self.app_source()
 

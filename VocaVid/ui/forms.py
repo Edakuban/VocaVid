@@ -406,7 +406,7 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row, button
         return f"""
 <form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post">
   <input type="hidden" name="video_approved" value="0">
-  <label class="approval-label"><input type="checkbox" name="video_approved" value="1"{checked} onchange="rememberScrollPosition(); this.form.submit()"> OK</label>
+  <label class="approval-label"><input type="checkbox" name="video_approved" value="1"{checked} onchange="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition(); this.form.submit()"> OK</label>
 </form>
 """
     next_value = "0" if approved else "1"
@@ -414,7 +414,7 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row, button
     label = "Mark as unfinished" if approved else "Mark as finished"
     check_icon = '<span class="finish-toggle-check" aria-hidden="true">&#10003;</span>' if approved else ""
     return f"""
-<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" onsubmit="rememberScrollPosition()">
+<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" onsubmit="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition()">
   <input type="hidden" name="video_approved" value="{next_value}">
   <button class="{button_class}" type="submit"><span>{label}</span>{check_icon}</button>
 </form>
