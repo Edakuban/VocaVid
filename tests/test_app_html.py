@@ -663,7 +663,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertNotIn('action="/projects/7/segments/2/redo"', inspector_html)
         self.assertNotIn('<div class="redo-action">images</div>', inspector_html)
         self.assertIn('action="/projects/7/segments/2/approval"', html)
-        self.assertIn('onsubmit="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition()"', html)
+        self.assertIn('onsubmit="rememberApprovalProgressBeforeSubmit()" data-project-sidepanel-form="1"', html)
         self.assertIn('name="video_approved" value="0"', html)
         self.assertIn('class="finish-toggle finish-toggle-active"', html)
         self.assertIn("Mark as unfinished", html)
@@ -1815,8 +1815,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("querySelectorAll(projectStoryboardFieldSelector)", html)
         self.assertIn("function shouldReplaceProjectStoryboard", html)
         self.assertIn("!projectStoryboardHasActiveEdit(storyboard) && !projectStoryboardHasDirtyFields(storyboard)", html)
-        self.assertIn("if (!shouldReplaceProjectStoryboard(storyboard)) return", html)
-        self.assertLess(html.index("if (!shouldReplaceProjectStoryboard(storyboard)) return"), html.index("storyboard.replaceWith(replacement)"))
+        self.assertIn("if (!force && !shouldReplaceProjectStoryboard(storyboard)) return", html)
+        self.assertLess(html.index("if (!force && !shouldReplaceProjectStoryboard(storyboard)) return"), html.index("storyboard.replaceWith(replacement)"))
 
     def test_segment_table_has_editable_section_type_after_text(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -2588,12 +2588,13 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines, used_actions={"scene-plan"})
 
         self.assertIn('action="/projects/7/lines/3/image-source"', html)
+        self.assertIn('data-project-sidepanel-form="1"', html)
         self.assertIn(
-            'type="radio" name="selected_image_source" value="image" checked onchange="rememberScrollPosition(); this.form.submit()"',
+            'type="radio" name="selected_image_source" value="image" checked onchange="submitProjectSidepanelForm(event, this.form)"',
             html,
         )
         self.assertIn(
-            'type="radio" name="selected_image_source" value="avatar" onchange="rememberScrollPosition(); this.form.submit()"',
+            'type="radio" name="selected_image_source" value="avatar" onchange="submitProjectSidepanelForm(event, this.form)"',
             html,
         )
 
@@ -2623,7 +2624,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("<th>Redo</th><th>OK</th><th>Status</th>", html)
         self.assertIn('action="/projects/7/lines/3/approval"', html)
         self.assertIn(
-            'type="checkbox" name="video_approved" value="1" checked onchange="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition(); this.form.submit()"',
+            'type="checkbox" name="video_approved" value="1" checked onchange="rememberApprovalProgressBeforeSubmit(); submitProjectSidepanelForm(event, this.form)"',
             html,
         )
         self.assertLess(html.index("<th>Redo</th>"), html.index("<th>OK</th>"))
@@ -2706,7 +2707,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn(".project-completion-celebration", html)
         self.assertIn("@keyframes completionParticleBurst", html)
         self.assertIn("@keyframes completionConfettiFall", html)
-        self.assertIn("rememberApprovalProgressBeforeSubmit(); rememberScrollPosition()", html)
+        self.assertIn('onsubmit="rememberApprovalProgressBeforeSubmit()" data-project-sidepanel-form="1"', html)
         self.assertNotIn("open-filter-button", html)
         self.assertNotIn("open-filter-info", html)
         self.assertIn('data-work-item="1" data-video-approved="0"', html)

@@ -392,9 +392,9 @@ def _image_choice_html(project_id: int, item_kind: str, item_index: int, row) ->
     image_checked = " checked" if selected == "image" else ""
     avatar_checked = " checked" if selected != "image" else ""
     return f"""
-<form class="compact-form image-choice image-choice-inline" action="/projects/{project_id}/{item_kind}/{item_index}/image-source" method="post">
-  <label><input type="radio" name="selected_image_source" value="image"{image_checked} onchange="rememberScrollPosition(); this.form.submit()"> Image</label>
-  <label><input type="radio" name="selected_image_source" value="avatar"{avatar_checked} onchange="rememberScrollPosition(); this.form.submit()"> Avatar</label>
+<form class="compact-form image-choice image-choice-inline" action="/projects/{project_id}/{item_kind}/{item_index}/image-source" method="post" data-project-sidepanel-form="1">
+  <label><input type="radio" name="selected_image_source" value="image"{image_checked} onchange="submitProjectSidepanelForm(event, this.form)"> Image</label>
+  <label><input type="radio" name="selected_image_source" value="avatar"{avatar_checked} onchange="submitProjectSidepanelForm(event, this.form)"> Avatar</label>
 </form>
 """
 
@@ -404,9 +404,9 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row, button
     if not button:
         checked = " checked" if approved else ""
         return f"""
-<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post">
+<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" data-project-sidepanel-form="1">
   <input type="hidden" name="video_approved" value="0">
-  <label class="approval-label"><input type="checkbox" name="video_approved" value="1"{checked} onchange="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition(); this.form.submit()"> OK</label>
+  <label class="approval-label"><input type="checkbox" name="video_approved" value="1"{checked} onchange="rememberApprovalProgressBeforeSubmit(); submitProjectSidepanelForm(event, this.form)"> OK</label>
 </form>
 """
     next_value = "0" if approved else "1"
@@ -414,7 +414,7 @@ def _approval_html(project_id: int, item_kind: str, item_index: int, row, button
     label = "Mark as unfinished" if approved else "Mark as finished"
     check_icon = '<span class="finish-toggle-check" aria-hidden="true">&#10003;</span>' if approved else ""
     return f"""
-<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" onsubmit="rememberApprovalProgressBeforeSubmit(); rememberScrollPosition()">
+<form class="compact-form" action="/projects/{project_id}/{item_kind}/{item_index}/approval" method="post" onsubmit="rememberApprovalProgressBeforeSubmit()" data-project-sidepanel-form="1">
   <input type="hidden" name="video_approved" value="{next_value}">
   <button class="{button_class}" type="submit"><span>{label}</span>{check_icon}</button>
 </form>
@@ -473,7 +473,7 @@ def _prompt_modal_html(modal_id: str, title: str, editor_html: str) -> str:
 
 def _image_prompt_editor_html(action: str, prompt: str) -> str:
     return f"""
-<form class="compact-form" action="{action}/image/save" method="post">
+<form class="compact-form" action="{action}/image/save" method="post" data-project-sidepanel-form="1">
   <label>Image</label><textarea class="prompt-textarea" name="prompt">{_text(prompt)}</textarea>
   <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/image/ai-fill">AI fill</button></p>
 </form>
@@ -482,7 +482,7 @@ def _image_prompt_editor_html(action: str, prompt: str) -> str:
 
 def _video_prompt_editor_html(action: str, video_prompt: str) -> str:
     return f"""
-<form class="compact-form" action="{action}/video/save" method="post">
+<form class="compact-form" action="{action}/video/save" method="post" data-project-sidepanel-form="1">
   <label>Video</label><textarea class="prompt-textarea" name="video_prompt">{_text(video_prompt)}</textarea>
   <p class="prompt-actions"><button>Save</button><button type="submit" formaction="{action}/video/ai-fill">AI fill</button></p>
 </form>

@@ -267,10 +267,10 @@ SCRIPTS = f"""
       handle.addEventListener('pointerup', stop);
       handle.addEventListener('pointercancel', stop);
     }}
-    function replaceProjectStoryboard(html) {{
+    function replaceProjectStoryboard(html, force = false) {{
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard || html === undefined) return;
-      if (!shouldReplaceProjectStoryboard(storyboard)) return;
+      if (!force && !shouldReplaceProjectStoryboard(storyboard)) return;
       const template = document.createElement('template');
       template.innerHTML = html.trim();
       const replacement = template.content.firstElementChild;
@@ -392,7 +392,7 @@ SCRIPTS = f"""
       progress.replaceWith(replacement);
       if (!previousState.done && nextState.done) launchProjectCompletionCelebration(replacement);
     }}
-    function updateProjectStatus(data) {{
+    function updateProjectStatus(data, forceStoryboard = false) {{
       updateQueueEstimate(data.queue_estimate_seconds, data.queue_count);
       updateBrowserTitle(data.queue_count);
       replaceProjectProgress(data.progress_html);
@@ -402,14 +402,14 @@ SCRIPTS = f"""
         const row = document.getElementById(rowId);
         if (row) replaceProjectRow(row, html);
       }});
-      if (data.storyboard_html !== undefined) replaceProjectStoryboard(data.storyboard_html);
+      if (data.storyboard_html !== undefined) replaceProjectStoryboard(data.storyboard_html, forceStoryboard);
     }}
-    async function refreshProjectStatus(projectId) {{
+    async function refreshProjectStatus(projectId, forceStoryboard = false) {{
       if (!projectId) return;
       const response = await fetch('/projects/' + projectId + '/status');
       if (!response.ok) return;
       const data = await response.json();
-      updateProjectStatus(data);
+      updateProjectStatus(data, forceStoryboard);
     }}
     async function pollProjectStatus(projectId) {{
       try {{
@@ -448,6 +448,29 @@ SCRIPTS = f"""
           body: new FormData(form),
         }});
         if (response.ok) await refreshJobsStatus();
+      }} finally {{
+        if (button) button.disabled = false;
+      }}
+      return false;
+    }}
+    async function submitProjectSidepanelForm(event, form) {{
+      if (event && event.preventDefault) event.preventDefault();
+      if (!form) return false;
+      rememberScrollPosition();
+      const submitter = event && event.submitter ? event.submitter : null;
+      const button = submitter || form.querySelector('button');
+      if (button) button.disabled = true;
+      try {{
+        const action = submitter && submitter.hasAttribute('formaction') ? submitter.formAction : form.action;
+        const method = submitter && submitter.hasAttribute('formmethod') ? submitter.formMethod : form.method;
+        const response = await fetch(action, {{
+          method: method || 'post',
+          body: new FormData(form),
+        }});
+        if (response.ok) {{
+          const projectId = currentProjectId();
+          if (projectId) await refreshProjectStatus(projectId, true);
+        }}
       }} finally {{
         if (button) button.disabled = false;
       }}
@@ -830,6 +853,10 @@ SCRIPTS = f"""
     document.addEventListener('submit', (event) => {{
       const form = event.target.closest('form[data-queue-form="1"]');
       if (form) submitQueueForm(event, form);
+    }});
+    document.addEventListener('submit', (event) => {{
+      const form = event.target.closest('form[data-project-sidepanel-form="1"]');
+      if (form) submitProjectSidepanelForm(event, form);
     }});
     document.addEventListener('submit', rememberScrollPosition);
     document.addEventListener('pointerdown', (event) => {{

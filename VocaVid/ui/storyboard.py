@@ -283,7 +283,7 @@ def _inspector_generation_actions_html(project_id: int, item_kind: str, item_ind
 
 def _inspector_action_form_html(project_id: int, action: str, item_index: int, label: str) -> str:
     return f"""
-<form class="compact-form" action="/projects/{project_id}/{action}" method="post" onsubmit="rememberScrollPosition()">
+<form class="compact-form" action="/projects/{project_id}/{action}" method="post" data-project-sidepanel-form="1">
   <input type="hidden" name="selected_lines" value="{_attr(item_index)}">
   <button>{_text(label)}</button>
 </form>

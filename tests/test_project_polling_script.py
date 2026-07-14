@@ -53,13 +53,28 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertIn("function currentProjectId()", app_source)
         self.assertIn("function projectActionSubmitted(form)", app_source)
         self.assertIn("window.setTimeout(() => refreshProjectStatus(projectId), 150)", app_source)
-        self.assertIn("async function refreshProjectStatus(projectId)", app_source)
-        self.assertIn("updateProjectStatus(data)", app_source)
+        self.assertIn("async function refreshProjectStatus(projectId, forceStoryboard = false)", app_source)
+        self.assertIn("updateProjectStatus(data, forceStoryboard)", app_source)
         self.assertIn("updateQueueEstimate(data.queue_estimate_seconds, data.queue_count)", app_source)
         self.assertIn("function queueEstimateLabel(seconds, queueCount)", app_source)
         self.assertIn("updateBrowserTitle(data.queue_count)", app_source)
         self.assertIn("function updateBrowserTitle(queueCount)", app_source)
         self.assertIn('onsubmit="return projectActionSubmitted(this)"', app_source)
+
+    def test_sidepanel_forms_submit_without_page_reload(self):
+        app_source = self.app_source()
+
+        self.assertIn('data-project-sidepanel-form="1"', app_source)
+        self.assertIn("async function submitProjectSidepanelForm(event, form)", app_source)
+        self.assertIn("if (event && event.preventDefault) event.preventDefault()", app_source)
+        self.assertIn("const action = submitter && submitter.hasAttribute('formaction') ? submitter.formAction : form.action", app_source)
+        self.assertIn("const method = submitter && submitter.hasAttribute('formmethod') ? submitter.formMethod : form.method", app_source)
+        self.assertIn("await fetch(action", app_source)
+        self.assertIn("if (projectId) await refreshProjectStatus(projectId, true)", app_source)
+        self.assertIn("const form = event.target.closest('form[data-project-sidepanel-form=\"1\"]')", app_source)
+        self.assertIn("if (form) submitProjectSidepanelForm(event, form)", app_source)
+        self.assertIn("function replaceProjectStoryboard(html, force = false)", app_source)
+        self.assertIn("if (!force && !shouldReplaceProjectStoryboard(storyboard)) return", app_source)
 
     def test_project_progress_completion_celebrates_only_on_done_transition(self):
         app_source = self.app_source()
