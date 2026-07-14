@@ -345,6 +345,22 @@ SCRIPTS = f"""
       if (!response.ok) return;
       updateJobsStatus(await response.json());
     }}
+    async function submitQueueForm(event, form) {{
+      if (event && event.preventDefault) event.preventDefault();
+      if (!form) return false;
+      const button = event && event.submitter ? event.submitter : form.querySelector('button');
+      if (button) button.disabled = true;
+      try {{
+        const response = await fetch(form.action, {{
+          method: form.method || 'post',
+          body: new FormData(form),
+        }});
+        if (response.ok) await refreshJobsStatus();
+      }} finally {{
+        if (button) button.disabled = false;
+      }}
+      return false;
+    }}
     async function pollJobsStatus() {{
       try {{
         await refreshJobsStatus();
@@ -719,6 +735,10 @@ SCRIPTS = f"""
       return true;
     }}
     document.addEventListener('submit', submitReelsForm);
+    document.addEventListener('submit', (event) => {{
+      const form = event.target.closest('form[data-queue-form="1"]');
+      if (form) submitQueueForm(event, form);
+    }});
     document.addEventListener('submit', rememberScrollPosition);
     document.addEventListener('pointerdown', (event) => {{
       if (event.target.closest('#reels-modal input[name="source_video"]')) pauseReelsUploadRefresh();

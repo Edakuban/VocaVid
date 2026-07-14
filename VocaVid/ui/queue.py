@@ -117,12 +117,12 @@ def _queue_admin_html(job_options: JobOptions) -> str:
     return f"""
   <div class="queue-admin-controls">
     <div class="queue-cleanup-actions">
-      <form class="compact-form" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
-      <form class="compact-form" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
+      <form class="compact-form" data-queue-form="1" action="/jobs/delete-queued" method="post"><button>Delete queued</button></form>
+      <form class="compact-form" data-queue-form="1" action="/jobs/delete-finished" method="post"><button>Delete finished</button></form>
     </div>
-    <form class="compact-form queue-settings-line" action="/jobs/options" method="post">
-      <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="this.form.submit()"> Autodelete finished</label>
-      <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="this.form.submit()"> Shutdown computer 15mins after last queue</label>
+    <form class="compact-form queue-settings-line" data-queue-form="1" action="/jobs/options" method="post">
+      <label><input type="checkbox" name="autodelete_finished"{autodelete_checked} onchange="submitQueueForm(event, this.form)"> Autodelete finished</label>
+      <label><input type="checkbox" name="shutdown_after_queue"{shutdown_checked} onchange="submitQueueForm(event, this.form)"> Shutdown computer 15mins after last queue</label>
     </form>
   </div>
 """
@@ -198,7 +198,7 @@ def _job_delete_html(job) -> str:
     if job.status == "running":
         return ""
     return f"""
-<form class="compact-form" action="/jobs/{job.id}/delete" method="post">
+<form class="compact-form" data-queue-form="1" action="/jobs/{job.id}/delete" method="post">
   <button>Delete</button>
 </form>
 """

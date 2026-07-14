@@ -287,8 +287,13 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("Autodelete finished", html)
         self.assertIn('name="shutdown_after_queue"', html)
         self.assertIn("Shutdown computer 15mins after last queue", html)
+        self.assertIn('data-queue-form="1" action="/jobs/delete-queued"', html)
+        self.assertIn('data-queue-form="1" action="/jobs/options"', html)
+        self.assertIn('onchange="submitQueueForm(event, this.form)"', html)
         self.assertIn("setupQueueEstimateCountdown(); pollJobsStatus();", html)
         self.assertIn("fetch('/jobs/status')", html)
+        self.assertIn("function submitQueueForm", html)
+        self.assertIn("form[data-queue-form=\"1\"]", html)
         self.assertIn("data.queue_summary_html", html)
         self.assertIn("queueSummary.innerHTML = data.queue_summary_html", html)
 
