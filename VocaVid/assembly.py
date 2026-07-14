@@ -53,6 +53,7 @@ def assemble_kdenlive_project(
     output_path: Path,
     template_path: Path,
     transition_handle_seconds: float,
+    render_target_path: Path | None = None,
 ) -> Path:
     if not clips:
         raise ValueError("At least one clip is required")
@@ -76,29 +77,34 @@ def assemble_kdenlive_project(
 
     fps = _profile_fps(root)
     handle = max(0.0, float(transition_handle_seconds))
-    total_duration = max(float(clip["end_sec"]) for clip in clips)
+    timeline_clips = _clip_timings(clips)
+    total_duration = max(float(clip["timeline_end_sec"]) for clip in timeline_clips)
 
     audio_producer = _producer("audio0", audio_path, total_duration, playlist_id="main_bin", base_path=output_path.parent)
     root.insert(_producer_insert_index(root), audio_producer)
     ET.SubElement(audio_playlist, "entry", {"producer": "audio0", "in": _timecode(0), "out": _timecode(total_duration)})
     _add_bin_entry(main_bin, "audio0", total_duration)
+    if render_target_path is not None:
+        _set_render_target(main_bin, render_target_path, output_path.parent)
 
-    for index, clip in enumerate(clips):
-        visible_duration = max(0.0, float(clip["end_sec"]) - float(clip["start_sec"]))
+    for index, clip in enumerate(timeline_clips):
+        visible_duration = max(0.0, float(clip["timeline_end_sec"]) - float(clip["timeline_start_sec"]))
         entry_duration = visible_duration + handle if index < len(clips) - 1 else visible_duration
         producer_id = f"clip{index}"
         clip_path = Path(clip["path"])
         root.insert(_producer_insert_index(root), _producer(producer_id, clip_path, entry_duration, playlist_id="main_bin", base_path=output_path.parent))
         target_playlist = main_playlist if index % 2 == 0 else overlay_playlist
-        _append_blank_until(target_playlist, float(clip["start_sec"]))
+        _append_blank_until(target_playlist, float(clip["timeline_start_sec"]))
         ET.SubElement(target_playlist, "entry", {"producer": producer_id, "in": _timecode(0), "out": _timecode(entry_duration)})
         _add_bin_entry(main_bin, producer_id, entry_duration)
 
-    for index, clip in enumerate(clips[:-1]):
-        start = float(clip["end_sec"])
+    for index, clip in enumerate(timeline_clips[:-1]):
+        next_clip = timeline_clips[index + 1]
+        start = max(float(clip["timeline_end_sec"]), float(next_clip["timeline_start_sec"]))
+        end = min(float(clip["timeline_end_sec"]) + handle, float(next_clip["timeline_start_sec"]) + handle, total_duration)
         from_playlist = "playlist10" if index % 2 == 0 else "playlist12"
         to_playlist = "playlist10" if (index + 1) % 2 == 0 else "playlist12"
-        _add_transition(sequence, index, start, min(start + handle, total_duration), root, from_playlist, to_playlist)
+        _add_transition(sequence, index, start, end, root, from_playlist, to_playlist, fps)
 
     sequence.set("out", _timecode(total_duration))
     _set_property(sequence, "kdenlive:duration", _timecode(total_duration))
@@ -225,6 +231,26 @@ def _add_bin_entry(main_bin: ET.Element, producer_id: str, duration: float) -> N
     ET.SubElement(main_bin, "entry", {"producer": producer_id, "in": _timecode(0), "out": _timecode(duration)})
 
 
+def _set_render_target(main_bin: ET.Element, render_target_path: Path, base_path: Path) -> None:
+    render_target = _relative_resource(render_target_path, base_path)
+    _set_property(main_bin, "kdenlive:docproperties.renderurl", render_target)
+    _set_property(main_bin, "kdenlive:docproperties.renderpath", render_target)
+
+
+def _clip_timings(clips: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    timed = []
+    for clip in clips:
+        start = float(clip["start_sec"])
+        end = float(clip["end_sec"])
+        if end < start:
+            end = start
+        updated = dict(clip)
+        updated["timeline_start_sec"] = start
+        updated["timeline_end_sec"] = end
+        timed.append(updated)
+    return timed
+
+
 def _append_blank_until(playlist: ET.Element, target_start: float) -> None:
     current = _playlist_duration(playlist)
     gap = target_start - current
@@ -250,13 +276,18 @@ def _add_transition(
     root: ET.Element,
     from_playlist: str,
     to_playlist: str,
+    fps: float,
 ) -> None:
     track_indices = {track.attrib.get("producer"): position for position, track in enumerate(sequence.findall("track"))}
     from_track = _sequence_track_producer_for_playlist(root, sequence, from_playlist)
     to_track = _sequence_track_producer_for_playlist(root, sequence, to_playlist)
     from_position = track_indices.get(from_track, 0)
     to_position = track_indices.get(to_track, 0)
-    transition = ET.SubElement(sequence, "transition", {"id": f"auto_transition{index}", "in": _timecode(start), "out": _timecode(end)})
+    frame = 1.0 / fps if fps > 0 else 0.040
+    if end - start <= frame:
+        return
+    transition_end = max(start, end - frame)
+    transition = ET.SubElement(sequence, "transition", {"id": f"auto_transition{index}", "in": _timecode(start), "out": _timecode(transition_end)})
     _set_property(transition, "a_track", str(min(from_position, to_position)))
     _set_property(transition, "b_track", str(max(from_position, to_position)))
     _set_property(transition, "mlt_service", "luma")

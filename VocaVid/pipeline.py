@@ -587,12 +587,14 @@ class Pipeline:
             if row["clip_path"]
         ]
         output = self._project_dir(project) / "final.kdenlive"
+        render_target = output.with_name("finished.mp4")
         result = assemble_kdenlive_project(
             clips,
             self._project_input_path(project["audio_path"]),
             output,
             self.kdenlive_template,
             transition_handle_seconds=float(project["transition_handle_seconds"]),
+            render_target_path=render_target,
         )
         self.store.update_project(project_id, final_video_path=self._project_storage_path(result))
         return result
