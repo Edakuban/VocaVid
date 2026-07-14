@@ -89,9 +89,12 @@ class ProjectOutputPathTests(unittest.TestCase):
 
             self.assertEqual(
                 result,
-                root / "outputs" / "feuer-und-stahl---02---kampf-und-ehre" / "final.kdenlive",
+                root / "outputs" / "feuer-und-stahl---02---kampf-und-ehre" / "02 - Kampf und Ehre.kdenlive",
             )
             root_xml = ET.parse(result).getroot()
+            properties = {prop.attrib.get("name"): prop.text for prop in root_xml.findall(".//property")}
+            self.assertEqual(properties["kdenlive:docproperties.renderurl"], "02 - Kampf und Ehre.mp4")
+            self.assertEqual(properties["kdenlive:docproperties.renderpath"], "02 - Kampf und Ehre.mp4")
             sequence = next(
                 tractor
                 for tractor in root_xml.findall("tractor")

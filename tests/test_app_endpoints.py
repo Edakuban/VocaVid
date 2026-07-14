@@ -770,6 +770,56 @@ class AppEndpointTests(unittest.TestCase):
             app_module.DB_PATH = old_db_path
             app_module.Pipeline = old_pipeline
 
+    def test_render_mp4_endpoint_queues_kdenlive_render_job(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        calls = []
+
+        class FakePipeline:
+            def __init__(self, store, workspace):
+                self.store = store
+
+            def render_final_mp4(self, project_id):
+                calls.append(project_id)
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                app_module.Pipeline = FakePipeline
+                store = Store(app_module.DB_PATH)
+                project_id = store.create_project(
+                    {
+                        "name": "Demo",
+                        "audio_path": "song.wav",
+                        "lyrics_path": "lyrics.txt",
+                        "global_style_prompt": "cinematic",
+                        "final_video_path": "outputs/demo/final.kdenlive",
+                    },
+                    parse_suno_lyrics("[Verse]\nHello\n"),
+                )
+                store.replace_segments(project_id, [RenderSegment(0, "lyrics", "Verse", False, False, [0], "Hello", 0.0, 3.0)])
+                store.update_segment(project_id, 0, clip_path="clip.mp4", video_approved=1)
+
+                app = app_module.create_app()
+                client = TestClient(app)
+                response = client.post(f"/projects/{project_id}/render-mp4", follow_redirects=False)
+                app.state.jobs.executor.shutdown(wait=True)
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(response.headers["location"], f"/projects/{project_id}")
+                self.assertEqual(calls, [project_id])
+                self.assertEqual(Store(app_module.DB_PATH).list_used_project_actions(project_id), {"render-mp4"})
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
     def test_line_insert_and_delete_endpoints_update_project_lines(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
@@ -1206,7 +1256,7 @@ class AppEndpointTests(unittest.TestCase):
             app_module.DB_PATH = old_db_path
             app_module.ReelsPipeline = old_reels_pipeline
 
-    def test_reels_analyze_uses_project_finished_mp4_when_present(self):
+    def test_reels_analyze_uses_project_named_mp4_when_present(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
         old_db_path = app_module.DB_PATH
@@ -1238,7 +1288,7 @@ class AppEndpointTests(unittest.TestCase):
                     },
                     parse_suno_lyrics("[Verse]\nHello\n"),
                 )
-                finished = app_module.APP_ROOT / "outputs" / "demo" / "finished.mp4"
+                finished = app_module.APP_ROOT / "outputs" / "demo" / "Demo.mp4"
                 finished.parent.mkdir(parents=True)
                 finished.write_bytes(b"mp4")
                 app = app_module.create_app()
@@ -1253,8 +1303,8 @@ class AppEndpointTests(unittest.TestCase):
 
                 self.assertEqual(response.status_code, 303)
                 analyses = Store(app_module.DB_PATH).list_reel_analyses(project_id)
-                self.assertEqual(analyses[0]["source_video_path"], "outputs/demo/finished.mp4")
-                self.assertEqual(calls, [("analyze", project_id, "outputs/demo/finished.mp4")])
+                self.assertEqual(analyses[0]["source_video_path"], "outputs/demo/Demo.mp4")
+                self.assertEqual(calls, [("analyze", project_id, "outputs/demo/Demo.mp4")])
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads

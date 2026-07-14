@@ -6,7 +6,7 @@ import wave
 from unittest.mock import patch
 from pathlib import Path
 
-from VocaVid.assembly import assemble_kdenlive_project, assemble_video, split_audio_segment
+from VocaVid.assembly import assemble_kdenlive_project, assemble_video, render_kdenlive_project, render_kdenlive_project_command, split_audio_segment
 
 
 class AssemblyTests(unittest.TestCase):
@@ -60,6 +60,52 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(calls[0][1:6], ["-y", "-ss", "35.000", "-to", "42.500"])
             self.assertIn(str(audio), calls[0])
             self.assertIn(str(output), calls[0])
+
+    def test_render_kdenlive_project_invokes_melt_with_mp4_consumer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            project = tmp_path / "final.kdenlive"
+            output = tmp_path / "finished.mp4"
+            project.write_text(
+                '<mlt producer="main_bin"><tractor id="tractor7"><property name="kdenlive:projectTractor">1</property></tractor></mlt>',
+                encoding="utf-8",
+            )
+            calls = []
+            render_producers = []
+
+            def fake_run(command, check, capture_output, text, cwd=None):
+                render_producers.append(ET.parse(command[2]).getroot().attrib.get("producer"))
+                calls.append((command, check, capture_output, text, cwd))
+                output.write_bytes(b"mp4")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            with patch.dict("os.environ", {"MELT_BINARY": "C:/tools/melt.exe"}):
+                result = render_kdenlive_project(project, output, runner=fake_run)
+
+            self.assertEqual(result, output)
+            command, check, capture_output, text, cwd = calls[0]
+            self.assertEqual(command[0], "C:/tools/melt.exe")
+            self.assertEqual(command[1], "-silent")
+            self.assertNotEqual(command[2], str(project))
+            self.assertEqual(Path(command[2]).parent, project.parent)
+            self.assertEqual(command[3], "-consumer")
+            self.assertEqual(command[4], f"avformat:{output}")
+            self.assertIn("vcodec=libx264", command)
+            self.assertIn("acodec=aac", command)
+            self.assertFalse(check)
+            self.assertTrue(capture_output)
+            self.assertTrue(text)
+            self.assertEqual(cwd, project.parent)
+            self.assertEqual(render_producers, ["tractor7"])
+            self.assertFalse(Path(command[2]).exists())
+
+    def test_render_kdenlive_project_command_uses_detected_melt_binary(self):
+        with patch.dict("os.environ", {"MELT_BINARY": "C:/tools/melt.exe"}):
+            command = render_kdenlive_project_command(Path("final.kdenlive"), Path("finished.mp4"))
+
+        self.assertEqual(command[0], "C:/tools/melt.exe")
+        self.assertEqual(command[1], "-silent")
+        self.assertEqual(command[3:5], ["-consumer", "avformat:finished.mp4"])
 
     def test_split_audio_segment_uses_ffmpeg_binary_env_override(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -176,6 +222,12 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(len(transitions), 1)
             self.assertEqual(transitions[0].attrib["in"], "00:00:04.000")
             self.assertEqual(transitions[0].attrib["out"], "00:00:04.440")
+            static_video_transitions = [
+                transition
+                for transition in root.findall(".//transition")
+                if any(prop.text == "qtblend" for prop in transition.findall("property") if prop.attrib.get("name") == "mlt_service")
+            ]
+            self.assertEqual(static_video_transitions, [])
 
     def test_assemble_kdenlive_project_preserves_tiny_timing_gaps_and_shortens_transition(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -293,7 +345,7 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(properties["a_track"], "2")
             self.assertEqual(properties["b_track"], "3")
 
-    def test_assemble_kdenlive_project_reverts_only_visually_descending_transitions(self):
+    def test_assemble_kdenlive_project_reverses_only_upper_to_lower_transitions(self):
         with tempfile.TemporaryDirectory() as directory:
             tmp_path = Path(directory)
             clips_dir = tmp_path / "media" / "clips"
@@ -356,10 +408,10 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(len(transition_properties), 2)
             self.assertEqual(transition_properties[0]["a_track"], "2")
             self.assertEqual(transition_properties[0]["b_track"], "3")
-            self.assertEqual(transition_properties[0]["reverse"], "1")
+            self.assertEqual(transition_properties[0]["reverse"], "0")
             self.assertEqual(transition_properties[1]["a_track"], "2")
             self.assertEqual(transition_properties[1]["b_track"], "3")
-            self.assertEqual(transition_properties[1]["reverse"], "0")
+            self.assertEqual(transition_properties[1]["reverse"], "1")
 
     def test_assemble_kdenlive_project_writes_relative_resource_paths(self):
         with tempfile.TemporaryDirectory() as directory:

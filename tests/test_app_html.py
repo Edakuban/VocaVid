@@ -339,7 +339,7 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('class="wip-button"', html)
         self.assertIn('title="WIP: not fully clean yet"', html)
-        self.assertEqual(html.count('class="wip-button"'), 1)
+        self.assertEqual(html.count('class="wip-button"'), 2)
         self.assertIn('<button>1. Analyze + Split</button>', html)
         self.assertNotIn("Segs + Audio", html)
         self.assertIn('<button>3. Gen Prompts</button>', html)
@@ -348,6 +348,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<button>4. Gen Images</button>', html)
         self.assertIn('<button>5. Gen Avatar Images</button>', html)
         self.assertIn('<button>6. Gen Clips</button>', html)
+        self.assertIn("8. Render MP4", html)
         self.assertNotIn('class="button wip-button"', html)
 
     def test_project_page_includes_reels_button_and_modal(self):
@@ -356,13 +357,13 @@ class AppHtmlTests(unittest.TestCase):
         html = _page("Demo", _project_html(project, []))
 
         self.assertIn('onclick="openReelsModal()"', html)
-        self.assertIn(">8. Make reels</button>", html)
+        self.assertIn(">9. Make reels</button>", html)
         self.assertIn('id="reels-modal"', html)
         self.assertIn('id="reels-status"', html)
         self.assertIn('action="/projects/7/reels/analyze"', html)
         self.assertIn('data-reels-form="1"', html)
         self.assertIn("If empty, VocaVid uses", html)
-        self.assertIn("outputs/demo/finished.mp4", html)
+        self.assertIn("outputs/demo/Demo.mp4", html)
         self.assertNotIn('name="source_video_path"', html)
         self.assertIn('name="source_video" type="file" accept="video/mp4,.mp4" onchange="updateReelsUploadLabel(this)"', html)
         self.assertIn('class="reels-upload-name" aria-live="polite">No upload selected</p>', html)
@@ -1612,6 +1613,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("return previousHtml !== replacement.outerHTML", html)
         self.assertIn("if (!projectRowChanged(row, replacement)) return", html)
         self.assertIn("projectRowServerHtml.set(replacement.id, replacement.outerHTML)", html)
+        self.assertIn("const actions = document.querySelector('.project-topbar .actions')", html)
+        self.assertIn("actions.innerHTML = data.actions_html", html)
 
     def test_project_status_payload_includes_storyboard_and_segment_rows_for_polling(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -1637,6 +1640,8 @@ class AppHtmlTests(unittest.TestCase):
 
         payload = _project_status_payload(project, [], segments, active_jobs=[])
 
+        self.assertIn("actions_html", payload)
+        self.assertIn('action="/projects/7/render-mp4"', payload["actions_html"])
         self.assertIn("storyboard_html", payload)
         self.assertIn('id="project-storyboard"', payload["storyboard_html"])
         self.assertIn("Fresh storyboard text", payload["storyboard_html"])
@@ -1651,6 +1656,41 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/segments/0/timing"', payload["rows"]["segment-row-0"])
         self.assertIn('<div class="status">done</div>', payload["rows"]["segment-row-0"])
         self.assertNotIn('id="project-storyboard"', payload["rows"]["segment-row-0"])
+
+    def test_project_status_payload_updates_render_button_to_preview_existing_mp4(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/Demo.kdenlive"}
+        finished = app_module.APP_ROOT / "outputs" / "demo" / "Demo.mp4"
+        finished.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            finished.write_bytes(b"mp4")
+            segments = [
+                {
+                    "segment_index": 0,
+                    "kind": "lyrics",
+                    "section": "Verse",
+                    "is_chorus": 0,
+                    "clean_text": "Done",
+                    "start_sec": 1.0,
+                    "end_sec": 2.0,
+                    "prompt": None,
+                    "image_path": None,
+                    "clip_path": "clip.mp4",
+                    "audio_path": None,
+                    "scene_plan": "",
+                    "video_approved": 1,
+                    "status": "done",
+                    "error": "",
+                }
+            ]
+
+            payload = _project_status_payload(project, [], segments, active_jobs=[], used_actions={"render-mp4"})
+
+            self.assertIn('type="button" title="Preview rendered MP4"', payload["actions_html"])
+            self.assertIn("openClipLightbox(&#x27;/assets/outputs/demo/Demo.mp4", payload["actions_html"])
+            self.assertNotIn('action="/projects/7/render-mp4"', payload["actions_html"])
+        finally:
+            if finished.exists():
+                finished.unlink()
 
     def test_project_status_payload_locks_storyboard_cards_for_queued_jobs(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -2031,6 +2071,110 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("function openClipLightbox", html)
         self.assertIn("function closeClipLightbox", html)
 
+    def test_render_mp4_button_previews_existing_named_video(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
+        finished = app_module.APP_ROOT / "outputs" / "demo" / "Demo.mp4"
+        finished.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            finished.write_bytes(b"mp4")
+            segments = [
+                {
+                    "segment_index": 0,
+                    "kind": "lyrics",
+                    "section": "Verse",
+                    "is_chorus": 0,
+                    "clean_text": "Hello",
+                    "start_sec": 0.0,
+                    "end_sec": 3.0,
+                    "prompt": None,
+                    "image_path": None,
+                    "clip_path": "clip.mp4",
+                    "audio_path": None,
+                    "scene_plan": "",
+                    "video_approved": 1,
+                    "status": "done",
+                    "error": "",
+                }
+            ]
+
+            html = _project_html(project, [], segments)
+
+            self.assertIn('type="button" title="Preview rendered MP4"', html)
+            self.assertIn("8. Render MP4", html)
+            self.assertIn("openClipLightbox(&#x27;/assets/outputs/demo/Demo.mp4", html)
+            self.assertNotIn('action="/projects/7/render-mp4"', html)
+        finally:
+            if finished.exists():
+                finished.unlink()
+
+    def test_render_mp4_button_previews_legacy_finished_video(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
+        finished = app_module.APP_ROOT / "outputs" / "demo" / "finished.mp4"
+        finished.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            finished.write_bytes(b"mp4")
+            segments = [
+                {
+                    "segment_index": 0,
+                    "kind": "lyrics",
+                    "section": "Verse",
+                    "is_chorus": 0,
+                    "clean_text": "Hello",
+                    "start_sec": 0.0,
+                    "end_sec": 3.0,
+                    "prompt": None,
+                    "image_path": None,
+                    "clip_path": "clip.mp4",
+                    "audio_path": None,
+                    "scene_plan": "",
+                    "video_approved": 1,
+                    "status": "done",
+                    "error": "",
+                }
+            ]
+
+            html = _project_html(project, [], segments)
+
+            self.assertIn("openClipLightbox(&#x27;/assets/outputs/demo/finished.mp4", html)
+            self.assertNotIn('action="/projects/7/render-mp4"', html)
+        finally:
+            if finished.exists():
+                finished.unlink()
+
+    def test_render_mp4_button_previews_legacy_final_video(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
+        finished = app_module.APP_ROOT / "outputs" / "demo" / "final.mp4"
+        finished.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            finished.write_bytes(b"mp4")
+            segments = [
+                {
+                    "segment_index": 0,
+                    "kind": "lyrics",
+                    "section": "Verse",
+                    "is_chorus": 0,
+                    "clean_text": "Hello",
+                    "start_sec": 0.0,
+                    "end_sec": 3.0,
+                    "prompt": None,
+                    "image_path": None,
+                    "clip_path": "clip.mp4",
+                    "audio_path": None,
+                    "scene_plan": "",
+                    "video_approved": 1,
+                    "status": "done",
+                    "error": "",
+                }
+            ]
+
+            html = _project_html(project, [], segments)
+
+            self.assertIn("openClipLightbox(&#x27;/assets/outputs/demo/final.mp4", html)
+            self.assertNotIn('action="/projects/7/render-mp4"', html)
+        finally:
+            if finished.exists():
+                finished.unlink()
+
     def test_analyze_split_is_single_top_action_before_generation(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
@@ -2043,6 +2187,7 @@ class AppHtmlTests(unittest.TestCase):
         avatar_index = html.index('<button>5. Gen Avatar Images</button>')
         clips_index = html.index('<button>6. Gen Clips</button>')
         assemble_index = html.index('7. Assemble Final')
+        render_index = html.index('8. Render MP4')
         settings_index = html.index('action="/projects/7/settings"')
         self.assertNotIn('<button>2. Segs + Audio</button>', html)
         self.assertNotIn("Gen Image Prompts", html)
@@ -2054,6 +2199,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(images_index, avatar_index)
         self.assertLess(avatar_index, clips_index)
         self.assertLess(clips_index, assemble_index)
+        self.assertLess(assemble_index, render_index)
         self.assertLess(align_index, settings_index)
 
     def test_used_top_actions_are_numbered_and_dark_grey_but_clickable(self):
@@ -2604,11 +2750,13 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("alert('Bitte erst alle Videos mit OK freigeben.')", html)
         self.assertIn('title="Alle Videos erst mit OK markieren"', html)
         self.assertIn("7. Assemble Final", html)
+        self.assertIn("8. Render MP4", html)
 
         lines[1]["video_approved"] = 1
         approved_html = _project_html(project, lines)
 
         self.assertIn('action="/projects/7/assemble"', approved_html)
+        self.assertIn('action="/projects/7/render-mp4"', approved_html)
         self.assertNotIn("alert('Bitte erst alle Videos mit OK freigeben.')", approved_html)
 
     def test_lyrics_table_has_insert_and_delete_line_controls(self):

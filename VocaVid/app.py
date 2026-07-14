@@ -20,7 +20,7 @@ from .alignment import normalize_whisper_model_size
 from .paths import slug_folder_name, storage_relative_path
 from .pipeline import Pipeline
 from .reels import ReelsPipeline
-from .reels.storage import ensure_reels_dirs, project_finished_video_path
+from .reels.storage import ensure_reels_dirs, project_finished_video_path, project_finished_video_path_candidates
 from .store import Store
 from .worker import JobQueue
 
@@ -127,6 +127,7 @@ def create_app() -> FastAPI:
             "video-prompts": ("generate video prompts", lambda: pipeline.generate_video_prompts(project_id, selected)),
             "clips": ("generate clips", lambda: pipeline.generate_clips(project_id, selected)),
             "assemble": ("assemble", lambda: pipeline.assemble(project_id, selected)),
+            "render-mp4": ("render MP4", lambda: pipeline.render_final_mp4(project_id)),
         }
         if action not in actions:
             return False
@@ -388,11 +389,12 @@ def create_app() -> FastAPI:
             source_dir = ensure_reels_dirs(APP_ROOT, project)["root"] / "source"
             video_path = storage_relative_path(APP_ROOT, await _save_upload(source_video, source_dir))
         else:
-            default_video_path = project_finished_video_path(APP_ROOT, project)
-            video_path = storage_relative_path(APP_ROOT, default_video_path) if default_video_path.exists() else ""
+            default_video_path = next((path for path in project_finished_video_path_candidates(APP_ROOT, project) if path.exists()), None)
+            video_path = storage_relative_path(APP_ROOT, default_video_path) if default_video_path else ""
         if not video_path:
             analysis_id = store.create_reel_analysis(project_id, "")
-            store.update_reel_analysis(analysis_id, status="failed", error="Add finished.mp4 to the project output folder or upload a source video")
+            expected = storage_relative_path(APP_ROOT, project_finished_video_path(APP_ROOT, project))
+            store.update_reel_analysis(analysis_id, status="failed", error=f"Add {expected} to the project output folder or upload a source video")
             return RedirectResponse(f"/projects/{project_id}", status_code=303)
         analysis_id = store.create_reel_analysis(project_id, video_path)
         shutdown_controller.cancel_pending()
@@ -631,6 +633,12 @@ def create_app() -> FastAPI:
     def assemble(project_id: int, selected_lines: list[int] = Form(default=[])):
         if submit_project_action(project_id, "assemble", selected_lines):
             mark_used(project_id, "assemble")
+        return RedirectResponse(f"/projects/{project_id}", status_code=303)
+
+    @app.post("/projects/{project_id}/render-mp4")
+    def render_mp4(project_id: int):
+        if submit_project_action(project_id, "render-mp4", []):
+            mark_used(project_id, "render-mp4")
         return RedirectResponse(f"/projects/{project_id}", status_code=303)
 
     @app.post("/projects/{project_id}/clear")

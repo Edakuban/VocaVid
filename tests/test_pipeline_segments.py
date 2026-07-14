@@ -1542,13 +1542,13 @@ class PipelineSegmentTests(unittest.TestCase):
 
             result = pipeline.assemble(project_id)
 
-            self.assertEqual(result, root / "outputs" / "demo" / "final.kdenlive")
+            self.assertEqual(result, root / "outputs" / "demo" / "Demo.kdenlive")
             self.assertTrue(result.exists())
-            self.assertEqual(store.get_project(project_id)["final_video_path"], "outputs/demo/final.kdenlive")
+            self.assertEqual(store.get_project(project_id)["final_video_path"], "outputs/demo/Demo.kdenlive")
             xml = result.read_text(encoding="utf-8")
             self.assertIn('out="00:00:04.720"', xml)
-            self.assertIn('<property name="kdenlive:docproperties.renderurl">finished.mp4</property>', xml)
-            self.assertIn('<property name="kdenlive:docproperties.renderpath">finished.mp4</property>', xml)
+            self.assertIn('<property name="kdenlive:docproperties.renderurl">Demo.mp4</property>', xml)
+            self.assertIn('<property name="kdenlive:docproperties.renderpath">Demo.mp4</property>', xml)
             self.assertIn('producer="clip0"', xml)
             self.assertIn('producer="clip1"', xml)
 
@@ -1617,6 +1617,42 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertIsNone(line["clip_path"])
             self.assertEqual(line["status"], "pending")
             self.assertEqual(line["error"], "")
+
+    def test_render_final_mp4_uses_named_output_for_existing_legacy_kdenlive_path(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            root = Path(directory)
+            store = Store(root / "test.sqlite3")
+            audio = root / "song.wav"
+            lyrics = root / "lyrics.txt"
+            project_path = root / "outputs" / "feuer-und-stahl---02---kampf-und-ehre" / "final.kdenlive"
+            audio.write_text("wav", encoding="utf-8")
+            lyrics.write_text("[Verse]\nHello\n", encoding="utf-8")
+            project_path.parent.mkdir(parents=True)
+            project_path.write_text("<mlt/>", encoding="utf-8")
+            project_id = store.create_project(
+                {
+                    "name": "Feuer und Stahl - 02 - Kampf und Ehre",
+                    "audio_path": str(audio),
+                    "lyrics_path": str(lyrics),
+                    "global_style_prompt": "cinematic",
+                },
+                parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+            )
+            store.update_project(project_id, final_video_path="outputs/feuer-und-stahl---02---kampf-und-ehre/final.kdenlive")
+            calls = []
+
+            def fake_render(input_path, output_path):
+                calls.append((input_path, output_path))
+                output_path.write_bytes(b"mp4")
+                return output_path
+
+            pipeline = Pipeline(store, root / "outputs")
+            with patch("VocaVid.pipeline.render_kdenlive_project", fake_render):
+                result = pipeline.render_final_mp4(project_id)
+
+            expected = root / "outputs" / "feuer-und-stahl---02---kampf-und-ehre" / "02 - Kampf und Ehre.mp4"
+            self.assertEqual(result, expected)
+            self.assertEqual(calls, [(project_path, expected)])
 
     def test_regroup_project_realigned_existing_line_timings_and_rebuilds_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:

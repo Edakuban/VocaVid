@@ -116,8 +116,10 @@ After the initial setup, the normal VocaVid workflow looks like this:
    and mark good clips with `OK`.
 9. Use the advanced table view when you need compact timing or line-level
    editing.
-10. Click `Assemble Final`.
-11. Optional: open `Make reels` on the project page to analyze a finished MP4,
+10. Click `Assemble Final` to write the editable Kdenlive project.
+11. Click `Render MP4` to render the final video. If the MP4 already exists,
+    the same button opens it in the lightbox instead of rendering again.
+12. Optional: open `Make reels` on the project page to analyze a finished MP4,
     review short-form candidates, render previews, and export final vertical
     reels.
 
@@ -180,6 +182,15 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 
 - Generate still images, avatar/reference-person image variants, video clips,
   and final assembled outputs.
+- `Assemble Final` writes an editable `.kdenlive` project under the project
+  output folder. The folder keeps the slug name, while the Kdenlive file and
+  rendered MP4 use a readable project-based filename such as
+  `02 - Mauern aus Blut.kdenlive` and `02 - Mauern aus Blut.mp4`.
+- Final assembly uses two video tracks and one audio track, with overlap handles
+  and visible luma/wipe transitions between alternating video tracks.
+- `Render MP4` uses Kdenlive/MLT `melt` to render the generated project. When a
+  rendered MP4 is already present, the project page updates the button to open
+  a video preview lightbox.
 - Review segments as storyboard cards with image/video previews, timing, section
   labels, generation status, and locked/running overlays.
 - Use the inspector to edit prompts, compare selected media, approve clips, and
@@ -196,8 +207,9 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 
 - Open `Make reels` from a project page to create vertical short-form cuts from
   an existing MP4.
-- By default, VocaVid looks for `outputs/<project-slug>/finished.mp4`. You can
-  also upload a source MP4 directly in the Reels modal.
+- By default, VocaVid looks for the named render MP4 in
+  `outputs/<project-slug>/`, then falls back to legacy `final.mp4` and
+  `finished.mp4`. You can also upload a source MP4 directly in the Reels modal.
 - Reels analysis extracts audio, runs Whisper word alignment against the
   project's lyrics, scores sections with `librosa` energy/onset/beat features,
   and generates ranked candidates.

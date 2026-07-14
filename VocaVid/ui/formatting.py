@@ -106,6 +106,7 @@ def _action_from_job_name(name: str) -> str:
         "build segments": "segments",
         "generate scene plan": "scene-plan",
         "assemble": "assemble",
+        "render MP4": "render-mp4",
     }.get(label, "")
 
 

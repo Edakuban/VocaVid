@@ -3,6 +3,7 @@ from __future__ import annotations
 import subprocess
 import os
 import shutil
+import tempfile
 import wave
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -137,6 +138,71 @@ def assemble_kdenlive_project(
     return output_path
 
 
+def render_kdenlive_project(
+    project_path: Path,
+    output_path: Path,
+    runner: Runner = subprocess.run,
+) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    render_project_path = _write_melt_render_project(project_path)
+    try:
+        command = render_kdenlive_project_command(render_project_path, output_path)
+        result = runner(command, check=False, capture_output=True, text=True, cwd=project_path.parent)
+        if result.returncode != 0:
+            message = (result.stderr or result.stdout or "Kdenlive render failed").strip()
+            raise RuntimeError(message)
+    finally:
+        render_project_path.unlink(missing_ok=True)
+    return output_path
+
+
+def render_kdenlive_project_command(project_path: Path, output_path: Path) -> list[str]:
+    return [
+        _melt_binary(),
+        "-silent",
+        str(project_path),
+        "-consumer",
+        f"avformat:{output_path}",
+        "f=mp4",
+        "vcodec=libx264",
+        "acodec=aac",
+        "pix_fmt=yuv420p",
+        "crf=18",
+        "preset=medium",
+        "movflags=+faststart",
+        "real_time=-1",
+    ]
+
+
+def _write_melt_render_project(project_path: Path) -> Path:
+    tree = ET.parse(project_path)
+    root = tree.getroot()
+    project_tractor = next(
+        (
+            tractor
+            for tractor in root.findall("tractor")
+            if _property_value(tractor, "kdenlive:projectTractor") == "1"
+        ),
+        None,
+    )
+    if project_tractor is None:
+        project_tractor = root.find(".//tractor[@id='tractor7']") or _find_sequence_tractor(root)
+    producer_id = project_tractor.attrib.get("id")
+    if producer_id:
+        root.set("producer", producer_id)
+    handle = tempfile.NamedTemporaryFile(
+        mode="wb",
+        suffix=".kdenlive",
+        prefix=f"{project_path.stem}.render-",
+        dir=project_path.parent,
+        delete=False,
+    )
+    render_path = Path(handle.name)
+    with handle:
+        tree.write(handle, encoding="utf-8", xml_declaration=True)
+    return render_path
+
+
 def split_audio_segment(
     audio_path: Path,
     start_sec: float,
@@ -255,8 +321,6 @@ def _prune_to_used_tracks(root: ET.Element) -> None:
     _set_property(sequence, "kdenlive:sequenceproperties.audioTarget", "1")
     _set_property(sequence, "kdenlive:sequenceproperties.videoTarget", "2")
     _add_static_transition(sequence, "transition0", 0, 1, "mix")
-    _add_static_transition(sequence, "transition1", 0, 2, "qtblend")
-    _add_static_transition(sequence, "transition2", 0, 3, "qtblend")
 
 
 def _add_static_transition(sequence: ET.Element, transition_id: str, a_track: int, b_track: int, service: str) -> None:
@@ -380,7 +444,7 @@ def _add_transition(
     _set_property(transition, "b_track", str(max(from_position, to_position)))
     _set_property(transition, "mlt_service", "luma")
     _set_property(transition, "kdenlive_id", "wipe")
-    _set_property(transition, "reverse", "1" if from_position < to_position else "0")
+    _set_property(transition, "reverse", "1" if from_position > to_position else "0")
     _set_property(transition, "softness", "0")
     _set_property(transition, "progressive", "1")
     _set_property(transition, "always_active", "0")
@@ -412,6 +476,11 @@ def _set_property(parent: ET.Element, name: str, value: object) -> None:
     if prop is None:
         prop = ET.SubElement(parent, "property", {"name": name})
     prop.text = str(value)
+
+
+def _property_value(parent: ET.Element, name: str) -> str:
+    prop = next((child for child in parent.findall("property") if child.attrib.get("name") == name), None)
+    return "" if prop is None or prop.text is None else prop.text
 
 
 def _profile_fps(root: ET.Element) -> float:
@@ -468,3 +537,17 @@ def _ffmpeg_binary() -> str:
     if bundled.exists():
         return str(bundled)
     return "ffmpeg"
+
+
+def _melt_binary() -> str:
+    if os.environ.get("MELT_BINARY"):
+        return os.environ["MELT_BINARY"]
+    if shutil.which("melt"):
+        return "melt"
+    for candidate in (
+        Path(r"C:\Program Files\Kdenlive\bin\melt.exe"),
+        Path(r"C:\Program Files\kdenlive\bin\melt.exe"),
+    ):
+        if candidate.exists():
+            return str(candidate)
+    return "melt"

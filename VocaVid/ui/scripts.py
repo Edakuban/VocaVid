@@ -306,6 +306,8 @@ SCRIPTS = f"""
       updateBrowserTitle(data.queue_count);
       const progress = document.getElementById('project-progress-pill');
       if (progress && data.progress_html !== undefined && progress.outerHTML !== data.progress_html) progress.outerHTML = data.progress_html;
+      const actions = document.querySelector('.project-topbar .actions');
+      if (actions && data.actions_html !== undefined && actions.innerHTML !== data.actions_html) actions.innerHTML = data.actions_html;
       Object.entries(data.rows || {{}}).forEach(([rowId, html]) => {{
         const row = document.getElementById(rowId);
         if (row) replaceProjectRow(row, html);

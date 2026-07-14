@@ -285,7 +285,16 @@ def _segments_html(project, lines, segments, locked=None, show_generation_column
 """
 
 
-def _action_button(project_id: int, number: int, action: str, label: str, is_wip: bool, is_used: bool, enabled: bool = True) -> str:
+def _action_button(
+    project_id: int,
+    number: int,
+    action: str,
+    label: str,
+    is_wip: bool,
+    is_used: bool,
+    enabled: bool = True,
+    preview_url: str = "",
+) -> str:
     title = ""
     css_class = ""
     if is_used:
@@ -299,8 +308,12 @@ def _action_button(project_id: int, number: int, action: str, label: str, is_wip
         attrs += f' class="{css_class}"'
     if not enabled:
         attrs += ' type="button" title="Alle Videos erst mit OK markieren" onclick="alert(\'Bitte erst alle Videos mit OK freigeben.\')"'
+    elif preview_url:
+        attrs += f' type="button" title="Preview rendered MP4" onclick="openClipLightbox({_attr(_js_arg(preview_url))})"'
     elif title:
         attrs += f' title="{title}"'
+    if preview_url and enabled:
+        return f"""<button{attrs}>{number}. {label}</button>"""
     return f"""<form action="/projects/{project_id}/{action}" method="post" onsubmit="return projectActionSubmitted(this)"><button{attrs}>{number}. {label}</button></form>"""
 
 

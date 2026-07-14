@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from VocaVid.paths import resolve_storage_path, storage_relative_path
+from VocaVid.paths import project_output_file_stem, resolve_storage_path, storage_relative_path
 
 
 class PathStorageTests(unittest.TestCase):
@@ -32,3 +32,9 @@ class PathStorageTests(unittest.TestCase):
             app_root = Path(directory) / ".VocaVid"
 
             self.assertEqual(resolve_storage_path(app_root, "outputs/demo/clip.mp4"), app_root / "outputs" / "demo" / "clip.mp4")
+
+    def test_project_output_file_stem_uses_episode_number_and_title(self):
+        self.assertEqual(project_output_file_stem("Feuer und Stahl - 02 - Kampf und Ehre"), "02 - Kampf und Ehre")
+
+    def test_project_output_file_stem_is_windows_safe(self):
+        self.assertEqual(project_output_file_stem('CON<>:"/\\|?*'), "CON_________")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from . import context
 from .context import JobOptions
 from .formatting import (
     _all_videos_approved,
@@ -9,10 +10,12 @@ from .formatting import (
     _format_duration,
     _generated_asset_url,
     _locked_indices,
+    _local_asset_url,
     _row_value,
     _section_type,
     _text,
 )
+from ..paths import project_output_file_stem, resolve_storage_path, slug_folder_name
 from .forms import (
     _action_button,
     _avatar_gender_select_html,
@@ -217,6 +220,49 @@ def _is_kdenlive_project_done(project) -> bool:
     return final_video_path.lower().endswith(".kdenlive")
 
 
+def _rendered_mp4_url(project) -> str:
+    output_dir = f"outputs/{slug_folder_name(str(project['name']))}"
+    candidates = [
+        f"{output_dir}/{project_output_file_stem(str(project['name']))}.mp4",
+        f"{output_dir}/final.mp4",
+        f"{output_dir}/finished.mp4",
+    ]
+    for relative_path in candidates:
+        if resolve_storage_path(context.APP_ROOT, relative_path).exists():
+            return _local_asset_url(relative_path)
+    return ""
+
+
+def _project_actions_html(project, work_items, used_actions=None) -> str:
+    used_actions = used_actions or set()
+    assemble_enabled = _all_videos_approved(work_items)
+    rendered_mp4_url = _rendered_mp4_url(project)
+    action_specs = [
+        ("align", "Analyze + Split", False, "align"),
+        ("scene-plan", "Scene Plan", False, "scene-plan"),
+        ("generate-prompts", "Gen Prompts", False, ("prompts", "video-prompts")),
+        ("images", "Gen Images", False, "images"),
+        ("avatar-image", "Gen Avatar Images", False, "avatar-image"),
+        ("clips", "Gen Clips", False, "clips"),
+        ("assemble", "Assemble Final", True, "assemble"),
+        ("render-mp4", "Render MP4", True, "render-mp4"),
+    ]
+    actions = "".join(
+        _action_button(
+            project["id"],
+            number,
+            action,
+            label,
+            is_wip,
+            any(used_action in used_actions for used_action in used_key) if isinstance(used_key, tuple) else used_key in used_actions,
+            enabled=(action not in {"assemble", "render-mp4"} or not work_items or assemble_enabled),
+            preview_url=rendered_mp4_url if action == "render-mp4" else "",
+        )
+        for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
+    )
+    return actions + f'<button class="reels-open-button" type="button" onclick="openReelsModal()">9. Make reels</button>'
+
+
 def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
     project_ids = [int(project["id"]) for project in projects]
     try:
@@ -267,29 +313,7 @@ def _project_html(
     work_items = segments or lines
     item_kind = "segments" if segments else "lines"
     locked = _locked_indices(active_jobs, item_kind, work_items)
-    assemble_enabled = _all_videos_approved(work_items)
-    action_specs = [
-        ("align", "Analyze + Split", False, "align"),
-        ("scene-plan", "Scene Plan", False, "scene-plan"),
-        ("generate-prompts", "Gen Prompts", False, ("prompts", "video-prompts")),
-        ("images", "Gen Images", False, "images"),
-        ("avatar-image", "Gen Avatar Images", False, "avatar-image"),
-        ("clips", "Gen Clips", False, "clips"),
-        ("assemble", "Assemble Final", True, "assemble"),
-    ]
-    actions = "".join(
-        _action_button(
-            project["id"],
-            number,
-            action,
-            label,
-            is_wip,
-            any(used_action in used_actions for used_action in used_key) if isinstance(used_key, tuple) else used_key in used_actions,
-            enabled=(action != "assemble" or not work_items or assemble_enabled),
-        )
-        for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
-    )
-    actions += f'<button class="reels-open-button" type="button" onclick="openReelsModal()">8. Make reels</button>'
+    actions = _project_actions_html(project, work_items, used_actions)
     progress = _project_progress_html(work_items)
     queue_control = _queue_control_html(queue_jobs, average_durations, queue_estimate_seconds, queue_count, job_options)
     queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
@@ -390,6 +414,7 @@ def _project_status_payload(
         "queue_estimate_seconds": _queue_estimate_seconds(counted_jobs, average_durations),
         "queue_count": len(counted_jobs),
         "progress_html": _project_progress_html(rows),
+        "actions_html": _project_actions_html(project, rows, used_actions),
         "rows": _extract_row_snippets(html),
         "storyboard_html": _storyboard_html(project, rows, item_kind, locked),
     }
@@ -435,6 +460,7 @@ __all__ = [
     "_project_progress_counts",
     "_project_preview_row",
     "_is_kdenlive_project_done",
+    "_project_actions_html",
     "_project_navigation_ids",
     "_project_nav_html",
     "_project_html",

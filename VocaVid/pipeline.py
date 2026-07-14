@@ -11,13 +11,13 @@ from typing import Callable
 from urllib.parse import quote
 from urllib.request import urlretrieve
 
-from .assembly import assemble_kdenlive_project, split_audio_segment
+from .assembly import assemble_kdenlive_project, render_kdenlive_project, split_audio_segment
 from .alignment import align_lyrics_to_words, infer_language_from_lyrics, normalize_whisper_model_size, transcribe_words_with_fallback
 from .audio import get_wav_duration_sec
 from .comfy import ComfyClient, load_workflow, with_output_prefix
 from .lyrics import is_chorus_section, is_instrumental_section, parse_suno_lyrics
 from .models import LineTiming, LyricLine, RenderSegment
-from .paths import resolve_storage_path, slug_folder_name, storage_relative_path
+from .paths import project_output_file_stem, resolve_storage_path, slug_folder_name, storage_relative_path
 from .promptgen import inject_promptgen_context, inject_raw_text_prompt, inject_scenefill_context, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
 from .prompt_templates import load_named_prompt_template, render_prompt_template
 from .sceneplan import fallback_scene_plans, make_sceneplan_concept_prompt, make_sceneplan_prompt, parse_scene_plan_text
@@ -586,8 +586,8 @@ class Pipeline:
             for row in rows
             if row["clip_path"]
         ]
-        output = self._project_dir(project) / "final.kdenlive"
-        render_target = output.with_name("finished.mp4")
+        output = self._project_dir(project) / f"{project_output_file_stem(str(project['name']))}.kdenlive"
+        render_target = output.with_suffix(".mp4")
         result = assemble_kdenlive_project(
             clips,
             self._project_input_path(project["audio_path"]),
@@ -598,6 +598,14 @@ class Pipeline:
         )
         self.store.update_project(project_id, final_video_path=self._project_storage_path(result))
         return result
+
+    def render_final_mp4(self, project_id: int) -> Path:
+        project = self.store.get_project(project_id)
+        project_path = self._project_input_path(project["final_video_path"] or "")
+        if not project_path.exists() or project_path.suffix.lower() != ".kdenlive":
+            project_path = self.assemble(project_id)
+        output = self._project_dir(project) / f"{project_output_file_stem(str(project['name']))}.mp4"
+        return render_kdenlive_project(project_path, output)
 
     def retry_line(self, project_id: int, line_index: int) -> None:
         self.store.update_line(project_id, line_index, status="pending", error="")

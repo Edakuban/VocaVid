@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 
 from .formatting import _attr, _format_duration, _local_asset_url, _row_value, _text
-from ..paths import slug_folder_name
+from ..paths import project_output_file_stem, slug_folder_name
 
 
 def _reels_modal_html(project, analyses=None, candidates_by_analysis=None) -> str:
@@ -42,7 +42,7 @@ def _reels_status_html(project, analyses=None, candidates_by_analysis=None) -> s
 
 
 def _reels_input_html(project, latest) -> str:
-    default_source = f"outputs/{slug_folder_name(str(project['name']))}/finished.mp4"
+    default_source = f"outputs/{slug_folder_name(str(project['name']))}/{project_output_file_stem(str(project['name']))}.mp4"
     return f"""
 <section class="reels-panel reels-input-panel">
   <h3>Source MP4</h3>
