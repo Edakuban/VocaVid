@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from VocaVid.lyrics import parse_suno_lyrics
@@ -90,3 +91,17 @@ class ProjectOutputPathTests(unittest.TestCase):
                 result,
                 root / "outputs" / "feuer-und-stahl---02---kampf-und-ehre" / "final.kdenlive",
             )
+            root_xml = ET.parse(result).getroot()
+            sequence = next(
+                tractor
+                for tractor in root_xml.findall("tractor")
+                if any(track.attrib.get("producer") == "tractor6" for track in tractor.findall("track"))
+            )
+            self.assertEqual(
+                [track.attrib.get("producer") for track in sequence.findall("track")],
+                ["producer0", "tractor1", "tractor5", "tractor6"],
+            )
+            self.assertIsNone(root_xml.find(".//tractor[@id='tractor0']"))
+            self.assertIsNone(root_xml.find(".//tractor[@id='tractor2']"))
+            self.assertIsNone(root_xml.find(".//tractor[@id='tractor3']"))
+            self.assertIsNone(root_xml.find(".//tractor[@id='tractor4']"))

@@ -74,10 +74,12 @@ def assemble_kdenlive_project(
     _clear_playlist_timeline(overlay_playlist)
     _clear_playlist_timeline(audio_playlist)
     _remove_generated_project_items(root)
+    _prune_to_used_tracks(root)
 
     fps = _profile_fps(root)
     handle = max(0.0, float(transition_handle_seconds))
     timeline_clips = _clip_timings(clips)
+    transition_durations = _transition_durations(timeline_clips, handle)
     total_duration = max(float(clip["timeline_end_sec"]) for clip in timeline_clips)
 
     audio_producer = _producer("audio0", audio_path, total_duration, playlist_id="main_bin", base_path=output_path.parent)
@@ -89,7 +91,8 @@ def assemble_kdenlive_project(
 
     for index, clip in enumerate(timeline_clips):
         visible_duration = max(0.0, float(clip["timeline_end_sec"]) - float(clip["timeline_start_sec"]))
-        entry_duration = visible_duration + handle if index < len(clips) - 1 else visible_duration
+        outgoing_handle = transition_durations[index] if index < len(transition_durations) else 0.0
+        entry_duration = visible_duration + outgoing_handle
         producer_id = f"clip{index}"
         clip_path = Path(clip["path"])
         root.insert(_producer_insert_index(root), _producer(producer_id, clip_path, entry_duration, playlist_id="main_bin", base_path=output_path.parent))
@@ -100,8 +103,13 @@ def assemble_kdenlive_project(
 
     for index, clip in enumerate(timeline_clips[:-1]):
         next_clip = timeline_clips[index + 1]
+        transition_duration = transition_durations[index]
         start = max(float(clip["timeline_end_sec"]), float(next_clip["timeline_start_sec"]))
-        end = min(float(clip["timeline_end_sec"]) + handle, float(next_clip["timeline_start_sec"]) + handle, total_duration)
+        end = min(
+            float(clip["timeline_end_sec"]) + transition_duration,
+            float(next_clip["timeline_start_sec"]) + transition_duration,
+            total_duration,
+        )
         from_playlist = "playlist10" if index % 2 == 0 else "playlist12"
         to_playlist = "playlist10" if (index + 1) % 2 == 0 else "playlist12"
         _add_transition(sequence, index, start, end, root, from_playlist, to_playlist, fps)
@@ -206,6 +214,58 @@ def _remove_generated_project_items(root: ET.Element) -> None:
                 tractor.remove(child)
 
 
+def _prune_to_used_tracks(root: ET.Element) -> None:
+    tractor_ids = {tractor.attrib.get("id", "") for tractor in root.findall("tractor")}
+    if not {"tractor1", "tractor5", "tractor6"}.issubset(tractor_ids):
+        return
+    sequence = _find_sequence_tractor(root)
+    used_playlist_ids = {"playlist2", "playlist3", "playlist10", "playlist11", "playlist12", "playlist13"}
+    used_tractor_ids = {"tractor1", "tractor5", "tractor6"}
+    for child in list(root):
+        child_id = child.attrib.get("id", "")
+        if child.tag == "playlist" and child_id.startswith("playlist") and child_id not in used_playlist_ids:
+            root.remove(child)
+        elif child.tag == "tractor" and child_id.startswith("tractor") and child_id not in used_tractor_ids and child_id != "tractor7":
+            root.remove(child)
+
+    wanted_tracks = ["producer0", "tractor1", "tractor5", "tractor6"]
+    for child in list(sequence):
+        if child.tag == "track" and child.attrib.get("producer") not in wanted_tracks:
+            sequence.remove(child)
+        elif child.tag == "transition" and not child.attrib.get("id", "").startswith("auto_transition"):
+            sequence.remove(child)
+    existing_tracks = {track.attrib.get("producer") for track in sequence.findall("track")}
+    insert_at = 0
+    for producer in wanted_tracks:
+        if producer not in existing_tracks:
+            sequence.insert(insert_at, ET.Element("track", {"producer": producer}))
+        insert_at += 1
+    _set_property(sequence, "kdenlive:sequenceproperties.tracksCount", "3")
+    _set_property(sequence, "kdenlive:sequenceproperties.tracks", "3")
+    _set_property(sequence, "kdenlive:sequenceproperties.audioTarget", "1")
+    _set_property(sequence, "kdenlive:sequenceproperties.videoTarget", "2")
+    _add_static_transition(sequence, "transition0", 0, 1, "mix")
+    _add_static_transition(sequence, "transition1", 0, 2, "qtblend")
+    _add_static_transition(sequence, "transition2", 0, 3, "qtblend")
+
+
+def _add_static_transition(sequence: ET.Element, transition_id: str, a_track: int, b_track: int, service: str) -> None:
+    transition = ET.SubElement(sequence, "transition", {"id": transition_id})
+    _set_property(transition, "a_track", str(a_track))
+    _set_property(transition, "b_track", str(b_track))
+    _set_property(transition, "mlt_service", service)
+    _set_property(transition, "kdenlive_id", service)
+    _set_property(transition, "internal_added", "237")
+    _set_property(transition, "always_active", "1")
+    if service == "mix":
+        _set_property(transition, "accepts_blanks", "1")
+        _set_property(transition, "sum", "1")
+    else:
+        _set_property(transition, "compositing", "0")
+        _set_property(transition, "distort", "0")
+        _set_property(transition, "rotate_center", "0")
+
+
 def _producer(producer_id: str, resource: Path, duration: float, playlist_id: str, base_path: Path) -> ET.Element:
     producer = ET.Element("producer", {"id": producer_id, "in": _timecode(0), "out": _timecode(duration)})
     _set_property(producer, "length", _timecode(duration))
@@ -249,6 +309,15 @@ def _clip_timings(clips: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
         updated["timeline_end_sec"] = end
         timed.append(updated)
     return timed
+
+
+def _transition_durations(clips: Sequence[dict[str, Any]], handle: float) -> list[float]:
+    durations = []
+    for current, next_clip in zip(clips, clips[1:]):
+        current_duration = max(0.0, float(current["timeline_end_sec"]) - float(current["timeline_start_sec"]))
+        next_duration = max(0.0, float(next_clip["timeline_end_sec"]) - float(next_clip["timeline_start_sec"]))
+        durations.append(max(0.0, min(handle, current_duration / 2.0, next_duration / 2.0)))
+    return durations
 
 
 def _append_blank_until(playlist: ET.Element, target_start: float) -> None:
