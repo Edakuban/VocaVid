@@ -643,14 +643,20 @@ def create_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/assemble")
     def assemble(project_id: int, selected_lines: list[int] = Form(default=[])):
-        if submit_project_action(project_id, "assemble", selected_lines):
-            mark_used(project_id, "assemble")
+        # Writing a Kdenlive project only builds an XML file from already
+        # generated clips.  It neither uses ComfyUI nor the GPU, so it should
+        # not wait behind long-running generation jobs in the single-worker
+        # queue.
+        pipeline.assemble(project_id, selected_lines)
+        mark_used(project_id, "assemble")
         return _project_redirect(project_id)
 
     @app.post("/projects/{project_id}/render-mp4")
     def render_mp4(project_id: int):
-        if submit_project_action(project_id, "render-mp4", []):
-            mark_used(project_id, "render-mp4")
+        # MLT/melt rendering is a local CPU task.  Keep it independent from
+        # the single-worker queue that serializes ComfyUI/GPU generation.
+        pipeline.render_final_mp4(project_id)
+        mark_used(project_id, "render-mp4")
         return _project_redirect(project_id)
 
     @app.post("/projects/{project_id}/clear")
