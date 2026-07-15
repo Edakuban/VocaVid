@@ -2377,6 +2377,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<output id="manual-timing-current">0.0</output>', html)
         self.assertIn('onclick="applyManualTimingTimestamp()"', html)
         self.assertIn('onclick="addManualInterlude(this, 0)"', html)
+        self.assertIn('class="manual-interlude-add" onclick="addManualInterlude(this, 0)" title="Instrumental- oder Interlude-Segment einfuegen">+</button>', html)
         self.assertIn("function addManualInterlude", _page("Demo", ""))
         self.assertIn('<select name="sections"><option value="Intro">Intro</option><option value="Verse" selected>Verse</option>', html)
         self.assertIn('<option value="Instrumental Fade-Out">Instrumental Fade-Out</option>', html)

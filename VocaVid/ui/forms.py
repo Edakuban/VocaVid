@@ -114,8 +114,7 @@ def _manual_timing_modal_html(project, lines, interludes=None) -> str:
 </tr>"""
         for interlude in interludes_by_line.get(line_index, []):
             rows += _manual_interlude_row_html(line_index, interlude)
-        if position < len(lines) - 1:
-            rows += f'''<tr class="manual-interlude-insert-row"><td colspan="5"><button type="button" class="manual-interlude-add" onclick="addManualInterlude(this, {line_index})" title="Instrumental- oder Interlude-Segment einfuegen">+ Interlude einfuegen</button></td></tr>'''
+        rows += f'''<tr class="manual-interlude-insert-row"><td colspan="5"><button type="button" class="manual-interlude-add" onclick="addManualInterlude(this, {line_index})" title="Instrumental- oder Interlude-Segment einfuegen">+</button></td></tr>'''
     return f"""
 <div id="manual-timing-modal" class="modal lightbox" onclick="if (event.target === this) closeManualTimingModal()">
   <div class="modal-content manual-timing-modal-content">
