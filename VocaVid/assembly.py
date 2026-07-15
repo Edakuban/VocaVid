@@ -34,15 +34,15 @@ def assemble_video(
         "-safe",
         "0",
         "-i",
-        _command_path_arg(concat_path),
+        _command_path_arg(concat_path, allowed_roots=[output_path.parent]),
         "-i",
-        _command_path_arg(audio_path),
+        _command_path_arg(audio_path, allowed_roots=[audio_path.parent]),
         "-c:v",
         "copy",
         "-c:a",
         "aac",
         "-shortest",
-        _command_path_arg(output_path),
+        _command_path_arg(output_path, allowed_roots=[output_path.parent]),
     ]
     runner(command, check=True, capture_output=True, text=True)
     return output_path
@@ -157,8 +157,8 @@ def render_kdenlive_project(
 
 
 def render_kdenlive_project_command(project_path: Path, output_path: Path) -> list[str]:
-    project_arg = _command_path_arg(project_path)
-    output_arg = _command_path_arg(output_path)
+    project_arg = _command_path_arg(project_path, allowed_roots=[project_path.parent])
+    output_arg = _command_path_arg(output_path, allowed_roots=[output_path.parent])
     return [
         _melt_binary(),
         "-silent",
@@ -211,13 +211,20 @@ def split_audio_segment(
     end_sec: float,
     output_path: Path,
     runner: Runner = subprocess.run,
+    source_root: Path | Sequence[Path] | None = None,
+    output_root: Path | None = None,
 ) -> Path:
     if end_sec <= start_sec:
         raise ValueError("Audio segment end must be after start")
 
+    audio_root = source_root or audio_path.parent
+    target_root = output_root or output_path.parent
+    audio_roots = list(audio_root) if isinstance(audio_root, Sequence) and not isinstance(audio_root, (str, bytes)) else [audio_root]
+    audio_path = _safe_path_under_any(audio_roots, audio_path, "Audio path")
+    output_path = _safe_path_under(target_root, output_path, "Output path")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    audio_arg = _command_path_arg(audio_path)
-    output_arg = _command_path_arg(output_path)
+    audio_arg = _command_path_arg(audio_path, allowed_roots=audio_roots)
+    output_arg = _command_path_arg(output_path, allowed_roots=[target_root])
     command = [
         _ffmpeg_binary(),
         "-y",
@@ -543,15 +550,32 @@ def _ffmpeg_binary() -> str:
     return "ffmpeg"
 
 
-def _command_path_arg(path: Path) -> str:
+def _command_path_arg(path: Path, allowed_roots: Sequence[Path] | None = None) -> str:
+    return str(_safe_path_under_any(allowed_roots or [path.parent], path, "Command path"))
+
+
+def _safe_path_under(root: Path, path: Path, label: str) -> Path:
+    return _safe_path_under_any([root], path, label)
+
+
+def _safe_path_under_any(roots: Sequence[Path], path: Path, label: str) -> Path:
     raw = str(path)
     if "\x00" in raw or "\r" in raw or "\n" in raw:
-        raise ValueError("Command path contains unsupported control characters")
+        raise ValueError(f"{label} contains unsupported control characters")
     resolved = path.resolve(strict=False)
     resolved_text = str(resolved)
     if "\x00" in resolved_text or "\r" in resolved_text or "\n" in resolved_text:
-        raise ValueError("Command path contains unsupported control characters")
-    return resolved_text
+        raise ValueError(f"{label} contains unsupported control characters")
+    if not roots:
+        raise ValueError(f"{label} requires an allowed root")
+    for root in roots:
+        root_resolved = Path(root).resolve(strict=False)
+        try:
+            resolved.relative_to(root_resolved)
+            return resolved
+        except ValueError:
+            continue
+    raise ValueError(f"{label} must stay within an allowed directory")
 
 
 def _command_binary_arg(value: str, variable_name: str) -> str:
@@ -566,7 +590,7 @@ def _command_binary_arg(value: str, variable_name: str) -> str:
 
 
 def _concat_file_entry(path: Path) -> str:
-    escaped = _command_path_arg(path).replace("\\", "/").replace("'", "'\\''")
+    escaped = _command_path_arg(path, allowed_roots=[path.parent]).replace("\\", "/").replace("'", "'\\''")
     return f"file '{escaped}'\n"
 
 

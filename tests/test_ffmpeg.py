@@ -142,6 +142,42 @@ class AssemblyTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     split_audio_segment(audio, start_sec=0, end_sec=1, output_path=output)
 
+    def test_split_audio_segment_rejects_source_outside_allowed_root(self):
+        with tempfile.TemporaryDirectory() as source_directory, tempfile.TemporaryDirectory() as other_directory:
+            source_root = Path(source_directory)
+            other_root = Path(other_directory)
+            audio = other_root / "song.wav"
+            output = source_root / "segment.wav"
+            audio.write_text("wav", encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                split_audio_segment(
+                    audio,
+                    start_sec=0,
+                    end_sec=1,
+                    output_path=output,
+                    source_root=source_root,
+                    output_root=source_root,
+                )
+
+    def test_split_audio_segment_rejects_output_outside_allowed_root(self):
+        with tempfile.TemporaryDirectory() as source_directory, tempfile.TemporaryDirectory() as other_directory:
+            source_root = Path(source_directory)
+            other_root = Path(other_directory)
+            audio = source_root / "song.wav"
+            output = other_root / "segment.wav"
+            audio.write_text("wav", encoding="utf-8")
+
+            with self.assertRaises(ValueError):
+                split_audio_segment(
+                    audio,
+                    start_sec=0,
+                    end_sec=1,
+                    output_path=output,
+                    source_root=source_root,
+                    output_root=source_root,
+                )
+
     def test_split_audio_segment_falls_back_to_python_wav_when_ffmpeg_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
             tmp_path = Path(directory)

@@ -158,6 +158,8 @@ class Pipeline:
             end,
             audio_path,
             runner=self.ffmpeg_runner,
+            source_root=[self.workspace.parent, self._project_input_path(project["audio_path"]).parent],
+            output_root=self._project_dir(project),
         )
         self.store.update_segment(
             project_id,
@@ -260,6 +262,8 @@ class Pipeline:
                 end,
                 audio_path,
                 runner=self.ffmpeg_runner,
+                source_root=[self.workspace.parent, self._project_input_path(project["audio_path"]).parent],
+                output_root=self._project_dir(project),
             )
             is_chorus = any(bool(item["is_chorus"]) for item in group)
             segments.append(
@@ -318,6 +322,8 @@ class Pipeline:
                 segment.end_sec,
                 audio_path,
                 runner=self.ffmpeg_runner,
+                source_root=[self.workspace.parent, self._project_input_path(project["audio_path"]).parent],
+                output_root=self._project_dir(project),
             )
             logger.info(
                 "split audio done project_id=%s segment=%s/%s output=%s elapsed_sec=%.3f",
