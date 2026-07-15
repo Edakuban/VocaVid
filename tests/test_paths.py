@@ -47,6 +47,20 @@ class PathStorageTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 storage_relative_path(app_root, r"D:\old\VocaVid\.VocaVid\outputs\..\secret.txt")
 
+    def test_resolve_storage_path_rejects_control_characters(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            app_root = Path(directory) / ".VocaVid"
+
+            with self.assertRaises(ValueError):
+                resolve_storage_path(app_root, "outputs/demo\nsecret.wav")
+
+    def test_storage_relative_path_rejects_control_characters(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            app_root = Path(directory) / ".VocaVid"
+
+            with self.assertRaises(ValueError):
+                storage_relative_path(app_root, "outputs/demo\rsecret.wav")
+
     def test_project_output_file_stem_uses_episode_number_and_title(self):
         self.assertEqual(project_output_file_stem("Feuer und Stahl - 02 - Kampf und Ehre"), "02 - Kampf und Ehre")
 

@@ -24,7 +24,7 @@ def assemble_video(
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     concat_path = output_path.with_suffix(".concat.txt")
-    concat_path.write_text("".join(f"file '{clip.as_posix()}'\n" for clip in clip_paths), encoding="utf-8")
+    concat_path.write_text("".join(_concat_file_entry(clip) for clip in clip_paths), encoding="utf-8")
 
     command = [
         _ffmpeg_binary(),
@@ -34,15 +34,15 @@ def assemble_video(
         "-safe",
         "0",
         "-i",
-        str(concat_path),
+        _command_path_arg(concat_path),
         "-i",
-        str(audio_path),
+        _command_path_arg(audio_path),
         "-c:v",
         "copy",
         "-c:a",
         "aac",
         "-shortest",
-        str(output_path),
+        _command_path_arg(output_path),
     ]
     runner(command, check=True, capture_output=True, text=True)
     return output_path
@@ -157,12 +157,14 @@ def render_kdenlive_project(
 
 
 def render_kdenlive_project_command(project_path: Path, output_path: Path) -> list[str]:
+    project_arg = _command_path_arg(project_path)
+    output_arg = _command_path_arg(output_path)
     return [
         _melt_binary(),
         "-silent",
-        str(project_path),
+        project_arg,
         "-consumer",
-        f"avformat:{output_path}",
+        f"avformat:{output_arg}",
         "f=mp4",
         "vcodec=libx264",
         "acodec=aac",
@@ -193,7 +195,7 @@ def _write_melt_render_project(project_path: Path) -> Path:
     handle = tempfile.NamedTemporaryFile(
         mode="wb",
         suffix=".kdenlive",
-        prefix=f"{project_path.stem}.render-",
+        prefix=f"{_safe_temp_prefix(project_path.stem)}.render-",
         dir=project_path.parent,
         delete=False,
     )
@@ -532,7 +534,7 @@ def _parse_timecode(value: str) -> float:
 
 def _ffmpeg_binary() -> str:
     if os.environ.get("FFMPEG_BINARY"):
-        return os.environ["FFMPEG_BINARY"]
+        return _command_binary_arg(os.environ["FFMPEG_BINARY"], "FFMPEG_BINARY")
     if shutil.which("ffmpeg"):
         return "ffmpeg"
     bundled = Path(r"C:\tmp\Dione\apps\Applio\applio\ffmpeg.exe")
@@ -542,12 +544,40 @@ def _ffmpeg_binary() -> str:
 
 
 def _command_path_arg(path: Path) -> str:
-    return str(path.resolve(strict=False))
+    raw = str(path)
+    if "\x00" in raw or "\r" in raw or "\n" in raw:
+        raise ValueError("Command path contains unsupported control characters")
+    resolved = path.resolve(strict=False)
+    resolved_text = str(resolved)
+    if "\x00" in resolved_text or "\r" in resolved_text or "\n" in resolved_text:
+        raise ValueError("Command path contains unsupported control characters")
+    return resolved_text
+
+
+def _command_binary_arg(value: str, variable_name: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError(f"{variable_name} must not be empty")
+    if "\x00" in raw or "\r" in raw or "\n" in raw:
+        raise ValueError(f"{variable_name} contains unsupported control characters")
+    if raw.startswith("-"):
+        raise ValueError(f"{variable_name} must be an executable path or name")
+    return raw
+
+
+def _concat_file_entry(path: Path) -> str:
+    escaped = _command_path_arg(path).replace("\\", "/").replace("'", "'\\''")
+    return f"file '{escaped}'\n"
+
+
+def _safe_temp_prefix(value: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "-" for ch in str(value or "project"))
+    return cleaned.strip("-_") or "project"
 
 
 def _melt_binary() -> str:
     if os.environ.get("MELT_BINARY"):
-        return os.environ["MELT_BINARY"]
+        return _command_binary_arg(os.environ["MELT_BINARY"], "MELT_BINARY")
     if shutil.which("melt"):
         return "melt"
     for candidate in (

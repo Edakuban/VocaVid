@@ -33,7 +33,7 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(result, output)
             self.assertEqual(
                 concat_file.read_text(encoding="utf-8"),
-                f"file '{clip_a.as_posix()}'\nfile '{clip_b.as_posix()}'\n",
+                f"file '{clip_a.resolve().as_posix()}'\nfile '{clip_b.resolve().as_posix()}'\n",
             )
             self.assertTrue(calls[0][0].endswith("ffmpeg.exe") or calls[0][0] == "ffmpeg")
             self.assertEqual(calls[0][1:4], ["-y", "-f", "concat"])
@@ -89,7 +89,7 @@ class AssemblyTests(unittest.TestCase):
             self.assertNotEqual(command[2], str(project))
             self.assertEqual(Path(command[2]).parent, project.parent)
             self.assertEqual(command[3], "-consumer")
-            self.assertEqual(command[4], f"avformat:{output}")
+            self.assertEqual(command[4], f"avformat:{output.resolve()}")
             self.assertIn("vcodec=libx264", command)
             self.assertIn("acodec=aac", command)
             self.assertFalse(check)
@@ -105,7 +105,13 @@ class AssemblyTests(unittest.TestCase):
 
         self.assertEqual(command[0], "C:/tools/melt.exe")
         self.assertEqual(command[1], "-silent")
-        self.assertEqual(command[3:5], ["-consumer", "avformat:finished.mp4"])
+        self.assertEqual(command[3], "-consumer")
+        self.assertEqual(command[4], f"avformat:{Path('finished.mp4').resolve()}")
+
+    def test_render_kdenlive_project_rejects_unsafe_melt_binary_override(self):
+        with patch.dict("os.environ", {"MELT_BINARY": "-consumer"}):
+            with self.assertRaises(ValueError):
+                render_kdenlive_project_command(Path("final.kdenlive"), Path("finished.mp4"))
 
     def test_split_audio_segment_uses_ffmpeg_binary_env_override(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -124,6 +130,17 @@ class AssemblyTests(unittest.TestCase):
                 split_audio_segment(audio, start_sec=0, end_sec=1, output_path=output, runner=fake_run)
 
             self.assertEqual(calls[0][0], "C:/tools/ffmpeg.exe")
+
+    def test_split_audio_segment_rejects_unsafe_ffmpeg_binary_override(self):
+        with tempfile.TemporaryDirectory() as directory:
+            tmp_path = Path(directory)
+            audio = tmp_path / "song.wav"
+            output = tmp_path / "segment.wav"
+            audio.write_text("wav", encoding="utf-8")
+
+            with patch.dict("os.environ", {"FFMPEG_BINARY": "-i"}):
+                with self.assertRaises(ValueError):
+                    split_audio_segment(audio, start_sec=0, end_sec=1, output_path=output)
 
     def test_split_audio_segment_falls_back_to_python_wav_when_ffmpeg_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -23,7 +23,7 @@ def project_output_file_stem(value: str) -> str:
 def storage_relative_path(app_root: Path, value: str | Path | None) -> str:
     if value is None:
         return ""
-    raw = str(value)
+    raw = _safe_path_text(value)
     if not raw:
         return ""
     normalized = raw.replace("\\", "/")
@@ -43,8 +43,7 @@ def storage_relative_path(app_root: Path, value: str | Path | None) -> str:
 
 
 def resolve_storage_path(app_root: Path, value: str | Path | None) -> Path:
-    raw = str(value or "")
-    path = Path(raw)
+    raw = _safe_path_text(value or "")
     normalized = raw.replace("\\", "/")
     for storage_dir in STORAGE_DIRS:
         marker = f"/{storage_dir}/"
@@ -55,11 +54,11 @@ def resolve_storage_path(app_root: Path, value: str | Path | None) -> Path:
             return app_root / _clean_storage_suffix(normalized[len(prefix):])
     if _is_internal_relative_path(normalized):
         return app_root / _clean_storage_suffix(normalized)
-    return path
+    return Path(raw)
 
 
 def is_internal_storage_path(value: str | Path | None) -> bool:
-    normalized = str(value or "").replace("\\", "/")
+    normalized = _safe_path_text(value or "").replace("\\", "/")
     return (
         _is_internal_relative_path(normalized)
         or any(
@@ -71,6 +70,13 @@ def is_internal_storage_path(value: str | Path | None) -> bool:
 
 def _is_internal_relative_path(normalized: str) -> bool:
     return normalized.startswith("uploads/") or normalized.startswith("outputs/")
+
+
+def _safe_path_text(value: str | Path) -> str:
+    raw = str(value)
+    if "\x00" in raw or "\r" in raw or "\n" in raw:
+        raise ValueError("Storage path contains unsupported control characters")
+    return raw
 
 
 def _clean_storage_suffix(value: str) -> str:
