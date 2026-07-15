@@ -34,12 +34,10 @@ def storage_relative_path(app_root: Path, value: str | Path | None) -> str:
         prefix = f"{storage_dir}/"
         if normalized.startswith(prefix):
             return _clean_storage_suffix(normalized[len(prefix):])
-    app_root = app_root.resolve()
-    path = Path(raw)
-    try:
-        return path.resolve().relative_to(app_root).as_posix()
-    except (OSError, ValueError):
-        return raw
+    relative_to_root = _relative_to_root_lexically(app_root, Path(raw))
+    if relative_to_root is not None:
+        return _clean_storage_suffix(relative_to_root)
+    return raw
 
 
 def resolve_storage_path(app_root: Path, value: str | Path | None) -> Path:
@@ -88,6 +86,39 @@ def _clean_storage_suffix(value: str) -> str:
             raise ValueError("Storage path must not escape the app root")
         parts.append(part)
     return "/".join(parts)
+
+
+def _relative_to_root_lexically(root: Path, path: Path) -> str | None:
+    root_parts = _normalized_path_parts(root)
+    path_parts = _normalized_path_parts(path)
+    if len(path_parts) < len(root_parts):
+        return None
+    if _casefold_parts(path_parts[: len(root_parts)]) != _casefold_parts(root_parts):
+        return None
+    return "/".join(path_parts[len(root_parts) :])
+
+
+def _normalized_path_parts(path: Path) -> tuple[str, ...]:
+    parts: list[str] = []
+    for part in path.parts:
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            if parts and parts[-1] != ".." and not _is_path_anchor(parts[-1]):
+                parts.pop()
+            else:
+                parts.append(part)
+            continue
+        parts.append(part)
+    return tuple(parts)
+
+
+def _casefold_parts(parts: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(part.casefold() for part in parts)
+
+
+def _is_path_anchor(part: str) -> bool:
+    return part.endswith(":\\") or part in {"/", "\\"}
 
 
 def _windows_safe_filename(value: str, max_length: int = 120) -> str:
