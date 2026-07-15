@@ -249,7 +249,7 @@ def _storyboard_section_badge(row) -> tuple[str, str]:
 
 
 def _storyboard_item_display_label(item_kind: str, item_index: int) -> str:
-    return f"# {item_index:02d}"
+    return f"# {item_index + 1:02d}"
 
 
 def _storyboard_progress_strip_html(row) -> str:

@@ -23,6 +23,7 @@ from VocaVid.ui.projects import (
 from VocaVid.ui.queue import _queue_estimate_label
 from VocaVid.ui.storyboard import (
     _segment_inspector_html,
+    _storyboard_item_display_label,
 )
 from VocaVid.worker import Job
 
@@ -331,7 +332,12 @@ class AppHtmlTests(unittest.TestCase):
         self.assertEqual(_job_name("generate images", "Demo Song", [0, 2]), "generate images: Demo Song (segments 1, 3)")
         self.assertEqual(_job_name("generate images", "Demo Song", []), "generate images: Demo Song")
         self.assertEqual(_job_name("generate images", "Demo Song", [2], item_kind="segments"), "generate images: Demo Song (segment 3)")
+        self.assertEqual(_job_name("generate clips", "Demo Song", [13], item_kind="segments"), "generate clips: Demo Song (segment 14)")
         self.assertEqual(_job_name("generate prompts", "Demo Song", [1], item_kind="lines"), "generate prompts: Demo Song (line 2)")
+
+    def test_storyboard_item_display_label_is_one_based(self):
+        self.assertEqual(_storyboard_item_display_label("segments", 13), "# 14")
+        self.assertEqual(_storyboard_item_display_label("lines", 1), "# 02")
 
     def test_unfinished_project_actions_are_pink_wip_buttons(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -652,7 +658,7 @@ class AppHtmlTests(unittest.TestCase):
 
         self.assertIn('class="segment-inspector"', html)
         self.assertIn('class="segment-inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0"', inspector_html)
-        self.assertIn('<h3 class="segment-inspector-title"># 02</h3>', html)
+        self.assertIn('<h3 class="segment-inspector-title"># 03</h3>', html)
         self.assertIn("Inspector lyric", html)
         self.assertIn('action="/projects/7/segments/2/prompts/image/save"', html)
         self.assertIn('formaction="/projects/7/segments/2/prompts/image/ai-fill"', html)
@@ -758,14 +764,14 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="segment-select storyboard-select" name="selected_lines" value="0"', html)
         self.assertIn('title="Segment markieren"', html)
         self.assertIn("!event.target.closest('.storyboard-select-wrap')", html)
-        self.assertIn('<div class="storyboard-card-title"><span># 00</span>', html)
+        self.assertIn('<div class="storyboard-card-title"><span># 01</span>', html)
         self.assertIn('<span class="storyboard-card-meta"><span class="storyboard-section-badge storyboard-section-badge-verse">Verse</span></span>', html)
         self.assertIn(".storyboard-section-badge-verse", html)
         self.assertNotIn("Segment 0", html)
         self.assertIn('onclick="selectStoryboardItem(event, this)"', html)
         self.assertIn('<template id="segment-inspector-template-segments-1">', html)
         self.assertIn('class="segment-inspector-nav"', html)
-        self.assertIn('<h3 class="segment-inspector-title"># 00</h3>', html)
+        self.assertIn('<h3 class="segment-inspector-title"># 01</h3>', html)
         self.assertIn('<span class="project-nav-button project-nav-disabled" title="Kein vorhergehendes Segment">◀</span>', html)
         self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Nachfolgendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-1&#x27;)">▶</button>', html)
         self.assertIn('<button class="project-nav-button segment-nav-button" type="button" title="Vorhergehendes Segment" onclick="selectStoryboardTemplate(&#x27;segment-inspector-template-segments-0&#x27;)">◀</button>', html)
@@ -992,7 +998,7 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _project_html(project, lines)
 
-        self.assertIn('<h3 class="segment-inspector-title"># 03</h3>', html)
+        self.assertIn('<h3 class="segment-inspector-title"># 04</h3>', html)
         self.assertIn('action="/projects/7/lines/3/prompts/image/save"', html)
         self.assertIn('action="/projects/7/lines/3/approval"', html)
         self.assertIn("Line inspector lyric", html)
