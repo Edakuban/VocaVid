@@ -590,18 +590,27 @@ class PipelineSegmentTests(unittest.TestCase):
             )
             pipeline.workflows = WorkflowPaths.defaults(root)
             pipeline.build_segments(project_id)
-            store.update_segment(project_id, 0, image_path=str(root / "outputs" / "project-1" / "images" / "segment-000.png"))
+            base_image = root / "outputs" / "project-1" / "images" / "segment-000.png"
+            base_image.parent.mkdir(parents=True, exist_ok=True)
+            base_image.write_bytes(b"base")
+            store.update_segment(project_id, 0, image_path=str(base_image))
             comfy_output = root / "comfy" / "avatar.png"
             comfy_output.parent.mkdir()
             comfy_output.write_bytes(b"avatar")
+            captured = {"uploads": []}
 
             class FakeClient:
                 def __init__(self, base_url):
                     self.base_url = base_url
 
-                def run_workflow(self, workflow, variables):
-                    self.workflow = workflow
-                    self.variables = variables
+                def upload_image(self, path, subfolder=""):
+                    captured["uploads"].append((Path(path), subfolder))
+                    return f"{subfolder}/{Path(path).name}".strip("/")
+
+                def run_workflow(self, workflow, variables, **kwargs):
+                    captured["workflow"] = workflow
+                    captured["variables"] = variables
+                    captured["kwargs"] = kwargs
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -617,6 +626,15 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertTrue(segment["avatar_image_path"].endswith("images\\avatar-segment-000.png") or segment["avatar_image_path"].endswith("images/avatar-segment-000.png"))
             self.assertEqual((root / segment["avatar_image_path"]).read_bytes(), b"avatar")
             self.assertEqual(segment["status"], "done")
+            self.assertEqual(
+                captured["uploads"],
+                [
+                    (base_image, "VocaVid/demo/inputs"),
+                    (reference, "VocaVid/demo/inputs"),
+                ],
+            )
+            self.assertEqual(captured["workflow"]["1"]["inputs"]["image"], "VocaVid/demo/inputs/segment-000.png")
+            self.assertEqual(captured["workflow"]["2"]["inputs"]["image"], "VocaVid/demo/inputs/ref.png")
 
     def test_generate_images_skips_approved_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
@@ -662,8 +680,9 @@ class PipelineSegmentTests(unittest.TestCase):
                 def __init__(self, base_url):
                     pass
 
-                def run_workflow(self, workflow, variables):
+                def run_workflow(self, workflow, variables, **kwargs):
                     captured["workflow"] = workflow
+                    captured["kwargs"] = kwargs
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -730,8 +749,9 @@ class PipelineSegmentTests(unittest.TestCase):
                 def __init__(self, base_url):
                     pass
 
-                def run_workflow(self, workflow, variables):
+                def run_workflow(self, workflow, variables, **kwargs):
                     captured["workflow"] = workflow
+                    captured["kwargs"] = kwargs
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -905,19 +925,28 @@ class PipelineSegmentTests(unittest.TestCase):
             pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
             pipeline.workflows = WorkflowPaths.defaults(root)
             pipeline.build_segments(project_id)
-            store.update_segment(project_id, 0, image_path="base.png", avatar_image_path="avatar.png", video_prompt="manual camera push")
+            base_image = root / "base.png"
+            avatar_image = root / "avatar.png"
+            base_image.write_bytes(b"base")
+            avatar_image.write_bytes(b"avatar")
+            store.update_segment(project_id, 0, image_path=str(base_image), avatar_image_path=str(avatar_image), video_prompt="manual camera push")
             comfy_output = root / "comfy" / "clip.mp4"
             comfy_output.parent.mkdir()
             comfy_output.write_bytes(b"mp4")
-            captured = {}
+            captured = {"uploads": []}
 
             class FakeClient:
                 def __init__(self, base_url):
                     self.base_url = base_url
 
-                def run_workflow(self, workflow, variables):
+                def upload_input(self, path, subfolder=""):
+                    captured["uploads"].append((Path(path), subfolder))
+                    return f"{subfolder}/{Path(path).name}".strip("/")
+
+                def run_workflow(self, workflow, variables, **kwargs):
                     captured["workflow"] = workflow
                     captured["variables"] = variables
+                    captured["kwargs"] = kwargs
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -931,8 +960,10 @@ class PipelineSegmentTests(unittest.TestCase):
 
             workflow = captured["workflow"]
             segment = store.list_segments(project_id)[0]
-            self.assertEqual(workflow["269"]["inputs"]["image"], "avatar.png")
-            self.assertEqual(workflow["276"]["inputs"]["audio"], str(root / segment["audio_path"]))
+            self.assertEqual(captured["uploads"], [(avatar_image, "VocaVid/demo/inputs"), (root / segment["audio_path"], "VocaVid/demo/inputs")])
+            self.assertEqual(workflow["269"]["inputs"]["image"], "VocaVid/demo/inputs/avatar.png")
+            self.assertEqual(workflow["276"]["inputs"]["audio"], "VocaVid/demo/inputs/segment-000.wav")
+            self.assertEqual(captured["kwargs"], {"partial_execution_targets": ["341"]})
             self.assertEqual(workflow["340:319"]["inputs"]["value"], "manual camera push")
             self.assertEqual(workflow["340:331"]["inputs"]["value"], 5.0)
             self.assertIn("demo/clips", segment["clip_path"].replace("\\", "/"))
@@ -975,8 +1006,9 @@ class PipelineSegmentTests(unittest.TestCase):
                 def __init__(self, base_url):
                     pass
 
-                def run_workflow(self, workflow, variables):
+                def run_workflow(self, workflow, variables, **kwargs):
                     captured["workflow"] = workflow
+                    captured["kwargs"] = kwargs
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -996,6 +1028,7 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(workflow["noise_b"]["inputs"]["noise_seed"], 123456789)
             self.assertEqual(workflow["sampler"]["inputs"]["seed"], 123456789)
             self.assertEqual(workflow["sampler"]["inputs"]["sampling_mode.seed"], 123456789)
+            self.assertEqual(captured["kwargs"], {"partial_execution_targets": ["341"]})
 
     def test_generate_clips_skips_approved_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
@@ -1033,7 +1066,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 def __init__(self, base_url):
                     pass
 
-                def run_workflow(self, workflow, variables):
+                def run_workflow(self, workflow, variables, **kwargs):
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -1125,9 +1158,10 @@ class PipelineSegmentTests(unittest.TestCase):
                 def __init__(self, base_url):
                     pass
 
-                def run_workflow(self, workflow, variables):
+                def run_workflow(self, workflow, variables, **kwargs):
                     captured["workflow"] = workflow
                     captured["variables"] = variables
+                    captured["kwargs"] = kwargs
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module
@@ -1179,7 +1213,7 @@ class PipelineSegmentTests(unittest.TestCase):
                 def __init__(self, base_url):
                     pass
 
-                def run_workflow(self, workflow, variables):
+                def run_workflow(self, workflow, variables, **kwargs):
                     return type("Result", (), {"ok": True, "output_files": [str(comfy_output)], "text_outputs": [], "error": ""})()
 
             import VocaVid.pipeline as pipeline_module

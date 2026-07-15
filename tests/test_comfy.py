@@ -98,6 +98,31 @@ class ComfyTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(result.text_outputs, ["a vivid image prompt"])
 
+    def test_comfy_client_extracts_singular_video_output(self):
+        class VideoTransport(FakeTransport):
+            def get_json(self, url):
+                return {
+                    "abc123": {
+                        "status": {"completed": True},
+                        "outputs": {
+                            "341": {
+                                "video": {
+                                    "filename": "segment-29.mp4",
+                                    "subfolder": "VocaVid/demo",
+                                    "type": "output",
+                                }
+                            }
+                        },
+                    }
+                }
+
+        client = ComfyClient("http://127.0.0.1:8188", transport=VideoTransport())
+
+        result = client.run_workflow({"x": "{{ value }}"}, {"value": "y"}, poll_interval_sec=0, timeout_sec=1)
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.output_files, ["VocaVid/demo/segment-29.mp4"])
+
     def test_url_transport_includes_http_error_body(self):
         import urllib.error
         from io import BytesIO

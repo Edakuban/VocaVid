@@ -917,15 +917,22 @@ class Pipeline:
         client = ComfyClient(project["comfy_base_url"])
         variables = self._variables(project, row, prefer_avatar=prefer_avatar)
         prefix = f"VocaVid/{self._project_folder_name(project)}/line-{row['line_index']}-{int(time.time() * 1000)}"
-        if output_field == "clip_path":
-            variables = _with_transition_handle_duration(project, variables)
-            workflow = _inject_image_audio_video_inputs(workflow, variables)
-            workflow = _randomize_workflow_seeds(workflow)
-        elif output_field == "image_path":
-            workflow = _randomize_workflow_seeds(workflow)
-        workflow = with_output_prefix(workflow, prefix)
+        partial_execution_targets = None
         self.store.update_line(project_id, row["line_index"], status="running", error="", last_action=action or output_field)
-        result = client.run_workflow(workflow, variables)
+        try:
+            if output_field == "clip_path":
+                variables = _with_transition_handle_duration(project, variables)
+                variables = _upload_clip_workflow_inputs(client, variables, self._project_folder_name(project))
+                workflow = _inject_image_audio_video_inputs(workflow, variables)
+                workflow = _randomize_workflow_seeds(workflow)
+                partial_execution_targets = _output_node_ids(workflow, {"savevideo", "savewebm"})
+            elif output_field == "image_path":
+                workflow = _randomize_workflow_seeds(workflow)
+            workflow = with_output_prefix(workflow, prefix)
+        except Exception as exc:
+            self.store.update_line(project_id, row["line_index"], status="failed", error=str(exc))
+            return
+        result = client.run_workflow(workflow, variables, partial_execution_targets=partial_execution_targets)
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
                 project,
@@ -959,15 +966,22 @@ class Pipeline:
         client = ComfyClient(project["comfy_base_url"])
         variables = self._variables(project, row, prefer_avatar=prefer_avatar)
         prefix = f"VocaVid/{self._project_folder_name(project)}/segment-{row['segment_index']}-{int(time.time() * 1000)}"
-        if output_field == "clip_path":
-            variables = _with_transition_handle_duration(project, variables)
-            workflow = _inject_image_audio_video_inputs(workflow, variables)
-            workflow = _randomize_workflow_seeds(workflow)
-        elif output_field == "image_path":
-            workflow = _randomize_workflow_seeds(workflow)
-        workflow = with_output_prefix(workflow, prefix)
+        partial_execution_targets = None
         self.store.update_segment(project_id, row["segment_index"], status="running", error="", last_action=action or output_field)
-        result = client.run_workflow(workflow, variables)
+        try:
+            if output_field == "clip_path":
+                variables = _with_transition_handle_duration(project, variables)
+                variables = _upload_clip_workflow_inputs(client, variables, self._project_folder_name(project))
+                workflow = _inject_image_audio_video_inputs(workflow, variables)
+                workflow = _randomize_workflow_seeds(workflow)
+                partial_execution_targets = _output_node_ids(workflow, {"savevideo", "savewebm"})
+            elif output_field == "image_path":
+                workflow = _randomize_workflow_seeds(workflow)
+            workflow = with_output_prefix(workflow, prefix)
+        except Exception as exc:
+            self.store.update_segment(project_id, row["segment_index"], status="failed", error=str(exc))
+            return
+        result = client.run_workflow(workflow, variables, partial_execution_targets=partial_execution_targets)
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
                 project,
@@ -990,12 +1004,17 @@ class Pipeline:
         workflow = load_workflow(workflow_path)
         client = ComfyClient(project["comfy_base_url"])
         variables = self._variables(project, row)
-        workflow = _inject_avatar_load_images(workflow, variables)
-        workflow = _inject_avatar_prompt(workflow, variables)
-        workflow = _randomize_workflow_seeds(workflow)
-        prefix = f"VocaVid/{self._project_folder_name(project)}/avatar-line-{row['line_index']}-{int(time.time() * 1000)}"
-        workflow = with_output_prefix(workflow, prefix)
         self.store.update_line(project_id, row["line_index"], status="running", error="", last_action="avatar-image")
+        try:
+            variables = _upload_avatar_workflow_inputs(client, variables, self._project_folder_name(project))
+            workflow = _inject_avatar_load_images(workflow, variables)
+            workflow = _inject_avatar_prompt(workflow, variables)
+            workflow = _randomize_workflow_seeds(workflow)
+            prefix = f"VocaVid/{self._project_folder_name(project)}/avatar-line-{row['line_index']}-{int(time.time() * 1000)}"
+            workflow = with_output_prefix(workflow, prefix)
+        except Exception as exc:
+            self.store.update_line(project_id, row["line_index"], status="failed", error=str(exc))
+            return
         result = client.run_workflow(workflow, variables)
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
@@ -1015,12 +1034,17 @@ class Pipeline:
         workflow = load_workflow(workflow_path)
         client = ComfyClient(project["comfy_base_url"])
         variables = self._variables(project, row)
-        workflow = _inject_avatar_load_images(workflow, variables)
-        workflow = _inject_avatar_prompt(workflow, variables)
-        workflow = _randomize_workflow_seeds(workflow)
-        prefix = f"VocaVid/{self._project_folder_name(project)}/avatar-segment-{row['segment_index']}-{int(time.time() * 1000)}"
-        workflow = with_output_prefix(workflow, prefix)
         self.store.update_segment(project_id, row["segment_index"], status="running", error="", last_action="avatar-image")
+        try:
+            variables = _upload_avatar_workflow_inputs(client, variables, self._project_folder_name(project))
+            workflow = _inject_avatar_load_images(workflow, variables)
+            workflow = _inject_avatar_prompt(workflow, variables)
+            workflow = _randomize_workflow_seeds(workflow)
+            prefix = f"VocaVid/{self._project_folder_name(project)}/avatar-segment-{row['segment_index']}-{int(time.time() * 1000)}"
+            workflow = with_output_prefix(workflow, prefix)
+        except Exception as exc:
+            self.store.update_segment(project_id, row["segment_index"], status="failed", error=str(exc))
+            return
         result = client.run_workflow(workflow, variables)
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
@@ -1415,6 +1439,38 @@ def _with_transition_handle_duration(project, variables: dict[str, str]) -> dict
     return updated
 
 
+def _upload_avatar_workflow_inputs(client: ComfyClient, variables: dict[str, str], project_folder_name: str) -> dict[str, str]:
+    updated = dict(variables)
+    upload_image = getattr(client, "upload_image", None)
+    if upload_image is None:
+        return updated
+    subfolder = f"VocaVid/{project_folder_name}/inputs"
+    for key in ("input_image_path", "reference_image_path", "fullbody_reference_image_path"):
+        value = updated.get(key, "")
+        if not value:
+            continue
+        path = Path(value)
+        if path.exists():
+            updated[key] = upload_image(path, subfolder=subfolder)
+    return updated
+
+
+def _upload_clip_workflow_inputs(client: ComfyClient, variables: dict[str, str], project_folder_name: str) -> dict[str, str]:
+    updated = dict(variables)
+    upload_input = getattr(client, "upload_input", None) or getattr(client, "upload_image", None)
+    if upload_input is None:
+        return updated
+    subfolder = f"VocaVid/{project_folder_name}/inputs"
+    for key in ("image_path", "audio_path"):
+        value = updated.get(key, "")
+        if not value:
+            continue
+        path = Path(value)
+        if path.exists():
+            updated[key] = upload_input(path, subfolder=subfolder)
+    return updated
+
+
 def _inject_avatar_load_images(workflow: dict, variables: dict[str, str]) -> dict:
     load_image_nodes = [
         node
@@ -1527,6 +1583,14 @@ def _inject_image_audio_video_inputs(workflow: dict, variables: dict[str, str]) 
                 inputs["value"] = video_prompt
                 break
     return workflow
+
+
+def _output_node_ids(workflow: dict, class_types: set[str]) -> list[str]:
+    return [
+        str(node_id)
+        for node_id, node in workflow.items()
+        if isinstance(node, dict) and str(node.get("class_type", "")).lower() in class_types
+    ]
 
 
 def _randomize_workflow_seeds(workflow: dict) -> dict:

@@ -5,6 +5,7 @@ import copy
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -36,16 +37,46 @@ class ComfyClient:
         self.base_url = base_url.rstrip("/")
         self.transport = transport or UrlLibTransport()
 
+    def upload_image(self, path: str | Path, subfolder: str = "VocaVid/input") -> str:
+        return self.upload_input(path, subfolder=subfolder)
+
+    def upload_input(self, path: str | Path, subfolder: str = "VocaVid/input") -> str:
+        image_path = Path(path)
+        boundary = f"----VocaVid{uuid.uuid4().hex}"
+        body = _multipart_form_data(
+            boundary,
+            fields={
+                "type": "input",
+                "subfolder": subfolder,
+                "overwrite": "true",
+            },
+            files={"image": image_path},
+        )
+        request = urllib.request.Request(
+            f"{self.base_url}/upload/image",
+            data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        with urllib.request.urlopen(request, timeout=60) as response:
+            result = json.loads(response.read().decode("utf-8"))
+        name = str(result.get("name") or image_path.name)
+        returned_subfolder = str(result.get("subfolder") or subfolder).strip("/")
+        return (Path(returned_subfolder) / name).as_posix() if returned_subfolder else name
+
     def run_workflow(
         self,
         workflow_template: dict[str, Any],
         variables: dict[str, Any],
         poll_interval_sec: float = 1.0,
         timeout_sec: float = 900.0,
+        partial_execution_targets: list[str] | None = None,
     ) -> ComfyResult:
         prompt = render_template(workflow_template, variables)
+        payload: dict[str, Any] = {"prompt": prompt}
+        if partial_execution_targets is not None:
+            payload["partial_execution_targets"] = partial_execution_targets
         try:
-            submit = self.transport.post_json(f"{self.base_url}/prompt", {"prompt": prompt})
+            submit = self.transport.post_json(f"{self.base_url}/prompt", payload)
         except urllib.error.HTTPError as exc:
             return ComfyResult(prompt_id="", ok=False, output_files=[], error=self.http_error_message(exc))
         except (OSError, urllib.error.URLError) as exc:
@@ -82,6 +113,31 @@ class ComfyClient:
 
 def load_workflow(path: Path) -> dict[str, Any]:
     return load_workflow_from_data(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _multipart_form_data(boundary: str, fields: dict[str, str], files: dict[str, Path]) -> bytes:
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+                str(value).encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    for name, path in files.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{name}"; filename="{path.name}"\r\n'.encode("utf-8"),
+                b"Content-Type: application/octet-stream\r\n\r\n",
+                path.read_bytes(),
+                b"\r\n",
+            ]
+        )
+    chunks.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(chunks)
 
 
 def load_workflow_from_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -284,8 +340,12 @@ def extract_output_files(history_entry: dict[str, Any]) -> list[str]:
     files: list[str] = []
     outputs = history_entry.get("outputs", {})
     for output in outputs.values():
-        for key in ("images", "videos", "gifs"):
-            for item in output.get(key, []):
+        for key in ("image", "images", "video", "videos", "gif", "gifs"):
+            value = output.get(key, [])
+            items = value if isinstance(value, list) else [value]
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
                 filename = item.get("filename")
                 if not filename:
                     continue
