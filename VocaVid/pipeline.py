@@ -147,11 +147,8 @@ class Pipeline:
             raise ValueError("end_sec must be greater than start_sec")
         project = self.store.get_project(project_id)
         segment = next(item for item in self.store.list_segments(project_id) if item["segment_index"] == segment_index)
-        audio_path = (
-            self._project_input_path(segment["audio_path"])
-            if segment["audio_path"]
-            else self._project_dir(project) / "audio-segments" / f"segment-{segment_index:03d}.wav"
-        )
+        stored_segment_index = int(segment["segment_index"])
+        audio_path = self._project_dir(project) / "audio-segments" / f"segment-{stored_segment_index:03d}.wav"
         split_audio_segment(
             self._project_input_path(project["audio_path"]),
             start,

@@ -1402,6 +1402,8 @@ class PipelineSegmentTests(unittest.TestCase):
 
             pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
             pipeline.build_segments(project_id)
+            outside_audio = root / "outside.wav"
+            store.update_segment(project_id, 0, audio_path=str(outside_audio))
 
             pipeline.update_segment_timing(project_id, 0, 1.25, 4.75)
 
@@ -1411,6 +1413,8 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(len(calls), 2)
             self.assertEqual(calls[-1][3], "1.250")
             self.assertEqual(calls[-1][5], "4.750")
+            self.assertEqual(segment["audio_path"], "outputs/demo/audio-segments/segment-000.wav")
+            self.assertFalse(outside_audio.exists())
             self.assertEqual((root / segment["audio_path"]).read_text(encoding="utf-8"), "wav 1.250 4.750")
 
     def test_update_segment_timing_invalidates_existing_clip_approval(self):
