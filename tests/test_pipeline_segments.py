@@ -845,7 +845,7 @@ class PipelineSegmentTests(unittest.TestCase):
             "scene_plan": "chorus performance with microphone",
             "genre": "industrial rock",
             "global_style": "cinematic",
-            "avatar_identity_context": "female avatar; oval face, dark eyes",
+            "avatar_identity_context": "female lead vocalist; oval face, dark eyes",
         }
 
         import VocaVid.pipeline as pipeline_module
@@ -856,7 +856,7 @@ class PipelineSegmentTests(unittest.TestCase):
         self.assertIn("replacing only the primary focus person", prompt)
         self.assertIn("focus singer on stage", prompt)
         self.assertIn("chorus performance with microphone", prompt)
-        self.assertIn("female avatar; oval face, dark eyes", prompt)
+        self.assertIn("female lead vocalist; oval face, dark eyes", prompt)
         self.assertIn("Do not alter non-focus people", prompt)
 
     def test_avatar_workflow_uses_fullbody_avatar_when_project_avatar_is_empty(self):

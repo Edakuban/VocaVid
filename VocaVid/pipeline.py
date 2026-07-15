@@ -1324,7 +1324,7 @@ def _avatar_identity_context(project) -> str:
     face = str(_row_value(project, "avatar_face_description", "") or "").strip()
     parts = []
     if gender:
-        parts.append(f"{gender} avatar")
+        parts.append(f"{gender} lead vocalist")
     if face:
         parts.append(face)
     return "; ".join(parts)

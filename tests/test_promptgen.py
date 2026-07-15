@@ -12,14 +12,14 @@ class PromptgenTests(unittest.TestCase):
             global_style="cinematic synthwave",
             duration="4.200",
             scene_plan="low angle shot of abandoned neon station",
-            avatar_identity_context="female avatar; short black hair",
+            avatar_identity_context="female lead vocalist; short black hair",
         )
 
         self.assertIn("I fall through neon rain", prompt)
         self.assertIn("Verse", prompt)
         self.assertIn("cinematic synthwave", prompt)
         self.assertIn("low angle shot of abandoned neon station", prompt)
-        self.assertIn("female avatar; short black hair", prompt)
+        self.assertIn("female lead vocalist; short black hair", prompt)
         self.assertIn("Return only the image prompt", prompt)
 
     def test_make_videoprompt_prompt_contains_controlled_performance_rules(self):
@@ -32,7 +32,7 @@ class PromptgenTests(unittest.TestCase):
             duration="5.000",
             genre="dark pop",
             scene_plan="steady emotional performance shot",
-            avatar_identity_context="male avatar; weathered face",
+            avatar_identity_context="male lead vocalist; weathered face",
         )
 
         self.assertIn("Generate a controlled image-to-video motion prompt", prompt)
@@ -42,7 +42,7 @@ class PromptgenTests(unittest.TestCase):
         self.assertIn("I sing into the dark", prompt)
         self.assertIn("close-up singer in black coat", prompt)
         self.assertIn("steady emotional performance shot", prompt)
-        self.assertIn("male avatar; weathered face", prompt)
+        self.assertIn("male lead vocalist; weathered face", prompt)
 
     def test_make_videoprompt_prompt_requests_motion_variety_and_blocks_invented_actions(self):
         prompt = make_videoprompt_prompt(
