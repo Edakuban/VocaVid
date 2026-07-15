@@ -218,8 +218,9 @@ class PipelineSegmentTests(unittest.TestCase):
             root = Path(directory)
             app_root = root / ".VocaVid"
             store = Store(root / "test.sqlite3")
-            audio = root / "song.wav"
+            audio = app_root / "uploads" / "demo" / "song.wav"
             lyrics = root / "lyrics.txt"
+            audio.parent.mkdir(parents=True)
             _write_wav(audio, duration_sec=6.0)
             lyrics.write_text("[Verse]\nOne\nTwo\n", encoding="utf-8")
             project_id = store.create_project(

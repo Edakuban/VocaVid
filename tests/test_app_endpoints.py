@@ -1155,8 +1155,9 @@ class AppEndpointTests(unittest.TestCase):
                 app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
                 store = Store(app_module.DB_PATH)
                 lyrics = root / "lyrics.txt"
-                audio = root / "song.wav"
+                audio = app_module.UPLOADS / "demo" / "song.wav"
                 lyrics.write_text("[Verse]\nOne\nTwo\nThree\n", encoding="utf-8")
+                audio.parent.mkdir(parents=True)
                 _write_wav(audio)
                 project_id = store.create_project(
                     {

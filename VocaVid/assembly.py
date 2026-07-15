@@ -211,20 +211,18 @@ def split_audio_segment(
     end_sec: float,
     output_path: Path,
     runner: Runner = subprocess.run,
-    source_root: Path | Sequence[Path] | None = None,
-    output_root: Path | None = None,
+    *,
+    source_root: Path,
+    output_root: Path,
 ) -> Path:
     if end_sec <= start_sec:
         raise ValueError("Audio segment end must be after start")
 
-    audio_root = source_root or audio_path.parent
-    target_root = output_root or output_path.parent
-    audio_roots = list(audio_root) if isinstance(audio_root, Sequence) and not isinstance(audio_root, (str, bytes)) else [audio_root]
-    audio_path = _safe_path_under_any(audio_roots, audio_path, "Audio path")
-    output_path = _safe_path_under(target_root, output_path, "Output path")
+    audio_path = _safe_path_under(source_root, audio_path, "Audio path")
+    output_path = _safe_path_under(output_root, output_path, "Output path")
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    audio_arg = _command_path_arg(audio_path, allowed_roots=audio_roots)
-    output_arg = _command_path_arg(output_path, allowed_roots=[target_root])
+    audio_arg = str(audio_path)
+    output_arg = str(output_path)
     command = [
         _ffmpeg_binary(),
         "-y",
@@ -562,19 +560,17 @@ def _safe_path_under_any(roots: Sequence[Path], path: Path, label: str) -> Path:
     raw = str(path)
     if "\x00" in raw or "\r" in raw or "\n" in raw:
         raise ValueError(f"{label} contains unsupported control characters")
-    resolved = path.resolve(strict=False)
-    resolved_text = str(resolved)
+    resolved_text = os.path.realpath(os.fspath(path))
     if "\x00" in resolved_text or "\r" in resolved_text or "\n" in resolved_text:
         raise ValueError(f"{label} contains unsupported control characters")
     if not roots:
         raise ValueError(f"{label} requires an allowed root")
     for root in roots:
-        root_resolved = Path(root).resolve(strict=False)
-        try:
-            resolved.relative_to(root_resolved)
-            return resolved
-        except ValueError:
-            continue
+        root_text = os.path.realpath(os.fspath(root))
+        candidate = os.path.normcase(resolved_text)
+        allowed = os.path.normcase(root_text)
+        if candidate == allowed or candidate.startswith(allowed.rstrip("/\\") + os.sep):
+            return Path(resolved_text)
     raise ValueError(f"{label} must stay within an allowed directory")
 
 

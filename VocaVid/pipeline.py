@@ -158,7 +158,7 @@ class Pipeline:
             end,
             audio_path,
             runner=self.ffmpeg_runner,
-            source_root=[self.workspace.parent, self._project_input_path(project["audio_path"]).parent],
+            source_root=self.workspace.parent,
             output_root=self._project_dir(project),
         )
         self.store.update_segment(
@@ -262,7 +262,7 @@ class Pipeline:
                 end,
                 audio_path,
                 runner=self.ffmpeg_runner,
-                source_root=[self.workspace.parent, self._project_input_path(project["audio_path"]).parent],
+                source_root=self.workspace.parent,
                 output_root=self._project_dir(project),
             )
             is_chorus = any(bool(item["is_chorus"]) for item in group)
@@ -322,7 +322,7 @@ class Pipeline:
                 segment.end_sec,
                 audio_path,
                 runner=self.ffmpeg_runner,
-                source_root=[self.workspace.parent, self._project_input_path(project["audio_path"]).parent],
+                source_root=self.workspace.parent,
                 output_root=self._project_dir(project),
             )
             logger.info(

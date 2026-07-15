@@ -53,7 +53,15 @@ class AssemblyTests(unittest.TestCase):
                 output.write_text("clip", encoding="utf-8")
                 return subprocess.CompletedProcess(command, 0, "", "")
 
-            result = split_audio_segment(audio, start_sec=35.0, end_sec=42.5, output_path=output, runner=fake_run)
+            result = split_audio_segment(
+                audio,
+                start_sec=35.0,
+                end_sec=42.5,
+                output_path=output,
+                runner=fake_run,
+                source_root=tmp_path,
+                output_root=tmp_path,
+            )
 
             self.assertEqual(result, output)
             self.assertTrue(calls[0][0].endswith("ffmpeg.exe") or calls[0][0] == "ffmpeg")
@@ -127,7 +135,15 @@ class AssemblyTests(unittest.TestCase):
                 return subprocess.CompletedProcess(command, 0, "", "")
 
             with patch.dict("os.environ", {"FFMPEG_BINARY": "C:/tools/ffmpeg.exe"}):
-                split_audio_segment(audio, start_sec=0, end_sec=1, output_path=output, runner=fake_run)
+                split_audio_segment(
+                    audio,
+                    start_sec=0,
+                    end_sec=1,
+                    output_path=output,
+                    runner=fake_run,
+                    source_root=tmp_path,
+                    output_root=tmp_path,
+                )
 
             self.assertEqual(calls[0][0], "C:/tools/ffmpeg.exe")
 
@@ -140,7 +156,14 @@ class AssemblyTests(unittest.TestCase):
 
             with patch.dict("os.environ", {"FFMPEG_BINARY": "-i"}):
                 with self.assertRaises(ValueError):
-                    split_audio_segment(audio, start_sec=0, end_sec=1, output_path=output)
+                    split_audio_segment(
+                        audio,
+                        start_sec=0,
+                        end_sec=1,
+                        output_path=output,
+                        source_root=tmp_path,
+                        output_root=tmp_path,
+                    )
 
     def test_split_audio_segment_rejects_source_outside_allowed_root(self):
         with tempfile.TemporaryDirectory() as source_directory, tempfile.TemporaryDirectory() as other_directory:
@@ -188,7 +211,15 @@ class AssemblyTests(unittest.TestCase):
             def missing_ffmpeg(command, check, capture_output, text):
                 raise FileNotFoundError(command[0])
 
-            result = split_audio_segment(audio, start_sec=0.5, end_sec=1.5, output_path=output, runner=missing_ffmpeg)
+            result = split_audio_segment(
+                audio,
+                start_sec=0.5,
+                end_sec=1.5,
+                output_path=output,
+                runner=missing_ffmpeg,
+                source_root=tmp_path,
+                output_root=tmp_path,
+            )
 
             self.assertEqual(result, output)
             with wave.open(str(output), "rb") as handle:
