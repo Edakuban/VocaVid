@@ -362,8 +362,9 @@ class AppHtmlTests(unittest.TestCase):
 
         html = _page("Demo", _project_html(project, []))
 
-        self.assertIn('onclick="openReelsModal()"', html)
-        self.assertIn(">9. Make reels</button>", html)
+        self.assertIn('<button type="button" disabled title="Bitte zuerst das finale MP4 rendern.">9. Make reels</button>', html)
+        self.assertNotIn('class="reels-open-button"', html)
+        self.assertNotIn('onclick="openReelsModal()"', html)
         self.assertIn('id="reels-modal"', html)
         self.assertIn('id="reels-status"', html)
         self.assertIn('action="/projects/7/reels/analyze"', html)
@@ -376,6 +377,22 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("If empty, VocaVid uses", html)
         self.assertNotIn('name="lyrics"', html[html.index('id="reels-modal"') :])
         self.assertIn("function openReelsModal", html)
+
+    def test_reels_button_is_enabled_after_rendered_mp4_exists(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
+        rendered_mp4 = app_module.APP_ROOT / "outputs" / "demo" / "Demo.mp4"
+        rendered_mp4.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            rendered_mp4.write_bytes(b"mp4")
+
+            html = _page("Demo", _project_html(project, []))
+
+            self.assertIn('<button type="button" onclick="openReelsModal()">9. Make reels</button>', html)
+            self.assertNotIn('disabled title="Bitte zuerst das finale MP4 rendern."', html)
+            self.assertNotIn('class="reels-open-button"', html)
+        finally:
+            if rendered_mp4.exists():
+                rendered_mp4.unlink()
         self.assertIn("function submitReelsForm", html)
         self.assertIn("function markReelsFormProcessing", html)
         self.assertIn("button.textContent = 'Processing...'", html)
@@ -2359,6 +2376,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/manual-timing"', html)
         self.assertIn('<output id="manual-timing-current">0.0</output>', html)
         self.assertIn('onclick="applyManualTimingTimestamp()"', html)
+        self.assertIn('onclick="addManualInterlude(this, 0)"', html)
+        self.assertIn("function addManualInterlude", _page("Demo", ""))
+        self.assertIn('<select name="sections"><option value="Intro">Intro</option><option value="Verse" selected>Verse</option>', html)
+        self.assertIn('<option value="Instrumental Fade-Out">Instrumental Fade-Out</option>', html)
         self.assertIn('placeholder="0.0"', html)
         self.assertIn("function applyManualTimingTimestamp", _page("Demo", ""))
         self.assertIn("Save Manual Timing", html)

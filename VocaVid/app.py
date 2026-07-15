@@ -326,6 +326,7 @@ def create_app() -> FastAPI:
         projects = store.list_projects()
         previous_project_id, next_project_id = _project_navigation_ids(projects, project_id)
         lines = store.list_lines(project_id)
+        manual_timing_interludes = store.list_manual_timing_interludes(project_id)
         segments = store.list_segments(project_id)
         used_actions = store.list_used_project_actions(project_id)
         reel_analyses = store.list_reel_analyses(project_id)
@@ -343,6 +344,7 @@ def create_app() -> FastAPI:
                 project,
                 lines,
                 segments,
+                manual_timing_interludes=manual_timing_interludes,
                 used_actions=used_actions,
                 active_jobs=active_jobs,
                 queue_estimate_seconds=_queue_estimate_seconds(queue_jobs, averages),
@@ -552,17 +554,21 @@ def create_app() -> FastAPI:
     @app.post("/projects/{project_id}/manual-timing")
     def save_manual_timing(
         project_id: int,
-        line_indices: list[int] = Form(...),
+        line_indices: list[str] = Form(...),
         clean_texts: list[str] = Form(...),
         sections: list[str] = Form(...),
         start_secs: list[str] = Form(...),
         end_secs: list[str] = Form(...),
+        row_types: list[str] = Form(default=[]),
+        interlude_after_line_indices: list[str] = Form(default=[]),
         manual_segment_starts: list[int] = Form(default=[]),
     ):
         starts = {int(index) for index in manual_segment_starts}
         row_count = len(line_indices)
-        if not all(len(values) == row_count for values in (clean_texts, sections, start_secs, end_secs)):
+        if not all(len(values) == row_count for values in (clean_texts, sections, start_secs, end_secs)) or row_types and len(row_types) != row_count:
             raise ValueError("Manual timing form fields must have matching row counts")
+        row_types = row_types or ["lyric"] * row_count
+        interlude_positions = iter(interlude_after_line_indices)
         rows = [
             {
                 "line_index": line_indices[index],
@@ -570,7 +576,9 @@ def create_app() -> FastAPI:
                 "section": sections[index],
                 "start_sec": start_secs[index],
                 "end_sec": end_secs[index],
-                "manual_segment_start": int(line_indices[index]) in starts,
+                "row_type": row_types[index],
+                "after_line_index": next(interlude_positions, None) if row_types[index] == "interlude" else None,
+                "manual_segment_start": line_indices[index].isdigit() and int(line_indices[index]) in starts,
             }
             for index in range(row_count)
         ]

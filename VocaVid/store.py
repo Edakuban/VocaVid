@@ -83,6 +83,17 @@ CREATE TABLE IF NOT EXISTS render_segments (
     PRIMARY KEY(project_id, segment_index)
 );
 
+CREATE TABLE IF NOT EXISTS manual_timing_interludes (
+    project_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    after_line_index INTEGER NOT NULL,
+    clean_text TEXT NOT NULL DEFAULT '[Instrumental]',
+    section TEXT NOT NULL DEFAULT 'Instrumental',
+    start_sec REAL NOT NULL,
+    end_sec REAL NOT NULL,
+    PRIMARY KEY(project_id, position)
+);
+
 CREATE TABLE IF NOT EXISTS project_actions (
     project_id INTEGER NOT NULL,
     action TEXT NOT NULL,
@@ -368,6 +379,38 @@ class Store:
                         segment.error,
                     )
                     for segment in segments
+                ],
+            )
+
+    def list_manual_timing_interludes(self, project_id: int) -> list[sqlite3.Row]:
+        with self._connect() as conn:
+            return list(
+                conn.execute(
+                    "SELECT * FROM manual_timing_interludes WHERE project_id = ? ORDER BY position",
+                    (project_id,),
+                )
+            )
+
+    def replace_manual_timing_interludes(self, project_id: int, interludes: list[dict[str, object]]) -> None:
+        with self._connect() as conn:
+            conn.execute("DELETE FROM manual_timing_interludes WHERE project_id = ?", (project_id,))
+            conn.executemany(
+                """
+                INSERT INTO manual_timing_interludes (
+                    project_id, position, after_line_index, clean_text, section, start_sec, end_sec
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        project_id,
+                        position,
+                        int(interlude["after_line_index"]),
+                        str(interlude["clean_text"]),
+                        str(interlude["section"]),
+                        float(interlude["start_sec"]),
+                        float(interlude["end_sec"]),
+                    )
+                    for position, interlude in enumerate(interludes)
                 ],
             )
 

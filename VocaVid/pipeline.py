@@ -185,18 +185,21 @@ class Pipeline:
     def save_manual_timing(self, project_id: int, rows: list[dict[str, object]]) -> None:
         project = self.store.get_project(project_id)
         cleaned_rows = []
+        interludes = []
         for position, row in enumerate(rows):
-            line_index = int(row["line_index"])
-            clean_text = str(row.get("clean_text", "")).strip()
+            is_interlude = str(row.get("row_type", "lyric")) == "interlude"
+            line_index = None if is_interlude else int(row["line_index"])
+            clean_text = str(row.get("clean_text", "")).strip() or ("[Instrumental]" if is_interlude else "")
             if not clean_text:
                 continue
-            section = str(row.get("section", "")).strip() or "Verse"
+            section = str(row.get("section", "")).strip() or ("Instrumental" if is_interlude else "Verse")
             start = _parse_manual_time(row.get("start_sec", ""))
             end = _parse_manual_time(row.get("end_sec", ""))
             if end <= start:
-                raise ValueError(f"Manual timing for line {line_index + 1} must end after it starts")
+                label = "interlude" if is_interlude else f"line {line_index + 1}"
+                raise ValueError(f"Manual timing for {label} must end after it starts")
             is_chorus = is_chorus_section(section)
-            manual_segment_start = bool(row.get("manual_segment_start")) or not cleaned_rows
+            manual_segment_start = is_interlude or bool(row.get("manual_segment_start")) or not cleaned_rows
             cleaned_row = {
                 "line_index": line_index,
                 "section": section,
@@ -206,8 +209,15 @@ class Pipeline:
                 "start_sec": start,
                 "end_sec": end,
                 "manual_segment_start": manual_segment_start,
+                "is_interlude": is_interlude,
             }
             cleaned_rows.append(cleaned_row)
+            if is_interlude:
+                after_line_index = row.get("after_line_index")
+                if after_line_index is None:
+                    raise ValueError("Manual interlude needs a position between lyric lines")
+                interludes.append({**cleaned_row, "after_line_index": int(after_line_index)})
+                continue
             self.store.update_line(
                 project_id,
                 line_index,
@@ -233,10 +243,12 @@ class Pipeline:
         if not cleaned_rows:
             raise ValueError("Manual timing needs at least one lyric line")
 
+        self.store.replace_manual_timing_interludes(project_id, interludes)
+
         groups: list[list[dict[str, object]]] = []
         current: list[dict[str, object]] = []
         for row in cleaned_rows:
-            if row["manual_segment_start"] and current:
+            if (row["manual_segment_start"] or (current and current[-1]["is_interlude"])) and current:
                 groups.append(current)
                 current = []
             current.append(row)
@@ -270,7 +282,7 @@ class Pipeline:
                     section=section,
                     is_chorus=False if instrumental else is_chorus,
                     use_reference=False if instrumental else is_chorus,
-                    source_line_indices=[int(item["line_index"]) for item in group],
+                    source_line_indices=[int(item["line_index"]) for item in group if item["line_index"] is not None],
                     clean_text=text,
                     start_sec=round(start, 6),
                     end_sec=round(end, 6),

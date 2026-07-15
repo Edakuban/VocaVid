@@ -260,7 +260,11 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
         )
         for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
-    return actions + f'<button class="reels-open-button" type="button" onclick="openReelsModal()">9. Make reels</button>'
+    if rendered_mp4_url:
+        reels_button = '<button type="button" onclick="openReelsModal()">9. Make reels</button>'
+    else:
+        reels_button = '<button type="button" disabled title="Bitte zuerst das finale MP4 rendern.">9. Make reels</button>'
+    return actions + reels_button
 
 
 def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
@@ -303,6 +307,7 @@ def _project_html(
     next_project_id: int | None = None,
     reel_analyses=None,
     reel_candidates_by_analysis=None,
+    manual_timing_interludes=None,
 ) -> str:
     segments = segments or []
     used_actions = used_actions or set()
@@ -350,7 +355,7 @@ def _project_html(
     {table}
   </section>
 {_project_settings_modal_html(project)}
-{_manual_timing_modal_html(project, lines)}
+{_manual_timing_modal_html(project, lines, manual_timing_interludes or [])}
 {_reels_modal_html(project, reel_analyses or [], reel_candidates_by_analysis or {})}
 </div>
 {_clip_lightbox_html()}

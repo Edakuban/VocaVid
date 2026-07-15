@@ -756,7 +756,7 @@ SCRIPTS = f"""
       const table = document.querySelector('.manual-timing-table');
       if (!audio || !table) return;
       const timestamp = formatManualTimingTimestamp(audio.currentTime);
-      const rows = Array.from(table.querySelectorAll('tbody tr'));
+      const rows = Array.from(table.querySelectorAll('tbody tr')).filter((row) => row.querySelector('input[name="start_secs"]'));
       for (let index = 1; index < rows.length; index += 1) {{
         const previousEnd = rows[index - 1].querySelector('input[name="end_secs"]');
         const currentStart = rows[index].querySelector('input[name="start_secs"]');
@@ -768,6 +768,36 @@ SCRIPTS = f"""
       }}
       const openEnd = rows.map((row) => row.querySelector('input[name="end_secs"]')).find((input) => input && manualTimingValueIsOpen(input));
       if (openEnd) setManualTimingInput(openEnd, timestamp);
+    }}
+    function addManualInterlude(button, afterLineIndex) {{
+      const insertRow = button.closest('tr');
+      if (!insertRow) return;
+      const row = document.createElement('tr');
+      row.className = 'manual-interlude-row';
+      row.innerHTML = `
+        <td class="manual-boundary-cell"><button class="manual-interlude-remove" type="button" title="Interlude entfernen" onclick="this.closest('tr').remove()">&times;</button></td>
+        <td>
+          <input type="hidden" name="line_indices" value="">
+          <input type="hidden" name="row_types" value="interlude">
+          <input type="hidden" name="interlude_after_line_indices" value="${{afterLineIndex}}">
+          <textarea class="manual-lyric-text" name="clean_texts" required>[Instrumental]</textarea>
+        </td>
+        <td><select name="sections">
+          <option value="Intro">Intro</option>
+          <option value="Verse">Verse</option>
+          <option value="Pre-Chorus">Pre-Chorus</option>
+          <option value="Chorus">Chorus</option>
+          <option value="Refrain">Refrain</option>
+          <option value="Bridge">Bridge</option>
+          <option value="Instrumental" selected>Instrumental</option>
+          <option value="Interlude">Interlude</option>
+          <option value="Instrumental Fade-Out">Instrumental Fade-Out</option>
+          <option value="Outro">Outro</option>
+        </select></td>
+        <td><input class="manual-time-input" name="start_secs" placeholder="0.0" required></td>
+        <td><input class="manual-time-input" name="end_secs" placeholder="0.0" required></td>`;
+      insertRow.before(row);
+      row.querySelector('textarea').focus();
     }}
     function openPromptModal(id) {{
       const box = document.getElementById(id);

@@ -177,6 +177,7 @@ STYLES = f"""
     .icon-button {{ width: 34px; height: 34px; padding: 0; border-radius: 50%; line-height: 34px; text-align: center; }}
     .actions button {{ border: 1px solid #3a454b; background: #293136; color: #c8d0d4; font-weight: 700; }}
     .actions button:hover, .actions button:focus {{ border-color: rgba(41,211,176,.58); background: #303b40; color: var(--text-primary); }}
+    .actions button:disabled {{ cursor: not-allowed; opacity: .55; }}
     .wip-button {{ border-color: var(--accent); background: var(--accent); color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.16); }}
     .wip-button:hover, .wip-button:focus {{ background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }}
     .used-button {{ border-color: #3a454b; background: #263238; color: #d8dfe2; box-shadow: inset 0 -2px 0 rgba(0,0,0,.18); }}
@@ -429,6 +430,11 @@ STYLES = f"""
     .manual-timing-table th:nth-child(3), .manual-timing-table td:nth-child(3) {{ width: 150px; }}
     .manual-timing-table th:nth-child(4), .manual-timing-table td:nth-child(4), .manual-timing-table th:nth-child(5), .manual-timing-table td:nth-child(5) {{ width: 96px; }}
     .manual-boundary-cell input {{ width: auto; }}
+    .manual-interlude-row {{ background: color-mix(in srgb, var(--action-soft) 38%, transparent); }}
+    .manual-interlude-row .manual-boundary-cell {{ color: var(--action); font-weight: 900; font-size: 18px; }}
+    .manual-interlude-remove {{ padding: 1px 7px; color: var(--text-secondary); font-size: 18px; line-height: 1; }}
+    .manual-interlude-insert-row td {{ padding: 5px 10px; text-align: center; border-top: 0; border-bottom: 0; }}
+    .manual-interlude-add {{ padding: 3px 10px; font-size: 12px; opacity: .82; }}
     .manual-lyric-text {{ min-height: 44px; resize: vertical; }}
     .manual-time-input {{ font-variant-numeric: tabular-nums; }}
     .manual-time-input.manual-time-filled {{ border-color: var(--action); box-shadow: 0 0 0 3px var(--action-soft); }}
@@ -481,7 +487,6 @@ STYLES = f"""
     .redo-cell {{ text-align: center; min-width: 72px; }}
     .redo-action {{ margin-top: 4px; color: var(--text-muted); font-size: 11px; overflow-wrap: anywhere; }}
     .inline-player {{ width: 180px; max-width: 100%; margin-left: 8px; vertical-align: middle; }}
-    .reels-open-button {{ border-color: rgba(41,211,176,.42) !important; background: rgba(41,211,176,.12) !important; color: #cdfbf1 !important; }}
     .reels-modal {{ z-index: 190; }}
     .reels-modal-content {{ width: min(1500px, 98vw); height: min(980px, 94vh); display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }}
     .reels-modal-content .lightbox-close {{ top: 12px; right: 12px; }}

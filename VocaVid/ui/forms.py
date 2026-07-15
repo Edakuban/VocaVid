@@ -84,8 +84,11 @@ def _segment_settings_html(project, show_heading: bool = True) -> str:
 """
 
 
-def _manual_timing_modal_html(project, lines) -> str:
+def _manual_timing_modal_html(project, lines, interludes=None) -> str:
     audio_url = _local_asset_url(_row_value(project, "audio_path", ""))
+    interludes_by_line = {}
+    for interlude in interludes or []:
+        interludes_by_line.setdefault(int(interlude["after_line_index"]), []).append(interlude)
     rows = ""
     for position, line in enumerate(lines):
         line_index = int(line["line_index"])
@@ -102,12 +105,17 @@ def _manual_timing_modal_html(project, lines) -> str:
   </td>
   <td>
     <input type="hidden" name="line_indices" value="{line_index}">
+    <input type="hidden" name="row_types" value="lyric">
     <textarea class="manual-lyric-text" name="clean_texts" required>{_text(clean_text)}</textarea>
   </td>
-  <td><input name="sections" value="{_attr(section)}"></td>
+  <td>{_manual_section_select_html(section)}</td>
   <td><input class="manual-time-input" name="start_secs" value="{_attr(_time_value(_row_value(line, "start_sec", None)))}" placeholder="0.0" required></td>
   <td><input class="manual-time-input" name="end_secs" value="{_attr(_time_value(_row_value(line, "end_sec", None)))}" placeholder="0.0" required></td>
 </tr>"""
+        for interlude in interludes_by_line.get(line_index, []):
+            rows += _manual_interlude_row_html(line_index, interlude)
+        if position < len(lines) - 1:
+            rows += f'''<tr class="manual-interlude-insert-row"><td colspan="5"><button type="button" class="manual-interlude-add" onclick="addManualInterlude(this, {line_index})" title="Instrumental- oder Interlude-Segment einfuegen">+ Interlude einfuegen</button></td></tr>'''
     return f"""
 <div id="manual-timing-modal" class="modal lightbox" onclick="if (event.target === this) closeManualTimingModal()">
   <div class="modal-content manual-timing-modal-content">
@@ -132,6 +140,51 @@ def _manual_timing_modal_html(project, lines) -> str:
   </div>
 </div>
 """
+
+
+def _manual_interlude_row_html(after_line_index, interlude=None) -> str:
+    interlude = interlude or {}
+    clean_text = _row_value(interlude, "clean_text", "[Instrumental]")
+    section = _row_value(interlude, "section", "Instrumental")
+    start = _time_value(_row_value(interlude, "start_sec", None))
+    end = _time_value(_row_value(interlude, "end_sec", None))
+    return f'''<tr class="manual-interlude-row">
+  <td class="manual-boundary-cell"><button class="manual-interlude-remove" type="button" title="Interlude entfernen" onclick="this.closest('tr').remove()">&#215;</button></td>
+  <td>
+    <input type="hidden" name="line_indices" value="">
+    <input type="hidden" name="row_types" value="interlude">
+    <input type="hidden" name="interlude_after_line_indices" value="{int(after_line_index)}">
+    <textarea class="manual-lyric-text" name="clean_texts" required>{_text(clean_text)}</textarea>
+  </td>
+  <td>{_manual_section_select_html(section)}</td>
+  <td><input class="manual-time-input" name="start_secs" value="{_attr(start)}" placeholder="0.0" required></td>
+  <td><input class="manual-time-input" name="end_secs" value="{_attr(end)}" placeholder="0.0" required></td>
+</tr>'''
+
+
+_MANUAL_SECTION_OPTIONS = (
+    "Intro",
+    "Verse",
+    "Pre-Chorus",
+    "Chorus",
+    "Refrain",
+    "Bridge",
+    "Instrumental",
+    "Interlude",
+    "Instrumental Fade-Out",
+    "Outro",
+)
+
+
+def _manual_section_select_html(selected: str) -> str:
+    selected = str(selected or "Verse")
+    options = list(_MANUAL_SECTION_OPTIONS)
+    if selected not in options:
+        options.append(selected)
+    return '<select name="sections">' + "".join(
+        f'<option value="{_attr(option)}"{" selected" if option == selected else ""}>{_text(option)}</option>'
+        for option in options
+    ) + "</select>"
 
 
 def _work_items_html(project, lines, segments, locked=None, show_generation_columns: bool = False) -> str:
