@@ -2236,6 +2236,20 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/align"', html)
         self.assertIn('action="/projects/7/generate-prompts"', html)
 
+    def test_render_mp4_requires_assemble_final_to_have_been_used(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+
+        html = _project_html(project, [], used_actions={"clips"})
+
+        self.assertIn('title="Bitte zuerst Assemble Final ausf\u00fchren"', html)
+        self.assertIn("alert('Bitte zuerst Assemble Final ausf\u00fchren.')", html)
+        self.assertIn('action="/projects/7/render-mp4"', html)
+        self.assertIn('class="wip-button" type="button" title="Bitte zuerst Assemble Final ausf\u00fchren"', html)
+
+        assembled_html = _project_html(project, [], used_actions={"assemble", "clips"})
+
+        self.assertIn('action="/projects/7/render-mp4"', assembled_html)
+
     def test_project_settings_are_visible_by_default_without_group_size_reset_warning(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
 
@@ -2792,8 +2806,12 @@ class AppHtmlTests(unittest.TestCase):
         approved_html = _project_html(project, lines)
 
         self.assertIn('action="/projects/7/assemble"', approved_html)
-        self.assertIn('action="/projects/7/render-mp4"', approved_html)
+        self.assertIn('title="Bitte zuerst Assemble Final ausf\u00fchren"', approved_html)
         self.assertNotIn("alert('Bitte erst alle Videos mit OK freigeben.')", approved_html)
+
+        assembled_html = _project_html(project, lines, used_actions={"assemble"})
+        self.assertIn('action="/projects/7/render-mp4"', assembled_html)
+        self.assertNotIn('title="Bitte zuerst Assemble Final ausf\u00fchren"', assembled_html)
 
     def test_lyrics_table_has_insert_and_delete_line_controls(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}

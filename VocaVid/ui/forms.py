@@ -346,6 +346,8 @@ def _action_button(
     is_used: bool,
     enabled: bool = True,
     preview_url: str = "",
+    disabled_title: str = "Alle Videos erst mit OK markieren",
+    disabled_alert: str = "Bitte erst alle Videos mit OK freigeben.",
 ) -> str:
     title = ""
     css_class = ""
@@ -359,7 +361,7 @@ def _action_button(
     if css_class:
         attrs += f' class="{css_class}"'
     if not enabled:
-        attrs += ' type="button" title="Alle Videos erst mit OK markieren" onclick="alert(\'Bitte erst alle Videos mit OK freigeben.\')"'
+        attrs += f' type="button" title="{_attr(disabled_title)}" onclick="alert(\'{disabled_alert}\')"'
     elif preview_url:
         attrs += f' type="button" title="Preview rendered MP4" onclick="openClipLightbox({_attr(_js_arg(preview_url))})"'
     elif title:

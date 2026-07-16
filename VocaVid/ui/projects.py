@@ -237,6 +237,7 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
     used_actions = used_actions or set()
     assemble_enabled = _all_videos_approved(work_items)
     rendered_mp4_url = _rendered_mp4_url(project)
+    render_enabled = "assemble" in used_actions or bool(rendered_mp4_url)
     action_specs = [
         ("align", "Analyze + Split", False, "align"),
         ("scene-plan", "Scene Plan", False, "scene-plan"),
@@ -255,8 +256,21 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
             label,
             is_wip,
             any(used_action in used_actions for used_action in used_key) if isinstance(used_key, tuple) else used_key in used_actions,
-            enabled=(action not in {"assemble", "render-mp4"} or not work_items or assemble_enabled),
+            enabled=(
+                action not in {"assemble", "render-mp4"}
+                or (not work_items or assemble_enabled) and (action != "render-mp4" or render_enabled)
+            ),
             preview_url=rendered_mp4_url if action == "render-mp4" else "",
+            disabled_title=(
+                "Bitte zuerst Assemble Final ausf\u00fchren"
+                if action == "render-mp4" and not render_enabled
+                else "Alle Videos erst mit OK markieren"
+            ),
+            disabled_alert=(
+                "Bitte zuerst Assemble Final ausf\u00fchren."
+                if action == "render-mp4" and not render_enabled
+                else "Bitte erst alle Videos mit OK freigeben."
+            ),
         )
         for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
