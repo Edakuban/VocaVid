@@ -122,6 +122,14 @@ class ProjectPollingScriptTests(unittest.TestCase):
         self.assertLess(app_source.index("const activeTemplateId = activeProjectStoryboardTemplateId(storyboard)"), app_source.index("storyboard.replaceWith(replacement)"))
         self.assertLess(app_source.index("storyboard.replaceWith(replacement)"), app_source.index("restoreProjectStoryboardSelection(replacement, activeTemplateId)"))
 
+    def test_storyboard_arrow_navigation_focuses_the_selected_card(self):
+        app_source = self.app_source()
+
+        self.assertIn("function selectStoryboardCard(storyboard, card, focusCard = false)", app_source)
+        self.assertIn("selectStoryboardCard(storyboard, card, true)", app_source)
+        self.assertIn("card.focus({ preventScroll: true });", app_source)
+        self.assertIn("card.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });", app_source)
+
     def test_storyboard_polling_preserves_checked_card_checkboxes(self):
         app_source = self.app_source()
 

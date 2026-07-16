@@ -832,7 +832,7 @@ SCRIPTS = f"""
         button.setAttribute('aria-pressed', active ? 'true' : 'false');
       }});
     }}
-    function selectStoryboardCard(storyboard, card) {{
+    function selectStoryboardCard(storyboard, card, focusCard = false) {{
       const templateId = card.dataset.inspectorTemplate;
       const template = templateId ? document.getElementById(templateId) : null;
       const current = storyboard.querySelector('#segment-inspector');
@@ -843,13 +843,17 @@ SCRIPTS = f"""
       const replacement = fragment.querySelector('#segment-inspector');
       if (!replacement) return;
       current.replaceWith(replacement);
+      if (focusCard) {{
+        card.focus({{ preventScroll: true }});
+        card.scrollIntoView({{ block: 'nearest', inline: 'nearest', behavior: 'smooth' }});
+      }}
     }}
     function selectStoryboardTemplate(templateId) {{
       const storyboard = document.getElementById('project-storyboard');
       if (!storyboard || !templateId) return;
       const card = storyboard.querySelector('[data-inspector-template="' + templateId + '"]');
       if (!card) return;
-      selectStoryboardCard(storyboard, card);
+      selectStoryboardCard(storyboard, card, true);
     }}
     function selectStoryboardItem(event, card) {{
       const interactiveSelector = 'button, a, input, textarea, select, label, audio, video, img, form';

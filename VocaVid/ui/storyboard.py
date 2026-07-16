@@ -126,6 +126,10 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
       <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
         <div class="segment-inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0"></div>
         {navigation}
+        <div class="segment-inspector-header-actions">
+          {quick_actions}
+          {approval_html}
+        </div>
         {image_choice_section}
         <div class="segment-inspector-section">
           <div class="segment-inspector-label">Preview</div>
@@ -141,10 +145,6 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
         </div>
         {image_prompt_modal}
         {video_prompt_modal}
-        <div class="segment-inspector-actions">
-          {quick_actions}
-          {approval_html}
-        </div>
       </aside>
 """
 
@@ -270,13 +270,10 @@ def _inspector_generation_actions_html(project_id: int, item_kind: str, item_ind
     if not (_row_value(row, "prompt", "") or _row_value(row, "video_prompt", "")):
         return ""
     return f"""
-        <div class="segment-inspector-section">
-          <div class="segment-inspector-label">Next renders</div>
-          <div class="inspector-generation-actions">
-            {_inspector_action_form_html(project_id, "images", item_index, "Gen Image")}
-            {_inspector_action_form_html(project_id, "avatar-image", item_index, "Gen Avatar")}
-            {_inspector_action_form_html(project_id, "clips", item_index, "Gen Clip")}
-          </div>
+        <div class="inspector-generation-actions">
+          {_inspector_action_form_html(project_id, "images", item_index, "Gen Image")}
+          {_inspector_action_form_html(project_id, "avatar-image", item_index, "Gen Avatar")}
+          {_inspector_action_form_html(project_id, "clips", item_index, "Gen Clip")}
         </div>
 """
 

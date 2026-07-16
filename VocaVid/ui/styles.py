@@ -384,6 +384,7 @@ STYLES = f"""
     .segment-inspector-nav {{ display: grid; grid-template-columns: 32px minmax(0, 1fr) 32px; gap: 10px; align-items: center; margin: -2px 0 0; }}
     .segment-inspector-title {{ color: var(--text-primary); font-size: 24px; font-weight: 800; letter-spacing: .02em; line-height: 1; text-align: center; text-transform: uppercase; }}
     .segment-nav-button {{ border: 0; padding: 0; }}
+    .segment-inspector-header-actions {{ display: grid; gap: 8px; }}
     .segment-inspector-section {{ display: grid; gap: 8px; min-width: 0; }}
     .segment-inspector-label {{ color: var(--text-muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }}
     .segment-inspector-label-row {{ display: flex; justify-content: space-between; gap: 10px; align-items: center; }}
@@ -392,11 +393,9 @@ STYLES = f"""
     .segment-inspector-audio-meta audio {{ display: none; }}
     .segment-audio-button {{ width: 28px; height: 28px; line-height: 28px; font-size: 12px; }}
     .segment-inspector-text {{ margin: 0; overflow-wrap: anywhere; }}
-    .segment-inspector-actions {{ display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }}
-    .segment-inspector-actions .compact-form {{ width: 100%; }}
-    .inspector-generation-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
-    .inspector-generation-actions .compact-form {{ flex: 1 1 0; min-width: 0; width: auto; margin: 0; }}
-    .inspector-generation-actions button {{ width: 100%; padding-left: 8px; padding-right: 8px; white-space: nowrap; }}
+    .inspector-generation-actions {{ display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-items: stretch; }}
+    .inspector-generation-actions .compact-form {{ min-width: 0; width: auto; margin: 0; }}
+    .inspector-generation-actions button {{ width: 100%; min-height: 42px; padding-left: 10px; padding-right: 10px; white-space: nowrap; }}
     .segment-inspector .storyboard-card-media {{ border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); }}
     .inspector-prompt-preview {{ display: grid; gap: 8px; align-items: start; }}
     .inspector-prompt-media-grid {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }}
