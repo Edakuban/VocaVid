@@ -98,7 +98,14 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(response.headers["location"], "/")
                 self.assertTrue(app.state.job_options.autodelete_finished)
                 self.assertTrue(app.state.job_options.shutdown_after_queue)
+                saved = Store(app_module.DB_PATH).get_global_settings()
+                self.assertEqual(saved["autodelete_finished"], 1)
+                self.assertEqual(saved["shutdown_after_queue"], 1)
                 app.state.jobs.executor.shutdown(wait=True)
+                restarted = app_module.create_app()
+                self.assertTrue(restarted.state.job_options.autodelete_finished)
+                self.assertTrue(restarted.state.job_options.shutdown_after_queue)
+                restarted.state.jobs.executor.shutdown(wait=True)
         finally:
             app_module.APP_ROOT = old_app_root
             app_module.UPLOADS = old_uploads
@@ -230,6 +237,11 @@ class AppEndpointTests(unittest.TestCase):
                 _write_wav(audio)
 
                 app = app_module.create_app()
+                Store(app_module.DB_PATH).update_global_settings(
+                    comfy_base_url="http://127.0.0.1:9000",
+                    output_resolution="1920x1080",
+                    fps=30,
+                )
                 client = TestClient(app)
                 with audio.open("rb") as audio_file:
                     response = client.post(
@@ -261,9 +273,9 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(project["chorus_group_size"], 2)
                 self.assertEqual(project["transition_handle_seconds"], 0.7)
                 self.assertEqual(project["whisper_model_size"], "large-v3")
-                self.assertEqual(project["output_resolution"], "1280x720")
-                self.assertEqual(project["fps"], 24)
-                self.assertEqual(project["comfy_base_url"], "http://127.0.0.1:8188")
+                self.assertEqual(project["output_resolution"], "1920x1080")
+                self.assertEqual(project["fps"], 30)
+                self.assertEqual(project["comfy_base_url"], "http://127.0.0.1:9000")
                 self.assertEqual(len(json.loads(project["reference_image_paths"])), 1)
                 deadline = time.time() + 2
                 while len(calls) < 4 and time.time() < deadline:
@@ -867,6 +879,58 @@ class AppEndpointTests(unittest.TestCase):
             app_module.UPLOADS = old_uploads
             app_module.DB_PATH = old_db_path
             app_module.Pipeline = old_pipeline
+
+    def test_global_settings_endpoint_persists_defaults_and_avatar(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.post(
+                    "/settings",
+                    data={
+                        "avatar_gender": "female",
+                        "avatar_face_description": "silver hair, green eyes",
+                        "comfy_base_url": "http://127.0.0.1:9000",
+                        "output_resolution": "1920x1080",
+                        "fps": "30",
+                        "lyric_group_size": "3",
+                        "chorus_group_size": "2",
+                        "transition_handle_seconds": "0.8",
+                        "whisper_model_size": "medium",
+                        "autodelete_finished": "on",
+                    },
+                    files={"avatar": ("band.png", b"fake image", "image/png")},
+                    follow_redirects=False,
+                )
+
+                self.assertEqual(response.status_code, 303)
+                saved = Store(app_module.DB_PATH).get_global_settings()
+                self.assertEqual(saved["avatar_path"], "global/band.png")
+                self.assertEqual(saved["avatar_gender"], "female")
+                self.assertEqual(saved["avatar_face_description"], "silver hair, green eyes")
+                self.assertEqual(saved["comfy_base_url"], "http://127.0.0.1:9000")
+                self.assertEqual(saved["output_resolution"], "1920x1080")
+                self.assertEqual(saved["fps"], 30)
+                self.assertEqual(saved["lyric_group_size"], 3)
+                self.assertEqual(saved["chorus_group_size"], 2)
+                self.assertEqual(saved["transition_handle_seconds"], 0.8)
+                self.assertEqual(saved["whisper_model_size"], "medium")
+                self.assertEqual(saved["autodelete_finished"], 1)
+                self.assertEqual(saved["shutdown_after_queue"], 0)
+                self.assertTrue((app_module.APP_ROOT / "global" / "band.png").exists())
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
 
     def test_line_insert_and_delete_endpoints_update_project_lines(self):
         old_app_root = app_module.APP_ROOT

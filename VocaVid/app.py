@@ -76,8 +76,14 @@ def create_app() -> FastAPI:
         logger.warning("marked %s interrupted running project items as failed", interrupted_items)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
     reels_pipeline = ReelsPipeline(store, APP_ROOT)
-    job_options = JobOptions()
+    saved_global_settings = store.get_global_settings()
+    job_options = JobOptions(
+        autodelete_finished=bool(saved_global_settings["autodelete_finished"]),
+        shutdown_after_queue=bool(saved_global_settings["shutdown_after_queue"]),
+    )
     shutdown_controller = ShutdownController()
+    if job_options.shutdown_after_queue:
+        shutdown_controller.enable()
 
     def record_finished_job(job) -> None:
         if job.action and job.duration_seconds is not None:
@@ -208,6 +214,7 @@ def create_app() -> FastAPI:
         active_jobs = jobs.active_jobs()
         average_durations = store.average_job_durations()
         projects = store.list_projects()
+        global_settings = store.get_global_settings()
         project_previews = {int(project["id"]): store.list_segments(int(project["id"])) for project in projects}
         return _page(
             "Projects",
@@ -218,6 +225,7 @@ def create_app() -> FastAPI:
                 queue_estimate_seconds=_queue_estimate_seconds(active_jobs, average_durations),
                 job_options=job_options,
                 project_previews=project_previews,
+                global_settings=global_settings,
             ),
             queue_count=len(active_jobs),
         )
@@ -244,6 +252,53 @@ def create_app() -> FastAPI:
     ):
         job_options.autodelete_finished = autodelete_finished == "on"
         job_options.shutdown_after_queue = shutdown_after_queue == "on"
+        store.update_global_settings(
+            autodelete_finished=int(job_options.autodelete_finished),
+            shutdown_after_queue=int(job_options.shutdown_after_queue),
+        )
+        if job_options.autodelete_finished:
+            jobs.delete_finished_jobs()
+        if job_options.shutdown_after_queue:
+            shutdown_controller.enable()
+        else:
+            shutdown_controller.disable()
+        return RedirectResponse("/", status_code=303)
+
+    @app.post("/settings")
+    async def update_global_settings(
+        avatar: UploadFile | None = File(None),
+        avatar_gender: str = Form(""),
+        avatar_face_description: str = Form(""),
+        comfy_base_url: str = Form("http://127.0.0.1:8188"),
+        output_resolution: str = Form("1280x720"),
+        fps: int = Form(24),
+        lyric_group_size: int = Form(2),
+        chorus_group_size: int = Form(1),
+        transition_handle_seconds: float = Form(0.5),
+        whisper_model_size: str = Form("large-v3"),
+        autodelete_finished: str | None = Form(None),
+        shutdown_after_queue: str | None = Form(None),
+    ):
+        current = store.get_global_settings()
+        avatar_path = str(current["avatar_path"] or "")
+        if avatar is not None and avatar.filename:
+            avatar_path = _storage_path(await _save_upload(avatar, APP_ROOT / "global"))
+        job_options.autodelete_finished = autodelete_finished == "on"
+        job_options.shutdown_after_queue = shutdown_after_queue == "on"
+        store.update_global_settings(
+            avatar_path=avatar_path,
+            avatar_gender=_normalize_avatar_gender(avatar_gender),
+            avatar_face_description=avatar_face_description.strip(),
+            comfy_base_url=comfy_base_url.strip() or "http://127.0.0.1:8188",
+            output_resolution=output_resolution.strip() or "1280x720",
+            fps=max(1, int(fps)),
+            lyric_group_size=max(1, int(lyric_group_size)),
+            chorus_group_size=max(1, int(chorus_group_size)),
+            transition_handle_seconds=max(0.0, float(transition_handle_seconds)),
+            whisper_model_size=normalize_whisper_model_size(whisper_model_size),
+            autodelete_finished=int(job_options.autodelete_finished),
+            shutdown_after_queue=int(job_options.shutdown_after_queue),
+        )
         if job_options.autodelete_finished:
             jobs.delete_finished_jobs()
         if job_options.shutdown_after_queue:
@@ -274,13 +329,13 @@ def create_app() -> FastAPI:
         avatar_gender: str = Form(""),
         avatar_face_description: str = Form(""),
         global_style_prompt: str = Form(""),
-        comfy_base_url: str = Form("http://127.0.0.1:8188"),
-        output_resolution: str = Form("1280x720"),
-        fps: int = Form(24),
-        lyric_group_size: int = Form(2),
-        chorus_group_size: int = Form(1),
-        transition_handle_seconds: float = Form(0.5),
-        whisper_model_size: str = Form("large-v3"),
+        comfy_base_url: str = Form(""),
+        output_resolution: str = Form(""),
+        fps: str = Form(""),
+        lyric_group_size: str = Form(""),
+        chorus_group_size: str = Form(""),
+        transition_handle_seconds: str = Form(""),
+        whisper_model_size: str = Form(""),
         audio: UploadFile = File(...),
         lyrics: UploadFile = File(...),
         avatar: UploadFile | None = File(None),
@@ -290,9 +345,14 @@ def create_app() -> FastAPI:
         project_dir.mkdir(parents=True, exist_ok=True)
         audio_path = await _save_upload(audio, project_dir)
         lyrics_path = await _save_upload(lyrics, project_dir)
+        defaults = store.get_global_settings()
+        effective_avatar_gender = _normalize_avatar_gender(avatar_gender) or str(defaults["avatar_gender"] or "")
+        effective_avatar_description = avatar_face_description.strip() or str(defaults["avatar_face_description"] or "")
         reference_paths = []
         if avatar is not None and avatar.filename:
             reference_paths.append(_storage_path(await _save_upload(avatar, project_dir / "references")))
+        elif defaults["avatar_path"]:
+            reference_paths.append(str(defaults["avatar_path"]))
         for item in references:
             if item.filename:
                 reference_paths.append(_storage_path(await _save_upload(item, project_dir / "references")))
@@ -304,20 +364,20 @@ def create_app() -> FastAPI:
                 "lyrics_path": _storage_path(lyrics_path),
                 "global_style_prompt": global_style_prompt,
                 "genre": genre.strip(),
-                "avatar_gender": _normalize_avatar_gender(avatar_gender),
-                "avatar_face_description": avatar_face_description.strip(),
+                "avatar_gender": effective_avatar_gender,
+                "avatar_face_description": effective_avatar_description,
                 "reference_image_paths": reference_paths,
-                "comfy_base_url": comfy_base_url,
-                "output_resolution": output_resolution,
-                "fps": fps,
-                "lyric_group_size": max(1, int(lyric_group_size)),
-                "chorus_group_size": max(1, int(chorus_group_size)),
-                "transition_handle_seconds": max(0.0, float(transition_handle_seconds)),
-                "whisper_model_size": normalize_whisper_model_size(whisper_model_size),
+                "comfy_base_url": comfy_base_url.strip() or str(defaults["comfy_base_url"]),
+                "output_resolution": output_resolution.strip() or str(defaults["output_resolution"]),
+                "fps": max(1, int(fps or defaults["fps"])),
+                "lyric_group_size": max(1, int(lyric_group_size or defaults["lyric_group_size"])),
+                "chorus_group_size": max(1, int(chorus_group_size or defaults["chorus_group_size"])),
+                "transition_handle_seconds": max(0.0, float(transition_handle_seconds or defaults["transition_handle_seconds"])),
+                "whisper_model_size": normalize_whisper_model_size(whisper_model_size or str(defaults["whisper_model_size"])),
             },
             lines,
         )
-        submit_initial_project_jobs(project_id, describe_avatar=not avatar_face_description.strip())
+        submit_initial_project_jobs(project_id, describe_avatar=not effective_avatar_description)
         return _project_redirect(project_id)
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)

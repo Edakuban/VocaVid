@@ -93,36 +93,65 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<label>Avatar</label><input name="avatar" type="file" accept="image/*">', html)
         self.assertIn('<label>Male / Female Avatar</label><select name="avatar_gender">', html)
         self.assertIn('<option value="male">Male</option>', html)
-        self.assertIn('<label>Avatar face description</label><textarea name="avatar_face_description"></textarea>', html)
+        self.assertIn('<label>Avatar face description</label><textarea name="avatar_face_description" placeholder=""></textarea>', html)
         self.assertNotIn('title="Available after creating the project">AI describe avatar</button>', html)
-        self.assertIn('<label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">', html)
-        self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
-        self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
-        self.assertIn('name="output_resolution" type="hidden" value="1280x720"', html)
-        self.assertIn('name="fps" type="hidden" value="24"', html)
-        self.assertIn('name="transition_handle_seconds" type="hidden" value="0.5"', html)
-        self.assertIn('name="whisper_model_size" type="hidden" value="large-v3"', html)
+        self.assertIn('<label>Comfy Base URL</label><input name="comfy_base_url" placeholder="http://127.0.0.1:8188">', html)
+        self.assertIn('name="lyric_group_size" type="number" min="1" max="8" placeholder="2"', html)
+        self.assertIn('name="chorus_group_size" type="number" min="1" max="8" placeholder="1"', html)
+        self.assertIn('name="output_resolution" placeholder="1280x720"', html)
+        self.assertIn('name="fps" type="number" min="1" placeholder="24"', html)
+        self.assertIn('name="transition_handle_seconds" type="number" min="0" step="0.1" placeholder="0.5"', html)
+        self.assertIn('<option value="large-v3" selected>large-v3</option>', html)
         self.assertNotIn("SUNO Lyrics", html)
         self.assertNotIn("Global Style Prompt", html)
         self.assertNotIn('name="global_style_prompt"', html)
         self.assertNotIn("Reference Images", html)
         self.assertNotIn('name="references"', html)
-        self.assertNotIn("<label>Resolution</label>", html)
-        self.assertNotIn("<label>FPS</label>", html)
-        self.assertNotIn("<label>Whisper Model</label>", html)
+        self.assertIn("<label>Resolution</label>", html)
+        self.assertIn("<label>FPS</label>", html)
+        self.assertIn("<label>Whisper Model</label>", html)
 
     def test_project_form_includes_clip_group_defaults(self):
         html = _projects_html([], [])
+        html = html[html.index('id="new-project-modal"'):]
 
-        self.assertIn('name="lyric_group_size" type="number" min="1" max="8" value="2"', html)
-        self.assertIn('name="chorus_group_size" type="number" min="1" max="8" value="1"', html)
-        self.assertIn('name="transition_handle_seconds" type="hidden" value="0.5"', html)
-        self.assertIn('name="whisper_model_size" type="hidden" value="large-v3"', html)
+        self.assertIn('name="lyric_group_size" type="number" min="1" max="8" placeholder="2"', html)
+        self.assertIn('name="chorus_group_size" type="number" min="1" max="8" placeholder="1"', html)
+        self.assertIn('name="transition_handle_seconds" type="number" min="0" step="0.1" placeholder="0.5"', html)
+        self.assertIn('<option value="large-v3" selected>large-v3</option>', html)
         self.assertLess(html.index('name="lyrics"'), html.index('name="lyric_group_size"'))
         self.assertLess(html.index('name="lyric_group_size"'), html.index('name="chorus_group_size"'))
         self.assertLess(html.index('name="chorus_group_size"'), html.index('name="transition_handle_seconds"'))
         self.assertLess(html.index('name="transition_handle_seconds"'), html.index('name="whisper_model_size"'))
         self.assertLess(html.index('name="whisper_model_size"'), html.index("<p><button>Create Project</button></p>"))
+
+    def test_start_page_has_persistent_global_configuration_modal(self):
+        settings = {
+            "avatar_path": "global/band.png",
+            "avatar_gender": "female",
+            "avatar_face_description": "silver hair",
+            "comfy_base_url": "http://127.0.0.1:9000",
+            "output_resolution": "1920x1080",
+            "fps": 30,
+            "lyric_group_size": 3,
+            "chorus_group_size": 2,
+            "transition_handle_seconds": 0.8,
+            "whisper_model_size": "medium",
+            "autodelete_finished": 1,
+            "shutdown_after_queue": 0,
+        }
+
+        html = _projects_html([], [], global_settings=settings)
+
+        self.assertIn('title="Global Configuration"', html)
+        self.assertIn('onclick="openGlobalSettingsModal()"', html)
+        self.assertIn('id="global-settings-modal"', html)
+        self.assertIn('action="/settings"', html)
+        self.assertIn('src="/assets/global/band.png"', html)
+        self.assertIn('placeholder="http://127.0.0.1:9000"', html)
+        self.assertIn('placeholder="1920x1080"', html)
+        self.assertIn('<option value="medium" selected>medium</option>', html)
+        self.assertIn('name="autodelete_finished" checked', html)
 
     def test_start_page_renders_project_cards_and_marks_done_projects(self):
         projects = [

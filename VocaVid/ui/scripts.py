@@ -541,6 +541,16 @@ SCRIPTS = f"""
       if (!box) return;
       box.classList.remove('open');
     }}
+    function openGlobalSettingsModal() {{
+      const box = document.getElementById('global-settings-modal');
+      if (!box) return;
+      box.classList.add('open');
+    }}
+    function closeGlobalSettingsModal() {{
+      const box = document.getElementById('global-settings-modal');
+      if (!box) return;
+      box.classList.remove('open');
+    }}
     function normalizeSearchText(value) {{
       return String(value || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
     }}

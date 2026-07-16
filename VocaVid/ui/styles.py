@@ -317,6 +317,7 @@ STYLES = f"""
     .project-title-row .button {{ margin-left: 0; }}
     .project-icon-button {{ width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border-radius: 12px; border: 1px solid var(--border-default); background: #263238; color: var(--text-primary); font-size: 18px; }}
     .project-icon-button:hover, .project-icon-button:focus {{ background: var(--bg-control-hover); border-color: var(--action); color: var(--text-primary); }}
+    .global-config-button {{ flex: 0 0 auto; }}
     .project-nav-button {{ display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-default); background: #263238; color: var(--text-primary); font-size: 18px; font-weight: 800; line-height: 1; text-decoration: none; }}
     .project-nav-button:hover, .project-nav-button:focus {{ background: var(--bg-control-hover); border-color: var(--border-strong); }}
     .project-nav-disabled {{ opacity: .32; cursor: default; }}
@@ -414,6 +415,16 @@ STYLES = f"""
     .image-prompt-modal-content .prompt-textarea {{ min-height: 144px; }}
     .segment-inspector .prompt-textarea {{ width: 100%; min-height: 250px; }}
     .project-modal-content {{ width: min(860px, 94vw); }}
+    .global-settings-modal-content {{ width: min(780px, 94vw); max-height: 88vh; display: grid; grid-template-rows: auto minmax(0, 1fr); }}
+    .global-settings-form {{ min-height: 0; overflow: auto; margin: 0; border: 0; border-radius: 0; }}
+    .global-settings-form fieldset {{ display: grid; gap: 8px; margin: 0 0 18px; padding: 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }}
+    .global-settings-form legend {{ padding: 0 7px; color: var(--text-primary); font-weight: 800; }}
+    .global-checkbox {{ display: flex; align-items: center; gap: 9px; }}
+    .global-checkbox input {{ width: auto; margin: 0; }}
+    .global-avatar-preview {{ display: block; width: 150px; aspect-ratio: 1; object-fit: cover; border: 1px solid var(--border-default); border-radius: var(--radius-md); }}
+    .new-project-avatar-default {{ display: flex; align-items: center; gap: 10px; color: var(--text-muted); }}
+    .new-project-avatar-default img {{ width: 56px; height: 56px; object-fit: cover; border: 1px solid var(--border-default); border-radius: var(--radius-sm); }}
+    .global-avatar-empty, .settings-default-hint {{ color: var(--text-muted); font-size: 12px; }}
     .project-modal-content form {{ margin: 0; border: 0; border-radius: 0; }}
     .project-settings-body {{ max-height: calc(88vh - 74px); overflow: auto; }}
     .project-settings-body > form {{ max-height: none; overflow: visible; }}

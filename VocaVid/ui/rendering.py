@@ -74,6 +74,7 @@ from .forms import (
 )
 from .projects import (
     _extract_row_snippets,
+    _global_settings_modal_html,
     _initial_setup_banner_html,
     _is_kdenlive_project_done,
     _new_project_modal_html,
@@ -248,6 +249,7 @@ __all__ = [
     "_projects_html",
     "_start_topbar_html",
     "_new_project_modal_html",
+    "_global_settings_modal_html",
     "_start_hero_html",
     "_project_list_item_html",
     "_project_card_media_html",

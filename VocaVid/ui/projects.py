@@ -24,6 +24,7 @@ from .forms import (
     _image_lightbox_html,
     _manual_timing_modal_html,
     _segment_settings_html,
+    _whisper_model_select_html,
     _work_items_html,
 )
 from .queue import (
@@ -43,10 +44,18 @@ def _projects_html(
     queue_estimate_seconds: float | None = None,
     job_options: JobOptions | None = None,
     project_previews: dict[int, list] | None = None,
+    global_settings=None,
 ) -> str:
     average_durations = average_durations or {}
     job_options = job_options or JobOptions()
     project_previews = project_previews or {}
+    global_settings = global_settings or {
+        "avatar_path": "", "avatar_gender": "", "avatar_face_description": "",
+        "comfy_base_url": "http://127.0.0.1:8188", "output_resolution": "1280x720",
+        "fps": 24, "lyric_group_size": 2, "chorus_group_size": 1,
+        "transition_handle_seconds": 0.5, "whisper_model_size": "large-v3",
+        "autodelete_finished": 0, "shutdown_after_queue": 0,
+    }
     active_project_ids = {int(job.project_id) for job in jobs if job.project_id and job.status in {"queued", "running"}}
     rows = "".join(_project_list_item_html(p, project_previews.get(int(p["id"]), []), int(p["id"]) in active_project_ids) for p in projects)
     active_count = len([job for job in jobs if job.status in {"queued", "running"}])
@@ -79,7 +88,8 @@ def _projects_html(
 </section>
 </div>
 {queue_modal}
-{_new_project_modal_html()}
+{_global_settings_modal_html(global_settings)}
+{_new_project_modal_html(global_settings)}
 </div>
 <script>setupQueueEstimateCountdown(); pollJobsStatus();</script>
 """
@@ -93,12 +103,26 @@ def _start_topbar_html(queue_estimate_seconds: float | None, queue_count: int = 
   <div class="studio-tagline">Local AI music-video studio</div>
   <div class="studio-spacer"></div>
   {_queue_estimate_html(queue_estimate_seconds, queue_count)}
+  <button class="project-icon-button global-config-button" type="button" title="Global Configuration" aria-label="Global Configuration" onclick="openGlobalSettingsModal()">⚙</button>
   <button class="studio-button" type="button" onclick="openNewProjectModal()">New Project</button>
 </div>
 """
 
 
-def _new_project_modal_html() -> str:
+def _new_project_modal_html(global_settings=None) -> str:
+    settings = global_settings or {
+        "avatar_path": "", "avatar_gender": "", "avatar_face_description": "",
+        "comfy_base_url": "http://127.0.0.1:8188", "output_resolution": "1280x720",
+        "fps": 24, "lyric_group_size": 2, "chorus_group_size": 1,
+        "transition_handle_seconds": 0.5, "whisper_model_size": "large-v3",
+    }
+    if settings["avatar_path"]:
+        avatar_default_html = (
+            f'<div class="new-project-avatar-default"><img src="{_attr(_local_asset_url(str(settings["avatar_path"])))}" '
+            'alt="Global avatar"><small>Global avatar — choose a file to override it.</small></div>'
+        )
+    else:
+        avatar_default_html = '<small class="settings-default-hint">No global avatar configured.</small>'
     return f"""
 <div id="new-project-modal" class="modal lightbox" onclick="if (event.target === this) closeNewProjectModal()">
   <div class="modal-content">
@@ -111,17 +135,59 @@ def _new_project_modal_html() -> str:
       <label>WAV</label><input name="audio" type="file" accept=".wav,audio/wav" required>
       <label>Lyrics</label><input name="lyrics" type="file" accept=".txt,.lyrics" required>
       <label>Genre</label><input name="genre" required>
-      <label>Avatar</label><input name="avatar" type="file" accept="image/*">
-      <label>Male / Female Avatar</label>{_avatar_gender_select_html("")}
-      <label>Avatar face description</label><textarea name="avatar_face_description"></textarea>
-      <label>Comfy Base URL</label><input name="comfy_base_url" value="http://127.0.0.1:8188">
-      <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="2">
-      <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="1">
-      <input name="output_resolution" type="hidden" value="1280x720">
-      <input name="fps" type="hidden" value="24">
-      <input name="transition_handle_seconds" type="hidden" value="0.5">
-      <input name="whisper_model_size" type="hidden" value="large-v3">
+      <label>Avatar</label><input name="avatar" type="file" accept="image/*">{avatar_default_html}
+      <label>Male / Female Avatar</label>{_avatar_gender_select_html(str(settings['avatar_gender'] or ''))}
+      <label>Avatar face description</label><textarea name="avatar_face_description" placeholder="{_attr(settings['avatar_face_description'])}"></textarea>
+      <label>Comfy Base URL</label><input name="comfy_base_url" placeholder="{_attr(settings['comfy_base_url'])}">
+      <label>Resolution</label><input name="output_resolution" placeholder="{_attr(settings['output_resolution'])}">
+      <label>FPS</label><input name="fps" type="number" min="1" placeholder="{_attr(settings['fps'])}">
+      <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" placeholder="{_attr(settings['lyric_group_size'])}">
+      <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" placeholder="{_attr(settings['chorus_group_size'])}">
+      <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" placeholder="{_attr(settings['transition_handle_seconds'])}">
+      <label>Whisper Model</label>{_whisper_model_select_html(str(settings['whisper_model_size']))}
       <p><button>Create Project</button></p>
+    </form>
+  </div>
+</div>
+"""
+
+
+def _global_settings_modal_html(settings) -> str:
+    avatar_path = str(settings["avatar_path"] or "")
+    avatar_preview = (
+        f'<img class="global-avatar-preview" src="{_attr(_local_asset_url(avatar_path))}" alt="Global avatar">'
+        if avatar_path else '<div class="global-avatar-empty">No global avatar configured</div>'
+    )
+    autodelete_checked = " checked" if settings["autodelete_finished"] else ""
+    shutdown_checked = " checked" if settings["shutdown_after_queue"] else ""
+    return f"""
+<div id="global-settings-modal" class="modal lightbox" onclick="if (event.target === this) closeGlobalSettingsModal()">
+  <div class="modal-content global-settings-modal-content">
+    <div class="studio-panel-head">
+      <h2>Global Configuration</h2>
+      <button class="lightbox-close" type="button" aria-label="Close window" onclick="closeGlobalSettingsModal()">X</button>
+    </div>
+    <form class="global-settings-form" action="/settings" method="post" enctype="multipart/form-data">
+      <fieldset><legend>Band / Avatar</legend>
+        {avatar_preview}
+        <label>Avatar</label><input name="avatar" type="file" accept="image/*">
+        <label>Male / Female Avatar</label>{_avatar_gender_select_html(str(settings['avatar_gender'] or ''))}
+        <label>Avatar face description</label><textarea name="avatar_face_description">{_text(settings['avatar_face_description'])}</textarea>
+      </fieldset>
+      <fieldset><legend>Project defaults</legend>
+        <label>Comfy Base URL</label><input name="comfy_base_url" value="{_attr(settings['comfy_base_url'])}" required>
+        <label>Resolution</label><input name="output_resolution" value="{_attr(settings['output_resolution'])}" required>
+        <label>FPS</label><input name="fps" type="number" min="1" value="{_attr(settings['fps'])}" required>
+        <label>Lyrics-Zeilen pro Clip</label><input name="lyric_group_size" type="number" min="1" max="8" value="{_attr(settings['lyric_group_size'])}" required>
+        <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="{_attr(settings['chorus_group_size'])}" required>
+        <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="{_attr(settings['transition_handle_seconds'])}" required>
+        <label>Whisper Model</label>{_whisper_model_select_html(str(settings['whisper_model_size']))}
+      </fieldset>
+      <fieldset><legend>Queue &amp; System</legend>
+        <label class="global-checkbox"><input type="checkbox" name="autodelete_finished"{autodelete_checked}> Autodelete finished</label>
+        <label class="global-checkbox"><input type="checkbox" name="shutdown_after_queue"{shutdown_checked}> Shutdown computer 15mins after last queue</label>
+      </fieldset>
+      <div class="settings-save-actions"><button>Save Global Configuration</button></div>
     </form>
   </div>
 </div>
@@ -473,6 +539,7 @@ __all__ = [
     "_projects_html",
     "_start_topbar_html",
     "_new_project_modal_html",
+    "_global_settings_modal_html",
     "_start_hero_html",
     "_project_list_item_html",
     "_project_card_media_html",

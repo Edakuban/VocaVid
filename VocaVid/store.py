@@ -10,6 +10,24 @@ from .models import LyricLine, LineTiming, RenderSegment
 
 
 SCHEMA = """
+CREATE TABLE IF NOT EXISTS global_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    avatar_path TEXT NOT NULL DEFAULT '',
+    avatar_gender TEXT NOT NULL DEFAULT '',
+    avatar_face_description TEXT NOT NULL DEFAULT '',
+    comfy_base_url TEXT NOT NULL DEFAULT 'http://127.0.0.1:8188',
+    output_resolution TEXT NOT NULL DEFAULT '1280x720',
+    fps INTEGER NOT NULL DEFAULT 24,
+    lyric_group_size INTEGER NOT NULL DEFAULT 2,
+    chorus_group_size INTEGER NOT NULL DEFAULT 1,
+    transition_handle_seconds REAL NOT NULL DEFAULT 0.5,
+    whisper_model_size TEXT NOT NULL DEFAULT 'large-v3',
+    autodelete_finished INTEGER NOT NULL DEFAULT 0,
+    shutdown_after_queue INTEGER NOT NULL DEFAULT 0
+);
+
+INSERT OR IGNORE INTO global_settings (id) VALUES (1);
+
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -279,6 +297,41 @@ class Store:
     def list_projects(self) -> list[sqlite3.Row]:
         with self._connect() as conn:
             return list(conn.execute("SELECT * FROM projects ORDER BY id DESC"))
+
+    def get_global_settings(self) -> sqlite3.Row:
+        with self._connect() as conn:
+            row = conn.execute("SELECT * FROM global_settings WHERE id = 1").fetchone()
+            if row is None:  # Defensive fallback for databases created by unusual tooling.
+                conn.execute("INSERT INTO global_settings (id) VALUES (1)")
+                row = conn.execute("SELECT * FROM global_settings WHERE id = 1").fetchone()
+            return row
+
+    def update_global_settings(self, **fields: Any) -> None:
+        allowed = {
+            "avatar_path",
+            "avatar_gender",
+            "avatar_face_description",
+            "comfy_base_url",
+            "output_resolution",
+            "fps",
+            "lyric_group_size",
+            "chorus_group_size",
+            "transition_handle_seconds",
+            "whisper_model_size",
+            "autodelete_finished",
+            "shutdown_after_queue",
+        }
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"Unknown global setting(s): {', '.join(sorted(unknown))}")
+        if not fields:
+            return
+        assignments = ", ".join(f"{key} = ?" for key in fields)
+        with self._connect() as conn:
+            conn.execute(
+                f"UPDATE global_settings SET {assignments} WHERE id = 1",
+                list(fields.values()),
+            )
 
     def get_project(self, project_id: int) -> sqlite3.Row:
         with self._connect() as conn:
