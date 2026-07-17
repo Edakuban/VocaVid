@@ -907,7 +907,14 @@ class PipelineSegmentTests(unittest.TestCase):
             _write_wav(audio, duration_sec=4.5)
             lyrics.write_text("[Verse]\nOne\n", encoding="utf-8")
             project_id = store.create_project(
-                {"name": "Demo", "audio_path": str(audio), "lyrics_path": str(lyrics), "global_style_prompt": "cinematic"},
+                {
+                    "name": "Demo",
+                    "audio_path": str(audio),
+                    "lyrics_path": str(lyrics),
+                    "global_style_prompt": "cinematic",
+                    "avatar_gender": "female",
+                    "avatar_face_description": "oval face, dark eyes",
+                },
                 parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
             )
             store.set_timings(project_id, [LineTiming(0, 0, 4.5, 0.9)])
@@ -965,7 +972,9 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(workflow["269"]["inputs"]["image"], "VocaVid/demo/inputs/avatar.png")
             self.assertEqual(workflow["276"]["inputs"]["audio"], "VocaVid/demo/inputs/segment-000.wav")
             self.assertEqual(captured["kwargs"], {"partial_execution_targets": ["341"]})
-            self.assertEqual(workflow["340:319"]["inputs"]["value"], "manual camera push")
+            self.assertIn("manual camera push", workflow["340:319"]["inputs"]["value"])
+            self.assertIn("Identity lock", workflow["340:319"]["inputs"]["value"])
+            self.assertIn("female lead vocalist; oval face, dark eyes", workflow["340:319"]["inputs"]["value"])
             self.assertEqual(workflow["340:331"]["inputs"]["value"], 5.0)
             self.assertIn("demo/clips", segment["clip_path"].replace("\\", "/"))
 

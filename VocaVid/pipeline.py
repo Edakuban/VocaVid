@@ -1586,7 +1586,10 @@ def _inject_image_audio_video_inputs(workflow: dict, variables: dict[str, str]) 
     image_path = variables.get("image_path", "")
     audio_path = variables.get("audio_path", "")
     duration = variables.get("duration", "")
-    video_prompt = variables.get("video_prompt", "")
+    video_prompt = _with_avatar_identity_constraint(
+        variables.get("video_prompt", ""),
+        variables.get("avatar_identity_context", ""),
+    )
     if image_path:
         for node in _nodes_by_class(workflow, "LoadImage"):
             inputs = node["inputs"]
@@ -1623,6 +1626,18 @@ def _inject_image_audio_video_inputs(workflow: dict, variables: dict[str, str]) 
                 inputs["value"] = video_prompt
                 break
     return workflow
+
+
+def _with_avatar_identity_constraint(video_prompt: str, avatar_identity_context: str) -> str:
+    identity = str(avatar_identity_context or "").strip()
+    if not identity:
+        return video_prompt
+    constraint = (
+        "Identity lock: preserve the exact person and facial identity from the input image throughout the entire clip. "
+        f"Identity details: {identity}. "
+        "No face change, identity drift, age change, or altered facial features."
+    )
+    return f"{str(video_prompt or '').strip()}\n\n{constraint}".strip()
 
 
 def _output_node_ids(workflow: dict, class_types: set[str]) -> list[str]:
