@@ -1623,7 +1623,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('class="segment-select storyboard-select" name="selected_lines" value="0" aria-label="Segment markieren" disabled', html)
         self.assertIn('<div class="storyboard-lock-overlay"><span>running</span></div>', html)
         self.assertIn('class="segment-inspector segment-inspector-locked"', html)
-        self.assertIn('data-locked="1" inert', html)
+        self.assertIn('class="segment-inspector-lockable" inert', html)
         self.assertIn('<div class="segment-inspector-lock-overlay"><span>running</span></div>', html)
         self.assertIn("card.dataset.locked === '1'", html)
         self.assertIn("'.segment-select:checked:not(:disabled)'", html)

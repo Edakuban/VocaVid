@@ -129,29 +129,31 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
     inert_attr = " inert" if locked_status else ""
     lock_overlay = f'<div class="segment-inspector-lock-overlay"><span>{_text(locked_status)}</span></div>' if locked_status else ""
     return f"""
-      <aside id="segment-inspector" class="segment-inspector{locked_class}" aria-label="Selected storyboard item" data-locked="{locked_attr}"{inert_attr}>
+      <aside id="segment-inspector" class="segment-inspector{locked_class}" aria-label="Selected storyboard item" data-locked="{locked_attr}">
         <div class="segment-inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0"></div>
         {navigation}
-        <div class="segment-inspector-header-actions">
-          {quick_actions}
-          {approval_html}
+        <div class="segment-inspector-lockable"{inert_attr}>
+          <div class="segment-inspector-header-actions">
+            {quick_actions}
+            {approval_html}
+          </div>
+          {image_choice_section}
+          <div class="segment-inspector-section">
+            <div class="segment-inspector-label">Preview</div>
+            {media_html}
+          </div>
+          <div class="segment-inspector-section">
+            <div class="segment-inspector-label-row"><div class="segment-inspector-label">Text</div>{timing_html}</div>
+            <div class="segment-inspector-text">{text_html}</div>
+          </div>
+          <div class="segment-inspector-section">
+            <div class="segment-inspector-label">Prompts</div>
+            {prompt_preview}
+          </div>
+          {image_prompt_modal}
+          {video_prompt_modal}
+          {lock_overlay}
         </div>
-        {image_choice_section}
-        <div class="segment-inspector-section">
-          <div class="segment-inspector-label">Preview</div>
-          {media_html}
-        </div>
-        <div class="segment-inspector-section">
-          <div class="segment-inspector-label-row"><div class="segment-inspector-label">Text</div>{timing_html}</div>
-          <div class="segment-inspector-text">{text_html}</div>
-        </div>
-        <div class="segment-inspector-section">
-          <div class="segment-inspector-label">Prompts</div>
-          {prompt_preview}
-        </div>
-        {image_prompt_modal}
-        {video_prompt_modal}
-        {lock_overlay}
       </aside>
 """
 
