@@ -1,4 +1,4 @@
-Ich will ein KI-Musikvideo zu dem Song erstellen. Welchen 'Global Style Prompt' sollte ich nutzen?
+I want to create an AI music video for this song. Which "Global Style Prompt" should I use?
 
 Genre: {GENRE}
 Lyrics: {LYRICS}
