@@ -1,13 +1,17 @@
-Create a continuous music video scene plan for the whole song.
+Create one continuous music video scene-plan batch.
 
 Genre: {GENRE}
 Global visual style: {GLOBAL_STYLE}
 Total render segments: {TOTAL_SEGMENTS}
+Planning batch: {BATCH_NUMBER} of {BATCH_COUNT}
+Full project render segments: {FULL_PROJECT_TOTAL_SEGMENTS}
 Lyrics lines per normal clip: {LYRIC_GROUP_SIZE}
 Lyrics lines per chorus/refrain clip: {CHORUS_GROUP_SIZE}
 {VIDEO_BIBLE_CONTEXT}
+{CONTINUITY_CONTEXT}
 
-First decide the overall concept and visual progression across the whole song, then assign one concise visual beat to each fixed render segment.
+Assign one concise visual beat to each fixed render segment in this batch. The video bible and handoff context define the whole-song progression; do not restart the concept at a batch boundary.
+The video bible contains the Overall concept and visual progression; do not repeat them in this batch response.
 
 The scene plan must feel like a real edited music video, not a sequence of similar character shots.
 
@@ -54,9 +58,6 @@ Creative interpretation rules:
 * No dialogue, no text on screen unless explicitly requested.
 
 Return:
-Overall concept: one sentence
-Visual progression: intro -> verse -> chorus -> bridge/finale style progression
-
 Return every render segment index exactly once in this exact format:
 0: scene description
 1: scene description
@@ -64,6 +65,7 @@ Return every render segment index exactly once in this exact format:
 You must return exactly {TOTAL_SEGMENTS} numbered segment lines, from {FIRST_INDEX} to {LAST_INDEX}.
 Do not skip, merge, rename, or add segments.
 Use only the numeric index at the start of each segment line. Do not write "segment_index".
+Keep every scene description to one sentence of at most 30 words.
 
 Fixed render segments:
 {SEGMENTS}

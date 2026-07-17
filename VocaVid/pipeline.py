@@ -29,6 +29,7 @@ from .workflows import WorkflowPaths
 
 logger = logging.getLogger(__name__)
 MIN_CONFIDENT_ALIGNMENT_RATIO = 0.30
+SCENE_PLAN_BATCH_SIZE = 12
 DEFAULT_AVATAR_IMAGE_TEMPLATE = """Edit Image 1 by replacing only the primary focus person with the identity from Image 2.
 
 Image prompt context:
@@ -373,20 +374,36 @@ class Pipeline:
             client = ComfyClient(project["comfy_base_url"])
             concept_result = client.run_workflow(inject_raw_text_prompt(workflow, make_sceneplan_concept_prompt(project, segments)), {})
             video_bible = concept_result.text_outputs[0].strip() if concept_result.ok and concept_result.text_outputs else ""
-            prompt = make_sceneplan_prompt(project, segments, video_bible=video_bible)
-            result = client.run_workflow(inject_raw_text_prompt(workflow, prompt), {})
-            if result.ok and result.text_outputs:
-                segment_plan = result.text_outputs[0].strip()
-                full_plan = _format_successful_scene_plan_text(segment_plan, video_bible)
-                plans = parse_scene_plan_text(segment_plan, [int(row["segment_index"]) for row in segments])
-                fallback = fallback_scene_plans(project, segments)
-                fallback_used = any(not plans.get(index) for index in fallback)
-                plans = {index: plans.get(index) or fallback[index] for index in fallback}
-                if fallback_used:
-                    full_plan = _format_scene_plan_text(plans, "promptgen returned missing or unusable segment lines")
+            plans = {}
+            fallback_indices: list[int] = []
+            batches = _scene_plan_batches(segments)
+            for batch_number, batch in enumerate(batches, start=1):
+                previous_scene_plans = list(plans.items())[-2:]
+                prompt = make_sceneplan_prompt(
+                    project,
+                    batch,
+                    video_bible=video_bible,
+                    previous_scene_plans=previous_scene_plans,
+                    batch_number=batch_number,
+                    batch_count=len(batches),
+                    full_project_total_segments=len(segments),
+                )
+                result = client.run_workflow(inject_raw_text_prompt(workflow, prompt), {})
+                expected_indices = [int(row["segment_index"]) for row in batch]
+                parsed = parse_scene_plan_text(result.text_outputs[0].strip(), expected_indices) if result.ok and result.text_outputs else {}
+                fallback = fallback_scene_plans(project, batch)
+                for index in expected_indices:
+                    plans[index] = parsed.get(index) or fallback[index]
+                    if not parsed.get(index):
+                        fallback_indices.append(index)
+            segment_plan = "\n".join(f"{index}: {plan}" for index, plan in plans.items())
+            if fallback_indices:
+                full_plan = _format_scene_plan_text(
+                    plans,
+                    f"promptgen returned missing or unusable segment lines for segments {_format_indices(fallback_indices)}",
+                )
             else:
-                plans = fallback_scene_plans(project, segments)
-                full_plan = _format_scene_plan_text(plans, "promptgen returned no usable text")
+                full_plan = _format_successful_scene_plan_text(segment_plan, video_bible)
         else:
             plans = fallback_scene_plans(project, segments)
             full_plan = _format_scene_plan_text(plans, "promptgen workflow is missing")
@@ -1377,6 +1394,14 @@ def _format_scene_plan_text(plans: dict[int, str], fallback_reason: str) -> str:
     lines = [f"Fallback scene plan used: {fallback_reason}."]
     lines.extend(f"{index}: {plan}" for index, plan in plans.items())
     return "\n".join(lines)
+
+
+def _scene_plan_batches(segments: list, batch_size: int = SCENE_PLAN_BATCH_SIZE) -> list[list]:
+    return [segments[start:start + batch_size] for start in range(0, len(segments), batch_size)]
+
+
+def _format_indices(indices: list[int]) -> str:
+    return ", ".join(str(index) for index in indices)
 
 
 def _format_successful_scene_plan_text(segment_plan: str, video_bible: str) -> str:

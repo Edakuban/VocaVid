@@ -37,16 +37,20 @@ Fixed render segments:
 {SEGMENTS}"""
 
 
-DEFAULT_SCENEPLAN_TEMPLATE = """Create a continuous music video scene plan for the whole song.
+DEFAULT_SCENEPLAN_TEMPLATE = """Create one continuous music video scene-plan batch.
 
 Genre: {GENRE}
 Global visual style: {GLOBAL_STYLE}
 Total render segments: {TOTAL_SEGMENTS}
+Planning batch: {BATCH_NUMBER} of {BATCH_COUNT}
+Full project render segments: {FULL_PROJECT_TOTAL_SEGMENTS}
 Lyrics lines per normal clip: {LYRIC_GROUP_SIZE}
 Lyrics lines per chorus/refrain clip: {CHORUS_GROUP_SIZE}
 {VIDEO_BIBLE_CONTEXT}
+{CONTINUITY_CONTEXT}
 
-First decide the overall concept and visual progression across the whole song, then assign one concise visual beat to each fixed render segment.
+Assign one concise visual beat to each fixed render segment in this batch. The video bible and handoff context define the whole-song progression; do not restart the concept at a batch boundary.
+The video bible contains the Overall concept and visual progression; do not repeat them in this batch response.
 
 The scene plan must feel like a real edited music video, not a sequence of similar character shots.
 
@@ -93,9 +97,6 @@ Creative interpretation rules:
 * No dialogue, no text on screen unless explicitly requested.
 
 Return:
-Overall concept: one sentence
-Visual progression: intro -> verse -> chorus -> bridge/finale style progression
-
 Return every render segment index exactly once in this exact format:
 0: scene description
 1: scene description
@@ -103,6 +104,7 @@ Return every render segment index exactly once in this exact format:
 You must return exactly {TOTAL_SEGMENTS} numbered segment lines, from {FIRST_INDEX} to {LAST_INDEX}.
 Do not skip, merge, rename, or add segments.
 Use only the numeric index at the start of each segment line. Do not write "segment_index".
+Keep every scene description to one sentence of at most 30 words.
 
 Fixed render segments:
 {SEGMENTS}"""
@@ -131,7 +133,15 @@ def make_sceneplan_concept_prompt(project: Any, segments: list[Any]) -> str:
     )
 
 
-def make_sceneplan_prompt(project: Any, segments: list[Any], video_bible: str = "") -> str:
+def make_sceneplan_prompt(
+    project: Any,
+    segments: list[Any],
+    video_bible: str = "",
+    previous_scene_plans: list[tuple[int, str]] | None = None,
+    batch_number: int = 1,
+    batch_count: int = 1,
+    full_project_total_segments: int | None = None,
+) -> str:
     genre = _row_value(project, "genre", "") or "unspecified genre"
     style = _row_value(project, "global_style_prompt", "")
     lyric_group_size = _row_value(project, "lyric_group_size", "2")
@@ -147,6 +157,14 @@ def make_sceneplan_prompt(project: Any, segments: list[Any], video_bible: str = 
 Video bible to follow:
 {video_bible}
 """ if video_bible.strip() else ""
+    previous_scene_plans = previous_scene_plans or []
+    continuity_context = ""
+    if previous_scene_plans:
+        handoff = "\n".join(f"{index}: {plan}" for index, plan in previous_scene_plans[-2:])
+        continuity_context = f"""
+Previous batch handoff (continue directly from these final shots; evolve rather than repeat them):
+{handoff}
+"""
     return render_prompt_template(
         load_named_prompt_template("sceneplan.txt", DEFAULT_SCENEPLAN_TEMPLATE),
         _sceneplan_variables(
@@ -155,10 +173,14 @@ Video bible to follow:
             lyric_group_size=lyric_group_size,
             chorus_group_size=chorus_group_size,
             total_segments=total_segments,
+            batch_number=batch_number,
+            batch_count=batch_count,
+            full_project_total_segments=full_project_total_segments or total_segments,
             first_index=first_index,
             last_index=last_index,
             segments_text=lines,
             video_bible_context=bible_context,
+            continuity_context=continuity_context,
         ),
     )
 
@@ -169,10 +191,14 @@ def _sceneplan_variables(
     lyric_group_size: str = "",
     chorus_group_size: str = "",
     total_segments: int = 0,
+    batch_number: int = 1,
+    batch_count: int = 1,
+    full_project_total_segments: int = 0,
     first_index: int = 0,
     last_index: int = 0,
     segments_text: str = "",
     video_bible_context: str = "",
+    continuity_context: str = "",
 ) -> dict[str, object]:
     return {
         "genre": genre,
@@ -185,6 +211,12 @@ def _sceneplan_variables(
         "CHORUS_GROUP_SIZE": chorus_group_size,
         "total_segments": total_segments,
         "TOTAL_SEGMENTS": total_segments,
+        "batch_number": batch_number,
+        "BATCH_NUMBER": batch_number,
+        "batch_count": batch_count,
+        "BATCH_COUNT": batch_count,
+        "full_project_total_segments": full_project_total_segments,
+        "FULL_PROJECT_TOTAL_SEGMENTS": full_project_total_segments,
         "first_index": first_index,
         "FIRST_INDEX": first_index,
         "last_index": last_index,
@@ -193,6 +225,8 @@ def _sceneplan_variables(
         "SEGMENTS": segments_text,
         "video_bible_context": video_bible_context,
         "VIDEO_BIBLE_CONTEXT": video_bible_context,
+        "continuity_context": continuity_context,
+        "CONTINUITY_CONTEXT": continuity_context,
     }
 
 

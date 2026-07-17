@@ -1340,6 +1340,74 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(segments[0]["scene_plan"], "memory shot, low dolly through ash")
             self.assertEqual(segments[1]["scene_plan"], "large-scale chorus shot, silhouettes rise behind singer")
 
+    def test_generate_scene_plan_batches_long_plans_and_passes_handoff_context(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            root = Path(directory)
+            store = Store(root / "test.sqlite3")
+            audio = root / "song.wav"
+            lyrics = root / "lyrics.txt"
+            _write_wav(audio, duration_sec=13.0)
+            lyrics.write_text("[Verse]\n" + "\n".join(f"Line {index}" for index in range(13)) + "\n", encoding="utf-8")
+            project_id = store.create_project(
+                {
+                    "name": "Demo",
+                    "audio_path": str(audio),
+                    "lyrics_path": str(lyrics),
+                    "global_style_prompt": "cinematic",
+                    "genre": "industrial rock",
+                    "lyric_group_size": 1,
+                },
+                parse_suno_lyrics(lyrics.read_text(encoding="utf-8")),
+            )
+            store.set_timings(project_id, [LineTiming(index, index, index + 1, 0.9) for index in range(13)])
+
+            def fake_run(command, check, capture_output, text):
+                Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(command[-1]).write_text("wav", encoding="utf-8")
+                return subprocess.CompletedProcess(command, 0, "", "")
+
+            workflows = root / "workflows"
+            workflows.mkdir()
+            (workflows / "promptgen.json").write_text('{"1": {"class_type": "TextGenerate", "inputs": {"prompt": ""}}}', encoding="utf-8")
+            pipeline = Pipeline(store, root / "outputs", ffmpeg_runner=fake_run)
+            pipeline.workflows = WorkflowPaths.defaults(root)
+            pipeline.build_segments(project_id)
+            captured_prompts = []
+
+            class FakeClient:
+                def __init__(self, base_url):
+                    pass
+
+                def run_workflow(self, workflow, variables):
+                    captured_prompts.append(workflow["1"]["inputs"]["prompt"])
+                    if len(captured_prompts) == 1:
+                        text = "Core concept: a ritual intensifies."
+                    elif len(captured_prompts) == 2:
+                        text = "\n".join(f"{index}: batch one scene {index}" for index in range(12))
+                    else:
+                        text = "12: batch two continuation"
+                    return type("Result", (), {"ok": True, "output_files": [], "text_outputs": [text], "error": ""})()
+
+            import VocaVid.pipeline as pipeline_module
+
+            original_client = pipeline_module.ComfyClient
+            try:
+                pipeline_module.ComfyClient = FakeClient
+                pipeline.generate_scene_plan(project_id)
+            finally:
+                pipeline_module.ComfyClient = original_client
+
+            project = store.get_project(project_id)
+            segments = store.list_segments(project_id)
+            self.assertEqual(len(captured_prompts), 3)
+            self.assertIn("Planning batch: 1 of 2", captured_prompts[1])
+            self.assertIn("Planning batch: 2 of 2", captured_prompts[2])
+            self.assertIn("Previous batch handoff", captured_prompts[2])
+            self.assertIn("10: batch one scene 10", captured_prompts[2])
+            self.assertIn("11: batch one scene 11", captured_prompts[2])
+            self.assertNotIn("Fallback scene plan used", project["scene_plan"])
+            self.assertEqual(segments[12]["scene_plan"], "batch two continuation")
+
     def test_save_scene_plan_updates_project_and_matching_segments(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             root = Path(directory)
