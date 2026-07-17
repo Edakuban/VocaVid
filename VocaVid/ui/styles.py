@@ -377,6 +377,9 @@ STYLES = f"""
     .progress-step {{ border-radius: 999px; border: 1px solid var(--border-default); padding: 3px 7px; color: var(--text-muted); background: #202a2f; font-size: 10px; font-weight: 750; text-transform: uppercase; }}
     .progress-step-done {{ border-color: rgba(41,211,176,.42); background: var(--action-soft); color: #aef8e6; }}
     .segment-inspector {{ position: sticky; z-index: 70; top: 156px; display: grid; gap: 12px; min-width: 0; max-height: calc(100vh - 172px); overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: var(--bg-panel); color: var(--text-primary); padding: 14px; }}
+    .segment-inspector-locked {{ overflow: hidden; }}
+    .segment-inspector-lock-overlay {{ position: absolute; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; background: rgba(11,16,18,.58); color: var(--text-primary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; cursor: not-allowed; }}
+    .segment-inspector-lock-overlay span {{ border: 1px solid rgba(255,255,255,.32); border-radius: 999px; background: rgba(8,9,13,.82); padding: 8px 12px; }}
     .segment-inspector-resize-handle {{ position: absolute; inset: 0 auto 0 0; z-index: 3; width: 14px; cursor: col-resize; touch-action: none; border-radius: 999px; }}
     .segment-inspector-resize-handle::after {{ content: ""; position: absolute; top: 14px; bottom: 14px; left: 6px; width: 2px; border-radius: 999px; background: rgba(255,255,255,.10); opacity: 0; transition: opacity 120ms ease, background-color 120ms ease; }}
     .segment-inspector-resize-handle:hover::after, .segment-inspector-resize-handle:focus-visible::after, .storyboard-workspace-resizing .segment-inspector-resize-handle::after {{ background: var(--action); opacity: 1; }}

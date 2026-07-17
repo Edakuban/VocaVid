@@ -50,6 +50,7 @@ def _storyboard_html(project, work_items, item_kind: str, locked=None) -> str:
             row,
             _storyboard_neighbor_index(work_items, item_kind, index - 1),
             _storyboard_neighbor_index(work_items, item_kind, index + 1),
+            locked.get(_row_index(row, item_kind)),
         )
         for index, row in enumerate(work_items)
     )
@@ -59,6 +60,7 @@ def _storyboard_html(project, work_items, item_kind: str, locked=None) -> str:
         work_items[0],
         None,
         _storyboard_neighbor_index(work_items, item_kind, 1),
+        locked.get(_row_index(work_items[0], item_kind)),
     )
     return f"""
   <section id="project-storyboard" class="project-storyboard">
@@ -78,16 +80,16 @@ def _storyboard_neighbor_index(work_items, item_kind: str, position: int):
     return int(_row_value(work_items[position], index_key, 0))
 
 
-def _storyboard_inspector_template_html(project, item_kind: str, row, previous_index=None, next_index=None) -> str:
+def _storyboard_inspector_template_html(project, item_kind: str, row, previous_index=None, next_index=None, locked_status: str | None = None) -> str:
     item_index = _row_index(row, item_kind)
     return f"""
     <template id="segment-inspector-template-{item_kind}-{item_index}">
-      {_segment_inspector_html(project, item_kind, row, previous_index, next_index)}
+      {_segment_inspector_html(project, item_kind, row, previous_index, next_index, locked_status)}
     </template>
 """
 
 
-def _segment_inspector_html(project, item_kind: str, row, previous_index=None, next_index=None) -> str:
+def _segment_inspector_html(project, item_kind: str, row, previous_index=None, next_index=None, locked_status: str | None = None) -> str:
     index_key = "segment_index" if item_kind == "segments" else "line_index"
     label = "Segment" if item_kind == "segments" else "Line"
     item_index = int(_row_value(row, index_key, 0))
@@ -122,8 +124,12 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
       </div>""" if image_choice_html else ""
     quick_actions = _inspector_generation_actions_html(project["id"], item_kind, item_index, row)
     navigation = _segment_inspector_navigation_html(item_kind, label, display_label, previous_index, next_index)
+    locked_class = " segment-inspector-locked" if locked_status else ""
+    locked_attr = "1" if locked_status else "0"
+    inert_attr = " inert" if locked_status else ""
+    lock_overlay = f'<div class="segment-inspector-lock-overlay"><span>{_text(locked_status)}</span></div>' if locked_status else ""
     return f"""
-      <aside id="segment-inspector" class="segment-inspector" aria-label="Selected storyboard item">
+      <aside id="segment-inspector" class="segment-inspector{locked_class}" aria-label="Selected storyboard item" data-locked="{locked_attr}"{inert_attr}>
         <div class="segment-inspector-resize-handle" role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabindex="0"></div>
         {navigation}
         <div class="segment-inspector-header-actions">
@@ -145,6 +151,7 @@ def _segment_inspector_html(project, item_kind: str, row, previous_index=None, n
         </div>
         {image_prompt_modal}
         {video_prompt_modal}
+        {lock_overlay}
       </aside>
 """
 
