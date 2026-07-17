@@ -26,6 +26,8 @@ assembled from approved clips.
   variants, image-to-video prompts, video clips, and final assemblies.
 - Review projects from a visual dashboard with searchable project cards and
   progress badges.
+- Set reusable global defaults, including an avatar identity, that are applied
+  to new projects while each project remains independently editable.
 - Work in a storyboard-first project view with segment cards, media previews,
   status chips, and a focused, resizable inspector for prompts and approvals.
 - Switch to the advanced table view when dense timing, line, and diagnostic
@@ -35,15 +37,21 @@ assembled from approved clips.
 - Create vertical reel candidates from a finished/uploaded MP4 with Whisper
   lyric alignment plus beat/energy scoring, then render quick previews or final
   exports.
+- Add precisely timed instrumental or interlude segments between lyric lines
+  when the song needs visual breathing room.
 - Track the global render queue from the top bar, queue modal, and browser tab
   title.
 - Keep uploads, generated media, databases, logs, and caches out of Git.
 
 ## Screenshots
 
-| Project dashboard | Queue modal |
+| Project dashboard | Storyboard and inspector |
 | --- | --- |
-| ![VocaVid dashboard with project cards and production status](docs/screenshots/vocavid-projects.png) | ![VocaVid queue modal with job controls](docs/screenshots/vocavid-jobs.png) |
+| ![VocaVid dashboard with project cards and production status](docs/screenshots/vocavid-projects.png) | ![VocaVid storyboard with pipeline controls and inspector](docs/screenshots/vocavid-project-detail.png) |
+
+| Reels workflow | Queue modal |
+| --- | --- |
+| ![VocaVid Reels analysis with ranked vertical-video candidates](docs/screenshots/vocavid-reels.png) | ![VocaVid queue modal with job controls](docs/screenshots/vocavid-jobs.png) |
 
 ## Sample generated Video
 
@@ -107,7 +115,9 @@ After the initial setup, the normal VocaVid workflow looks like this:
 2. Start VocaVid with `python -m VocaVid serve`.
 3. Create a project from the dashboard with `New Project`. The modal asks for a
    WAV file, SUNO-style lyrics, Whisper model, and segment grouping settings.
-4. Click `Analyze + Split` to align lyrics and build render segments.
+4. Click `Analyze + Split` to align lyrics and build render segments. For
+   exact placement of instrumental passages, use the manual timing editor to
+   add interludes between lyric lines.
 5. Review the storyboard cards and open the inspector for the segment that needs
    attention.
 6. Click `Scene Plan`, then edit and save the plan if needed.
@@ -156,6 +166,9 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 - Configure resolution, FPS, transition handles, Whisper model, normal segment
   size, chorus/refrain segment size, genre/style prompts, and reference images
   from the project settings panel.
+- Save global defaults for the initial project setup, including default avatar
+  image, gender and face description, queue cleanup behavior, and shutdown
+  after the queue completes.
 - Keep each project resumable through local SQLite state.
 
 ### Lyrics and Segments
@@ -167,10 +180,14 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
 - Group lyric lines into render segments, with separate group sizes for normal
   sections and chorus/refrain sections.
 - Highlight low-confidence rows so timing can be corrected manually.
+- Add, remove, and time interludes or instrumental passages between lyric lines
+  with the manual timing editor; these become first-class render segments.
 
 ### Prompting and Planning
 
 - Generate or edit a full scene plan before rendering.
+- Plan long songs in continuous batches with video-bible handoffs, so scene
+  direction carries across the entire project instead of resetting mid-song.
 - Generate global style text, image prompts, and image-to-video motion prompts.
 - Use per-row `Save` buttons to preserve manual edits.
 - Use `AI fill` to turn rough prompt drafts into production-ready scene
@@ -197,6 +214,8 @@ tests, and a healthy amount of "what if we made this nicer?" energy.
   navigate between segments without losing context. The inspector can be
   resized, and project polling avoids replacing actively reviewed media.
 - Choose whether each clip uses the base image or avatar image source.
+- Apply avatar identity context directly to video prompts, helping generated
+  clips retain the selected person across shots.
 - Retry selected segments without restarting the whole render.
 - Mark generated videos as approved with `OK`; approved rows are protected and
   skipped by later batch, selected-row, and redo generation actions.
