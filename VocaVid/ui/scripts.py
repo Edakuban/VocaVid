@@ -554,6 +554,29 @@ SCRIPTS = f"""
     function normalizeSearchText(value) {{
       return String(value || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
     }}
+    const projectBrowserPreferencesKey = 'vocavid.projectBrowserPreferences';
+    function restoreProjectBrowserPreferences() {{
+      const filter = document.getElementById('project-filter');
+      const sort = document.getElementById('project-sort');
+      if (!filter || !sort) return;
+      try {{
+        const preferences = JSON.parse(localStorage.getItem(projectBrowserPreferencesKey) || '{{}}');
+        if (preferences.filter && Array.from(filter.options).some((option) => option.value === preferences.filter)) filter.value = preferences.filter;
+        if (preferences.sort && Array.from(sort.options).some((option) => option.value === preferences.sort)) sort.value = preferences.sort;
+      }} catch (error) {{
+        // Keep the built-in defaults when browser storage is unavailable or invalid.
+      }}
+    }}
+    function saveProjectBrowserPreferences() {{
+      try {{
+        localStorage.setItem(projectBrowserPreferencesKey, JSON.stringify({{
+          filter: document.getElementById('project-filter')?.value || 'all',
+          sort: document.getElementById('project-sort')?.value || 'newest',
+        }}));
+      }} catch (error) {{
+        // Filtering and sorting remain usable when browser storage is unavailable.
+      }}
+    }}
     function applyProjectBrowserControls() {{
       const grid = document.getElementById('project-grid');
       if (!grid) return;
@@ -585,6 +608,9 @@ SCRIPTS = f"""
         element.addEventListener('input', applyProjectBrowserControls);
         element.addEventListener('change', applyProjectBrowserControls);
       }});
+      ['project-filter', 'project-sort'].forEach((id) => {{
+        document.getElementById(id)?.addEventListener('change', saveProjectBrowserPreferences);
+      }});
       document.querySelectorAll('.project-card video').forEach((video) => {{
         const card = video.closest('.project-card');
         if (!card) return;
@@ -597,6 +623,7 @@ SCRIPTS = f"""
           video.currentTime = 0;
         }});
       }});
+      restoreProjectBrowserPreferences();
       applyProjectBrowserControls();
     }}
     function openProjectSettingsModal() {{

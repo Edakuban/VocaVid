@@ -103,8 +103,8 @@ def _start_topbar_html(queue_estimate_seconds: float | None, queue_count: int = 
   <div class="studio-tagline">Local AI music-video studio</div>
   <div class="studio-spacer"></div>
   {_queue_estimate_html(queue_estimate_seconds, queue_count)}
-  <button class="project-icon-button global-config-button" type="button" title="Global Configuration" aria-label="Global Configuration" onclick="openGlobalSettingsModal()">⚙</button>
   <button class="studio-button" type="button" onclick="openNewProjectModal()">New Project</button>
+  <button class="project-icon-button global-config-button" type="button" title="Global Configuration" aria-label="Global Configuration" onclick="openGlobalSettingsModal()">⚙</button>
 </div>
 """
 

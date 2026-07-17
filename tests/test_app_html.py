@@ -183,11 +183,15 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('id="project-filter"', body)
         self.assertIn('id="project-sort"', body)
         self.assertIn("function applyProjectBrowserControls", html)
+        self.assertIn("const projectBrowserPreferencesKey = 'vocavid.projectBrowserPreferences'", html)
+        self.assertIn("function restoreProjectBrowserPreferences", html)
+        self.assertIn("function saveProjectBrowserPreferences", html)
         self.assertIn("setupProjectBrowserControls();", html)
         self.assertIn('class="project-card-placeholder-mark" aria-label="No preview yet"', body)
         self.assertNotIn(">FS<", body)
         self.assertNotIn(">OS<", body)
         self.assertIn('<img class="studio-logo" src="/icon/VocaVid_icon.svg" alt="" aria-hidden="true">', body)
+        self.assertLess(body.index('onclick="openNewProjectModal()"'), body.index('onclick="openGlobalSettingsModal()"'))
 
     def test_project_cards_use_chorus_clip_preview_before_other_media(self):
         projects = [{"id": 7, "name": "Demo Song", "final_video_path": None}]
