@@ -6,6 +6,11 @@ SCRIPTS = f"""
     const projectStoryboardCardServerHtml = new Map();
     const projectStoryboardTemplateServerHtml = new Map();
     let reelsUploadInteractionUntil = 0;
+    let finalizeItems = [];
+    let finalizeItemCursor = 0;
+    let finalizeCountdownTimer = null;
+    let finalizeCountdownValue = 3;
+    let finalizeMode = 'closed';
     function rememberProjectRows() {{
       document.querySelectorAll('tr[id^="line-row-"], tr[id^="segment-row-"]').forEach((row) => {{
         projectRowServerHtml.set(row.id, row.outerHTML);
@@ -403,6 +408,8 @@ SCRIPTS = f"""
         if (row) replaceProjectRow(row, html);
       }});
       if (data.storyboard_html !== undefined) replaceProjectStoryboard(data.storyboard_html, forceStoryboard);
+      const finalizeData = document.getElementById('finalize-review-data');
+      if (finalizeData && data.finalize_items_html !== undefined && !finalizeModalIsOpen()) finalizeData.innerHTML = data.finalize_items_html;
     }}
     async function refreshProjectStatus(projectId, forceStoryboard = false) {{
       if (!projectId) return;
@@ -930,6 +937,7 @@ SCRIPTS = f"""
       if (form) submitProjectSidepanelForm(event, form);
     }});
     document.addEventListener('submit', rememberScrollPosition);
+    document.addEventListener('keydown', handleFinalizeKeyboard);
     document.addEventListener('pointerdown', (event) => {{
       if (event.target.closest('#reels-modal input[name="source_video"]')) pauseReelsUploadRefresh();
     }});
@@ -1017,6 +1025,262 @@ SCRIPTS = f"""
       if (button) {{
         button.setAttribute('aria-label', 'Play clip');
         button.querySelector('.storyboard-play-icon').textContent = '▶';
+      }}
+    }}
+    function finalizeModalIsOpen() {{
+      const box = document.getElementById('finalize-modal');
+      return !!(box && box.classList.contains('open'));
+    }}
+    function currentFinalizeItem() {{
+      return finalizeItems[finalizeItemCursor] || null;
+    }}
+    function stopFinalizeCountdown() {{
+      if (finalizeCountdownTimer !== null) window.clearInterval(finalizeCountdownTimer);
+      finalizeCountdownTimer = null;
+      const countdown = document.getElementById('finalize-countdown');
+      if (countdown) countdown.hidden = true;
+    }}
+    function setFinalizeActionsVisible(visible) {{
+      const actions = document.getElementById('finalize-actions');
+      if (actions) actions.hidden = !visible;
+    }}
+    function setFinalizeInstruction(message, state = '') {{
+      const instruction = document.getElementById('finalize-instruction');
+      if (!instruction) return;
+      instruction.textContent = message;
+      instruction.dataset.state = state;
+    }}
+    function openFinalizeModal() {{
+      const box = document.getElementById('finalize-modal');
+      const data = document.getElementById('finalize-review-data');
+      if (!box || !data) return;
+      finalizeItems = Array.from(data.querySelectorAll('.finalize-review-item')).filter((item) => item.dataset.approved !== '1');
+      finalizeItemCursor = 0;
+      box.classList.add('open');
+      if (!finalizeItems.length) {{
+        finishFinalizeReview();
+        return;
+      }}
+      loadFinalizeItem();
+    }}
+    function closeFinalizeModal() {{
+      stopFinalizeCountdown();
+      const box = document.getElementById('finalize-modal');
+      const video = document.getElementById('finalize-video');
+      if (video) {{
+        video.pause();
+        video.onended = null;
+        video.removeAttribute('src');
+        video.load();
+      }}
+      closeFinalizePromptEditor();
+      setFinalizeActionsVisible(false);
+      if (box) box.classList.remove('open');
+      finalizeMode = 'closed';
+      const projectId = currentProjectId();
+      if (projectId) refreshProjectStatus(projectId);
+    }}
+    function loadFinalizeItem() {{
+      stopFinalizeCountdown();
+      closeFinalizePromptEditor();
+      setFinalizeActionsVisible(false);
+      const item = currentFinalizeItem();
+      if (!item) {{
+        finishFinalizeReview();
+        return;
+      }}
+      const video = document.getElementById('finalize-video');
+      const position = document.getElementById('finalize-position');
+      const title = document.getElementById('finalize-title');
+      if (!video || !position || !title) return;
+      position.textContent = '#' + item.dataset.position + ' / ' + item.dataset.total;
+      title.textContent = item.dataset.title || 'Untitled segment';
+      setFinalizeInstruction('No action needed: this clip will be marked as finished after playback. Press Space or Enter if it needs work.');
+      finalizeMode = 'playing';
+      video.onended = startFinalizeCountdown;
+      video.src = item.dataset.src;
+      video.currentTime = 0;
+      const playPromise = video.play();
+      if (playPromise && playPromise.catch) {{
+        playPromise.catch(() => setFinalizeInstruction('Press Play to start the review. Space or Enter opens the actions.'));
+      }}
+    }}
+    function startFinalizeCountdown() {{
+      if (!finalizeModalIsOpen() || !currentFinalizeItem()) return;
+      stopFinalizeCountdown();
+      finalizeMode = 'countdown';
+      finalizeCountdownValue = 3;
+      const countdown = document.getElementById('finalize-countdown');
+      if (countdown) {{
+        countdown.hidden = false;
+        countdown.textContent = String(finalizeCountdownValue);
+      }}
+      setFinalizeInstruction('Clip finished. Marking it as finished automatically...');
+      finalizeCountdownTimer = window.setInterval(() => {{
+        finalizeCountdownValue -= 1;
+        if (finalizeCountdownValue <= 0) {{
+          stopFinalizeCountdown();
+          approveCurrentFinalizeItem();
+          return;
+        }}
+        if (countdown) countdown.textContent = String(finalizeCountdownValue);
+      }}, 1000);
+    }}
+    function pauseFinalizeForActions() {{
+      if (!finalizeModalIsOpen() || !currentFinalizeItem()) return;
+      stopFinalizeCountdown();
+      const video = document.getElementById('finalize-video');
+      if (video) video.pause();
+      finalizeMode = 'actions';
+      setFinalizeActionsVisible(true);
+      setFinalizeInstruction('Choose an action or press 1–5. The review continues after generation is queued.');
+    }}
+    async function approveCurrentFinalizeItem() {{
+      const item = currentFinalizeItem();
+      if (!item || finalizeMode === 'saving') return;
+      finalizeMode = 'saving';
+      setFinalizeInstruction('Marking clip as finished...');
+      const formData = new FormData();
+      formData.append('video_approved', '1');
+      try {{
+        const response = await fetch('/projects/' + currentProjectId() + '/' + item.dataset.itemKind + '/' + item.dataset.itemIndex + '/approval', {{ method: 'post', body: formData }});
+        if (!response.ok) throw new Error('Approval failed');
+        item.dataset.approved = '1';
+        await advanceFinalizeReview();
+      }} catch (error) {{
+        finalizeMode = 'actions';
+        setFinalizeActionsVisible(true);
+        setFinalizeInstruction('Could not mark this clip as finished. Choose an action or try again.', 'error');
+      }}
+    }}
+    async function advanceFinalizeReview() {{
+      finalizeItemCursor += 1;
+      const projectId = currentProjectId();
+      if (projectId) refreshProjectStatus(projectId);
+      loadFinalizeItem();
+    }}
+    function finishFinalizeReview() {{
+      stopFinalizeCountdown();
+      closeFinalizePromptEditor();
+      setFinalizeActionsVisible(false);
+      const video = document.getElementById('finalize-video');
+      const position = document.getElementById('finalize-position');
+      const title = document.getElementById('finalize-title');
+      if (video) {{
+        video.pause();
+        video.onended = null;
+        video.removeAttribute('src');
+        video.load();
+      }}
+      const needsAnotherPass = finalizeItems.some((item) => item.dataset.approved !== '1');
+      if (position) position.textContent = 'Finalize complete';
+      if (title) title.textContent = needsAnotherPass ? 'Review pass complete' : 'All clips are finished';
+      setFinalizeInstruction(
+        needsAnotherPass ? 'Queued changes will need another review pass.' : 'Your project is ready for Assemble & Render MP4.',
+        'success'
+      );
+      finalizeMode = 'complete';
+      const projectId = currentProjectId();
+      if (projectId) refreshProjectStatus(projectId);
+    }}
+    async function queueFinalizeAction(action) {{
+      const item = currentFinalizeItem();
+      if (!item || finalizeMode === 'queueing') return;
+      finalizeMode = 'queueing';
+      document.querySelectorAll('#finalize-actions button').forEach((button) => button.disabled = true);
+      setFinalizeInstruction('Adding job to the queue...');
+      const formData = new FormData();
+      formData.append('selected_lines', item.dataset.itemIndex);
+      try {{
+        const response = await fetch('/projects/' + currentProjectId() + '/' + action, {{ method: 'post', body: formData }});
+        if (!response.ok) throw new Error('Queue request failed');
+        await advanceFinalizeReview();
+      }} catch (error) {{
+        finalizeMode = 'actions';
+        setFinalizeInstruction('Could not add the job to the queue. Please try again.', 'error');
+      }} finally {{
+        document.querySelectorAll('#finalize-actions button').forEach((button) => button.disabled = false);
+      }}
+    }}
+    function openFinalizePromptEditor(kind) {{
+      const item = currentFinalizeItem();
+      const editor = document.getElementById('finalize-prompt-editor');
+      const label = document.getElementById('finalize-prompt-label');
+      const textarea = document.getElementById('finalize-prompt-textarea');
+      if (!item || !editor || !label || !textarea) return;
+      stopFinalizeCountdown();
+      const isVideo = kind === 'video';
+      editor.dataset.promptKind = isVideo ? 'video' : 'image';
+      label.textContent = isVideo ? 'Edit Video Prompt' : 'Edit Image Prompt';
+      textarea.name = isVideo ? 'video_prompt' : 'prompt';
+      textarea.value = isVideo ? (item.dataset.videoPrompt || '') : (item.dataset.imagePrompt || '');
+      editor.hidden = false;
+      setFinalizeActionsVisible(false);
+      finalizeMode = 'prompt';
+      textarea.focus();
+    }}
+    function closeFinalizePromptEditor() {{
+      const editor = document.getElementById('finalize-prompt-editor');
+      if (!editor || editor.hidden) return;
+      editor.hidden = true;
+      if (finalizeModalIsOpen() && currentFinalizeItem()) {{
+        finalizeMode = 'actions';
+        setFinalizeActionsVisible(true);
+        setFinalizeInstruction('Choose an action or press 1–5.');
+      }}
+    }}
+    async function submitFinalizePrompt(event, form) {{
+      if (event && event.preventDefault) event.preventDefault();
+      const item = currentFinalizeItem();
+      const textarea = document.getElementById('finalize-prompt-textarea');
+      if (!item || !textarea) return false;
+      const kind = form.dataset.promptKind === 'video' ? 'video' : 'image';
+      const submitter = event && event.submitter ? event.submitter : null;
+      const suffix = submitter && submitter.dataset.aiFill === '1' ? '/ai-fill' : '/save';
+      const url = '/projects/' + currentProjectId() + '/' + item.dataset.itemKind + '/' + item.dataset.itemIndex + '/prompts/' + kind + suffix;
+      const formData = new FormData();
+      formData.append(kind === 'video' ? 'video_prompt' : 'prompt', textarea.value);
+      if (submitter) submitter.disabled = true;
+      try {{
+        const response = await fetch(url, {{ method: 'post', body: formData }});
+        if (!response.ok) throw new Error('Prompt save failed');
+        if (kind === 'video') item.dataset.videoPrompt = textarea.value;
+        else item.dataset.imagePrompt = textarea.value;
+        closeFinalizePromptEditor();
+        setFinalizeInstruction(suffix === '/ai-fill' ? 'AI fill added to the queue. Choose the next action.' : 'Prompt saved. Choose the next action.', 'success');
+      }} catch (error) {{
+        setFinalizeInstruction('Could not save the prompt. Please try again.', 'error');
+      }} finally {{
+        if (submitter) submitter.disabled = false;
+      }}
+      return false;
+    }}
+    function handleFinalizeKeyboard(event) {{
+      if (!finalizeModalIsOpen()) return;
+      const target = event.target;
+      const editing = target && target.closest && target.closest('input, textarea, select');
+      if (event.key === 'Escape') {{
+        if (finalizeMode === 'prompt') closeFinalizePromptEditor();
+        else closeFinalizeModal();
+        return;
+      }}
+      if (editing || finalizeMode === 'prompt' || finalizeMode === 'queueing' || finalizeMode === 'saving') return;
+      if ((event.key === ' ' || event.key === 'Enter') && (finalizeMode === 'playing' || finalizeMode === 'countdown')) {{
+        event.preventDefault();
+        pauseFinalizeForActions();
+        return;
+      }}
+      if (finalizeMode !== 'actions') return;
+      const shortcuts = {{ '1': 'clips', '2': 'avatar-image', '3': 'images' }};
+      if (shortcuts[event.key]) {{
+        event.preventDefault();
+        queueFinalizeAction(shortcuts[event.key]);
+      }} else if (event.key === '4') {{
+        event.preventDefault();
+        openFinalizePromptEditor('image');
+      }} else if (event.key === '5') {{
+        event.preventDefault();
+        openFinalizePromptEditor('video');
       }}
     }}
     function openClipLightbox(src, source) {{

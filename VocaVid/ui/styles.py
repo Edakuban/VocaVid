@@ -538,6 +538,38 @@ STYLES = f"""
     .reels-candidate-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .reels-candidate-actions form {{ margin: 0; padding: 0; border: 0; background: transparent; }}
     @media (max-width: 760px) {{ .reels-source-form {{ grid-template-columns: 1fr; align-items: stretch; }} .reels-source-form button {{ justify-self: stretch; }} .reels-preview-frame {{ max-width: 260px; }} }}
+    .lightbox.finalize-modal {{ z-index: 210; }}
+    .finalize-modal-content {{ position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; width: min(1120px, 96vw); max-height: 96vh; padding: 18px; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--bg-panel); box-shadow: 0 28px 90px rgba(0,0,0,.52); }}
+    .finalize-modal .finalize-close {{ top: 10px; right: 10px; z-index: 20; }}
+    .finalize-header {{ min-width: 0; padding: 0 48px 0 2px; }}
+    .finalize-position {{ color: var(--action); font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; font-variant-numeric: tabular-nums; }}
+    .finalize-header h2 {{ margin: 4px 0 0; overflow: hidden; color: var(--text-primary); font-size: clamp(18px, 2.4vw, 28px); line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }}
+    .finalize-video-frame {{ position: relative; display: grid; place-items: center; min-height: 0; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: #000; }}
+    .finalize-modal #finalize-video {{ display: block; width: 100%; max-height: calc(96vh - 260px); min-height: 260px; object-fit: contain; border-radius: 0; background: #000; }}
+    .finalize-countdown {{ position: absolute; inset: 50% auto auto 50%; display: grid; place-items: center; width: 94px; height: 94px; border: 4px solid rgba(255,255,255,.82); border-radius: 999px; background: rgba(10,15,17,.78); color: #fff; font-size: 50px; font-weight: 950; font-variant-numeric: tabular-nums; line-height: 1; transform: translate(-50%, -50%); box-shadow: 0 18px 50px rgba(0,0,0,.45); }}
+    .finalize-countdown[hidden] {{ display: none; }}
+    .finalize-review-panel {{ display: grid; gap: 10px; }}
+    .finalize-instruction {{ min-height: 20px; margin: 0; color: var(--text-secondary); text-align: center; font-size: 13px; font-weight: 700; }}
+    .finalize-instruction[data-state="error"] {{ color: #ffadb6; }}
+    .finalize-instruction[data-state="success"] {{ color: #bff5dc; }}
+    .finalize-actions {{ display: grid; gap: 8px; }}
+    .finalize-actions[hidden], .finalize-prompt-editor[hidden] {{ display: none; }}
+    .finalize-action-row {{ display: grid; gap: 8px; }}
+    .finalize-action-row-generation {{ grid-template-columns: repeat(3, minmax(0, 1fr)); }}
+    .finalize-action-row-prompts {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    .finalize-action-row button {{ display: flex; min-width: 0; min-height: 42px; align-items: center; justify-content: center; gap: 8px; }}
+    .finalize-action-row kbd {{ display: inline-grid; place-items: center; width: 22px; height: 22px; flex: 0 0 auto; border: 1px solid rgba(255,255,255,.24); border-radius: 5px; background: rgba(0,0,0,.22); color: inherit; font-family: inherit; font-size: 11px; font-weight: 900; box-shadow: inset 0 -2px 0 rgba(0,0,0,.24); }}
+    .finalize-prompt-editor {{ display: grid; gap: 9px; margin: 0; padding: 12px; border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--bg-card); }}
+    .finalize-prompt-head, .finalize-prompt-actions {{ display: flex; align-items: center; justify-content: space-between; gap: 10px; }}
+    .finalize-prompt-head label {{ color: var(--text-primary); font-weight: 850; }}
+    .finalize-prompt-editor textarea {{ width: 100%; min-height: 130px; resize: vertical; }}
+    .finalize-prompt-actions {{ justify-content: flex-end; }}
+    @media (max-width: 700px) {{
+      .finalize-modal-content {{ width: 96vw; max-height: 96vh; padding: 12px; }}
+      .finalize-modal #finalize-video {{ min-height: 180px; max-height: calc(96vh - 330px); }}
+      .finalize-action-row-generation, .finalize-action-row-prompts {{ grid-template-columns: 1fr; }}
+      .finalize-header h2 {{ white-space: normal; }}
+    }}
     .lightbox {{ position: fixed; inset: 0; z-index: 120; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,.72); backdrop-filter: blur(2px); padding: 24px; }}
     .lightbox.open {{ display: flex; }}
     .lightbox-content {{ position: relative; width: min(960px, 94vw); }}

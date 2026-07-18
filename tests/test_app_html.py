@@ -372,13 +372,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertEqual(_storyboard_item_display_label("segments", 13), "# 14")
         self.assertEqual(_storyboard_item_display_label("lines", 1), "# 02")
 
-    def test_unfinished_project_actions_are_pink_wip_buttons(self):
+    def test_project_actions_include_finalize_and_combined_render(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
         html = _page("Demo", _project_html(project, []))
 
-        self.assertIn('class="wip-button"', html)
-        self.assertIn('title="WIP: not fully clean yet"', html)
-        self.assertEqual(html.count('class="wip-button"'), 2)
         self.assertIn('<button>1. Analyze + Split</button>', html)
         self.assertNotIn("Segs + Audio", html)
         self.assertIn('<button>3. Gen Prompts</button>', html)
@@ -387,15 +384,15 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('<button>4. Gen Images</button>', html)
         self.assertIn('<button>5. Gen Avatar Images</button>', html)
         self.assertIn('<button>6. Gen Clips</button>', html)
-        self.assertIn("8. Render MP4", html)
-        self.assertNotIn('class="button wip-button"', html)
+        self.assertIn('disabled title="Generate all clips first">7. Finalize', html)
+        self.assertIn('disabled title="Finish all clips first">8. Assemble &amp; Render MP4', html)
 
     def test_project_page_includes_reels_button_and_modal(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
 
         html = _page("Demo", _project_html(project, []))
 
-        self.assertIn('<button type="button" disabled title="Bitte zuerst das finale MP4 rendern.">9. Make reels</button>', html)
+        self.assertIn('<button type="button" disabled title="Render the final MP4 first">9. Make reels</button>', html)
         self.assertNotIn('class="reels-open-button"', html)
         self.assertNotIn('onclick="openReelsModal()"', html)
         self.assertIn('id="reels-modal"', html)
@@ -1703,7 +1700,8 @@ class AppHtmlTests(unittest.TestCase):
         payload = _project_status_payload(project, [], segments, active_jobs=[])
 
         self.assertIn("actions_html", payload)
-        self.assertIn('action="/projects/7/render-mp4"', payload["actions_html"])
+        self.assertIn('disabled title="Finish all clips first">8. Assemble &amp; Render MP4', payload["actions_html"])
+        self.assertIn("finalize_items_html", payload)
         self.assertIn("storyboard_html", payload)
         self.assertIn('id="project-storyboard"', payload["storyboard_html"])
         self.assertIn("Fresh storyboard text", payload["storyboard_html"])
@@ -2136,6 +2134,68 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("function openClipLightbox", html)
         self.assertIn("function closeClipLightbox", html)
 
+    def test_finalize_review_renders_clips_progress_actions_and_shortcuts(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        segments = [
+            {
+                "segment_index": 0,
+                "kind": "lyrics",
+                "section": "Verse",
+                "is_chorus": 0,
+                "clean_text": "First line",
+                "start_sec": 0.0,
+                "end_sec": 2.0,
+                "clip_path": "clips/segment-000.mp4",
+                "audio_path": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "prompt": "wide cinematic frame",
+                "video_prompt": "slow camera move",
+                "video_approved": 1,
+                "status": "done",
+                "error": "",
+            },
+            {
+                "segment_index": 1,
+                "kind": "lyrics",
+                "section": "Chorus",
+                "is_chorus": 1,
+                "clean_text": "Sing it again",
+                "start_sec": 2.0,
+                "end_sec": 4.0,
+                "clip_path": "clips/segment-001.mp4",
+                "audio_path": None,
+                "image_path": None,
+                "avatar_image_path": None,
+                "prompt": "bright stage",
+                "video_prompt": "energetic performance",
+                "video_approved": 0,
+                "status": "done",
+                "error": "",
+            },
+        ]
+
+        html = _page("Demo", _project_html(project, [], segments))
+
+        self.assertIn('onclick="openFinalizeModal()">7. Finalize</button>', html)
+        self.assertIn('id="finalize-modal"', html)
+        self.assertIn('aria-label="Close finalize review" onclick="closeFinalizeModal()"', html)
+        self.assertIn('data-position="2" data-total="2"', html)
+        self.assertIn('data-title="Chorus', html)
+        self.assertIn('data-approved="1"', html)
+        self.assertIn('data-approved="0"', html)
+        self.assertIn('<kbd>1</kbd><span>Generate Clip</span>', html)
+        self.assertIn('<kbd>2</kbd><span>Generate Avatar</span>', html)
+        self.assertIn('<kbd>3</kbd><span>Generate Image</span>', html)
+        self.assertIn('<kbd>4</kbd><span>Edit Image Prompt</span>', html)
+        self.assertIn('<kbd>5</kbd><span>Edit Video Prompt</span>', html)
+        self.assertIn("finalizeCountdownValue = 3", html)
+        self.assertIn("event.key === ' ' || event.key === 'Enter'", html)
+        self.assertIn("formData.append('video_approved', '1')", html)
+        self.assertIn("function queueFinalizeAction", html)
+        self.assertIn("function submitFinalizePrompt", html)
+        self.assertIn(".lightbox.finalize-modal { z-index: 210;", html)
+
     def test_render_mp4_button_previews_existing_named_video(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
         finished = app_module.APP_ROOT / "outputs" / "demo" / "Demo.mp4"
@@ -2165,7 +2225,7 @@ class AppHtmlTests(unittest.TestCase):
             html = _project_html(project, [], segments)
 
             self.assertIn('type="button" title="Preview rendered MP4"', html)
-            self.assertIn("8. Render MP4", html)
+            self.assertIn("8. Assemble &amp; Render MP4", html)
             self.assertIn("openClipLightbox(&#x27;/assets/outputs/demo/Demo.mp4", html)
             self.assertNotIn('action="/projects/7/render-mp4"', html)
         finally:
@@ -2251,8 +2311,8 @@ class AppHtmlTests(unittest.TestCase):
         images_index = html.index('<button>4. Gen Images</button>')
         avatar_index = html.index('<button>5. Gen Avatar Images</button>')
         clips_index = html.index('<button>6. Gen Clips</button>')
-        assemble_index = html.index('7. Assemble Final')
-        render_index = html.index('8. Render MP4')
+        finalize_index = html.index('7. Finalize')
+        render_index = html.index('8. Assemble &amp; Render MP4')
         settings_index = html.index('action="/projects/7/settings"')
         self.assertNotIn('<button>2. Segs + Audio</button>', html)
         self.assertNotIn("Gen Image Prompts", html)
@@ -2263,8 +2323,8 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(prompts_index, images_index)
         self.assertLess(images_index, avatar_index)
         self.assertLess(avatar_index, clips_index)
-        self.assertLess(clips_index, assemble_index)
-        self.assertLess(assemble_index, render_index)
+        self.assertLess(clips_index, finalize_index)
+        self.assertLess(finalize_index, render_index)
         self.assertLess(align_index, settings_index)
 
     def test_used_top_actions_are_numbered_and_dark_grey_but_clickable(self):
@@ -2277,19 +2337,36 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('action="/projects/7/align"', html)
         self.assertIn('action="/projects/7/generate-prompts"', html)
 
-    def test_render_mp4_requires_assemble_final_to_have_been_used(self):
+    def test_assemble_render_requires_all_clips_to_be_finished(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        lines = [{
+            "line_index": 0,
+            "section": "Verse",
+            "is_chorus": 0,
+            "clean_text": "Hello",
+            "start_sec": 0.0,
+            "end_sec": 2.0,
+            "confidence": 1.0,
+            "prompt": "portrait",
+            "video_prompt": "camera move",
+            "image_path": None,
+            "avatar_image_path": None,
+            "clip_path": "clip.mp4",
+            "audio_path": None,
+            "video_approved": 0,
+            "status": "done",
+            "error": "",
+        }]
 
-        html = _project_html(project, [], used_actions={"clips"})
+        html = _project_html(project, lines, used_actions={"clips"})
 
-        self.assertIn('title="Bitte zuerst Assemble Final ausf\u00fchren"', html)
-        self.assertIn("alert('Bitte zuerst Assemble Final ausf\u00fchren.')", html)
-        self.assertIn('action="/projects/7/render-mp4"', html)
-        self.assertIn('class="wip-button" type="button" title="Bitte zuerst Assemble Final ausf\u00fchren"', html)
+        self.assertIn('disabled title="Finish all clips first">8. Assemble &amp; Render MP4', html)
+        self.assertNotIn('action="/projects/7/assemble-render"', html)
 
-        assembled_html = _project_html(project, [], used_actions={"assemble", "clips"})
+        lines[0]["video_approved"] = 1
+        approved_html = _project_html(project, lines, used_actions={"clips"})
 
-        self.assertIn('action="/projects/7/render-mp4"', assembled_html)
+        self.assertIn('action="/projects/7/assemble-render"', approved_html)
 
     def test_project_settings_are_visible_by_default_without_group_size_reset_warning(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
@@ -2838,21 +2915,18 @@ class AppHtmlTests(unittest.TestCase):
         html = _project_html(project, lines)
 
         self.assertIn('type="button"', html)
-        self.assertIn("alert('Bitte erst alle Videos mit OK freigeben.')", html)
-        self.assertIn('title="Alle Videos erst mit OK markieren"', html)
-        self.assertIn("7. Assemble Final", html)
-        self.assertIn("8. Render MP4", html)
+        self.assertIn('onclick="openFinalizeModal()">7. Finalize', html)
+        self.assertIn('disabled title="Finish all clips first">8. Assemble &amp; Render MP4', html)
 
         lines[1]["video_approved"] = 1
         approved_html = _project_html(project, lines)
 
-        self.assertIn('action="/projects/7/assemble"', approved_html)
-        self.assertIn('title="Bitte zuerst Assemble Final ausf\u00fchren"', approved_html)
-        self.assertNotIn("alert('Bitte erst alle Videos mit OK freigeben.')", approved_html)
+        self.assertIn('action="/projects/7/assemble-render"', approved_html)
+        self.assertNotIn('title="Finish all clips first"', approved_html)
 
         assembled_html = _project_html(project, lines, used_actions={"assemble"})
-        self.assertIn('action="/projects/7/render-mp4"', assembled_html)
-        self.assertNotIn('title="Bitte zuerst Assemble Final ausf\u00fchren"', assembled_html)
+        self.assertIn('action="/projects/7/assemble-render"', assembled_html)
+        self.assertIn('class="used-button"', assembled_html)
 
     def test_lyrics_table_has_insert_and_delete_line_controls(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}

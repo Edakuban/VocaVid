@@ -719,6 +719,14 @@ def create_app() -> FastAPI:
         mark_used(project_id, "render-mp4")
         return _project_redirect(project_id)
 
+    @app.post("/projects/{project_id}/assemble-render")
+    def assemble_render(project_id: int):
+        pipeline.assemble(project_id, [])
+        mark_used(project_id, "assemble")
+        pipeline.render_final_mp4(project_id)
+        mark_used(project_id, "render-mp4")
+        return _project_redirect(project_id)
+
     @app.post("/projects/{project_id}/clear")
     def clear_project(project_id: int):
         pipeline.clear_project(project_id)

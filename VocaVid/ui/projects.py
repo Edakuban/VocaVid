@@ -9,6 +9,7 @@ from .formatting import (
     _attr,
     _format_duration,
     _generated_asset_url,
+    _js_arg,
     _locked_indices,
     _local_asset_url,
     _row_value,
@@ -27,6 +28,7 @@ from .forms import (
     _whisper_model_select_html,
     _work_items_html,
 )
+from .finalize import _finalize_items_html, _finalize_modal_html
 from .queue import (
     _queue_control_html,
     _queue_estimate_html,
@@ -303,7 +305,6 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
     used_actions = used_actions or set()
     assemble_enabled = _all_videos_approved(work_items)
     rendered_mp4_url = _rendered_mp4_url(project)
-    render_enabled = "assemble" in used_actions or bool(rendered_mp4_url)
     action_specs = [
         ("align", "Analyze + Split", False, "align"),
         ("scene-plan", "Scene Plan", False, "scene-plan"),
@@ -311,8 +312,6 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
         ("images", "Gen Images", False, "images"),
         ("avatar-image", "Gen Avatar Images", False, "avatar-image"),
         ("clips", "Gen Clips", False, "clips"),
-        ("assemble", "Assemble Final", True, "assemble"),
-        ("render-mp4", "Render MP4", True, "render-mp4"),
     ]
     actions = "".join(
         _action_button(
@@ -322,28 +321,39 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
             label,
             is_wip,
             any(used_action in used_actions for used_action in used_key) if isinstance(used_key, tuple) else used_key in used_actions,
-            enabled=(
-                action not in {"assemble", "render-mp4"}
-                or (not work_items or assemble_enabled) and (action != "render-mp4" or render_enabled)
-            ),
-            preview_url=rendered_mp4_url if action == "render-mp4" else "",
-            disabled_title=(
-                "Bitte zuerst Assemble Final ausf\u00fchren"
-                if action == "render-mp4" and not render_enabled
-                else "Alle Videos erst mit OK markieren"
-            ),
-            disabled_alert=(
-                "Bitte zuerst Assemble Final ausf\u00fchren."
-                if action == "render-mp4" and not render_enabled
-                else "Bitte erst alle Videos mit OK freigeben."
-            ),
+            enabled=True,
+            preview_url="",
         )
         for number, (action, label, is_wip, used_key) in enumerate(action_specs, start=1)
     )
+    all_clips_ready = bool(work_items) and all(bool(_row_value(row, "clip_path", "")) for row in work_items)
+    finalize_attrs = (
+        ' type="button" onclick="openFinalizeModal()"'
+        if all_clips_ready
+        else ' type="button" disabled title="Generate all clips first"'
+    )
+    actions += f'<button{finalize_attrs}>7. Finalize</button>'
+    if rendered_mp4_url:
+        assemble_render = (
+            f'<button type="button" title="Preview rendered MP4" '
+            f'onclick="openClipLightbox({_attr(_js_arg(rendered_mp4_url))})">8. Assemble &amp; Render MP4</button>'
+        )
+    elif assemble_enabled:
+        used_class = ' class="used-button"' if "assemble" in used_actions or "render-mp4" in used_actions else ""
+        assemble_render = (
+            f'<form action="/projects/{project["id"]}/assemble-render" method="post">'
+            f'<button{used_class}>8. Assemble &amp; Render MP4</button></form>'
+        )
+    else:
+        assemble_render = (
+            '<button type="button" disabled title="Finish all clips first">'
+            '8. Assemble &amp; Render MP4</button>'
+        )
+    actions += assemble_render
     if rendered_mp4_url:
         reels_button = '<button type="button" onclick="openReelsModal()">9. Make reels</button>'
     else:
-        reels_button = '<button type="button" disabled title="Bitte zuerst das finale MP4 rendern.">9. Make reels</button>'
+        reels_button = '<button type="button" disabled title="Render the final MP4 first">9. Make reels</button>'
     return actions + reels_button
 
 
@@ -406,6 +416,7 @@ def _project_html(
     next_project_nav = _project_nav_html(next_project_id, "next")
     initial_setup_banner = _initial_setup_banner_html(active_jobs)
     storyboard = _storyboard_html(project, work_items, item_kind, locked)
+    finalize_modal = _finalize_modal_html(project, work_items, item_kind)
     table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
 <div class="project-studio">
@@ -437,6 +448,7 @@ def _project_html(
 {_project_settings_modal_html(project)}
 {_manual_timing_modal_html(project, lines, manual_timing_interludes or [])}
 {_reels_modal_html(project, reel_analyses or [], reel_candidates_by_analysis or {})}
+{finalize_modal}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
@@ -503,6 +515,7 @@ def _project_status_payload(
         "actions_html": _project_actions_html(project, rows, used_actions),
         "rows": _extract_row_snippets(html),
         "storyboard_html": _storyboard_html(project, rows, item_kind, locked),
+        "finalize_items_html": _finalize_items_html(project, rows, item_kind),
     }
 
 
