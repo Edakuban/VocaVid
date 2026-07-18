@@ -563,6 +563,7 @@ SCRIPTS = f"""
     }}
     const projectBrowserPreferencesKey = 'vocavid.projectBrowserPreferences';
     function restoreProjectBrowserPreferences() {{
+      const search = document.getElementById('project-search');
       const filter = document.getElementById('project-filter');
       const sort = document.getElementById('project-sort');
       if (!filter || !sort) return;
@@ -573,6 +574,12 @@ SCRIPTS = f"""
       }} catch (error) {{
         // Keep the built-in defaults when browser storage is unavailable or invalid.
       }}
+      const query = new URLSearchParams(window.location.search);
+      const queryFilter = query.get('filter');
+      const querySort = query.get('sort');
+      if (queryFilter && Array.from(filter.options).some((option) => option.value === queryFilter)) filter.value = queryFilter;
+      if (querySort && Array.from(sort.options).some((option) => option.value === querySort)) sort.value = querySort;
+      if (search && query.has('search')) search.value = query.get('search') || '';
     }}
     function saveProjectBrowserPreferences() {{
       try {{
@@ -593,10 +600,18 @@ SCRIPTS = f"""
       const cards = Array.from(grid.querySelectorAll('.project-card'));
       cards.sort((a, b) => {{
         if (sort === 'oldest') return Number(a.dataset.projectId || 0) - Number(b.dataset.projectId || 0);
-        if (sort === 'name-asc') return String(a.dataset.title || '').localeCompare(String(b.dataset.title || ''));
-        if (sort === 'name-desc') return String(b.dataset.title || '').localeCompare(String(a.dataset.title || ''));
+        if (sort === 'name-asc') return normalizeSearchText(a.dataset.title || '').localeCompare(normalizeSearchText(b.dataset.title || ''));
+        if (sort === 'name-desc') return normalizeSearchText(b.dataset.title || '').localeCompare(normalizeSearchText(a.dataset.title || ''));
         return Number(b.dataset.projectId || 0) - Number(a.dataset.projectId || 0);
       }}).forEach((card) => grid.appendChild(card));
+      const context = new URLSearchParams({{ filter, sort }});
+      if (search) context.set('search', document.getElementById('project-search')?.value.trim() || '');
+      cards.forEach((card) => {{
+        const link = card.querySelector('.project-card-link');
+        if (!link) return;
+        const projectPath = String(link.getAttribute('href') || '').split('?')[0];
+        link.setAttribute('href', projectPath + '?' + context.toString());
+      }});
       let visible = 0;
       cards.forEach((card) => {{
         const titleMatches = normalizeSearchText(card.dataset.title || '').includes(search);

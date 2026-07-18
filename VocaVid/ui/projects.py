@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import unicodedata
+from urllib.parse import urlencode
 
 from . import context
 from .context import JobOptions
@@ -357,8 +359,67 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
     return actions + reels_button
 
 
-def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int | None]:
-    project_ids = [int(project["id"]) for project in projects]
+_PROJECT_BROWSER_FILTERS = {"all", "in-progress", "done"}
+_PROJECT_BROWSER_SORTS = {"newest", "oldest", "name-asc", "name-desc"}
+
+
+def _normalize_project_browser_text(value) -> str:
+    normalized = unicodedata.normalize("NFD", str(value or "").lower())
+    return "".join(character for character in normalized if unicodedata.category(character) != "Mn")
+
+
+def _project_browser_values(
+    project_filter: str | None = None,
+    project_sort: str | None = None,
+    project_search: str | None = None,
+) -> tuple[str, str, str]:
+    normalized_filter = project_filter if project_filter in _PROJECT_BROWSER_FILTERS else "all"
+    normalized_sort = project_sort if project_sort in _PROJECT_BROWSER_SORTS else "newest"
+    return normalized_filter, normalized_sort, str(project_search or "").strip()
+
+
+def _project_browser_query(
+    project_filter: str | None = None,
+    project_sort: str | None = None,
+    project_search: str | None = None,
+) -> str:
+    normalized_filter, normalized_sort, normalized_search = _project_browser_values(
+        project_filter, project_sort, project_search
+    )
+    values = {"filter": normalized_filter, "sort": normalized_sort}
+    if normalized_search:
+        values["search"] = normalized_search
+    return urlencode(values)
+
+
+def _project_navigation_ids(
+    projects,
+    project_id: int,
+    project_filter: str | None = None,
+    project_sort: str | None = None,
+    project_search: str | None = None,
+) -> tuple[int | None, int | None]:
+    normalized_filter, normalized_sort, normalized_search = _project_browser_values(
+        project_filter, project_sort, project_search
+    )
+    search_text = _normalize_project_browser_text(normalized_search)
+    visible_projects = []
+    for project in projects:
+        project_status = "done" if _is_kdenlive_project_done(project) else "in-progress"
+        if normalized_filter != "all" and project_status != normalized_filter:
+            continue
+        if search_text not in _normalize_project_browser_text(project["name"]):
+            continue
+        visible_projects.append(project)
+    if normalized_sort == "oldest":
+        visible_projects.sort(key=lambda project: int(project["id"]))
+    elif normalized_sort == "name-asc":
+        visible_projects.sort(key=lambda project: _normalize_project_browser_text(project["name"]))
+    elif normalized_sort == "name-desc":
+        visible_projects.sort(key=lambda project: _normalize_project_browser_text(project["name"]), reverse=True)
+    else:
+        visible_projects.sort(key=lambda project: int(project["id"]), reverse=True)
+    project_ids = [int(project["id"]) for project in visible_projects]
     try:
         index = project_ids.index(int(project_id))
     except ValueError:
@@ -368,7 +429,7 @@ def _project_navigation_ids(projects, project_id: int) -> tuple[int | None, int 
     return previous_project_id, next_project_id
 
 
-def _project_nav_html(project_id: int | None, direction: str) -> str:
+def _project_nav_html(project_id: int | None, direction: str, navigation_query: str = "") -> str:
     if direction == "previous":
         symbol = "◀"
         active_title = "Vorhergehendes Projekt"
@@ -379,7 +440,9 @@ def _project_nav_html(project_id: int | None, direction: str) -> str:
         disabled_title = "Kein nachfolgendes Projekt"
     if project_id is None:
         return f'<span class="project-nav-button project-nav-disabled" title="{disabled_title}">{symbol}</span>'
-    return f'<a class="project-nav-button" href="/projects/{project_id}" title="{active_title}">{symbol}</a>'
+    query_suffix = f"?{navigation_query}" if navigation_query else ""
+    href = _attr(f"/projects/{project_id}{query_suffix}")
+    return f'<a class="project-nav-button" href="{href}" title="{active_title}">{symbol}</a>'
 
 
 def _project_html(
@@ -395,6 +458,7 @@ def _project_html(
     job_options: JobOptions | None = None,
     previous_project_id: int | None = None,
     next_project_id: int | None = None,
+    navigation_query: str = "",
     reel_analyses=None,
     reel_candidates_by_analysis=None,
     manual_timing_interludes=None,
@@ -412,8 +476,9 @@ def _project_html(
     progress = _project_progress_html(work_items)
     queue_control = _queue_control_html(queue_jobs, average_durations, queue_estimate_seconds, queue_count, job_options)
     queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
-    previous_project_nav = _project_nav_html(previous_project_id, "previous")
-    next_project_nav = _project_nav_html(next_project_id, "next")
+    previous_project_nav = _project_nav_html(previous_project_id, "previous", navigation_query)
+    next_project_nav = _project_nav_html(next_project_id, "next", navigation_query)
+    project_list_href = _attr(f"/?{navigation_query}" if navigation_query else "/")
     initial_setup_banner = _initial_setup_banner_html(active_jobs)
     storyboard = _storyboard_html(project, work_items, item_kind, locked)
     finalize_modal = _finalize_modal_html(project, work_items, item_kind)
@@ -424,7 +489,7 @@ def _project_html(
   <div class="project-topbar">
     <div class="project-title-row">
       <div class="project-title-left">
-        <a class="button project-icon-button" href="/" aria-label="Back to projects" title="Back to projects">←</a>
+        <a class="button project-icon-button" href="{project_list_href}" aria-label="Back to projects" title="Back to projects">←</a>
         <button class="project-icon-button" type="button" title="Project Settings" onclick="openProjectSettingsModal()">⚙</button>
         {progress}
       </div>
@@ -561,6 +626,7 @@ __all__ = [
     "_project_preview_row",
     "_is_kdenlive_project_done",
     "_project_actions_html",
+    "_project_browser_query",
     "_project_navigation_ids",
     "_project_nav_html",
     "_project_html",

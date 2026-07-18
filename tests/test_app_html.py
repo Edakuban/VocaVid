@@ -16,7 +16,9 @@ from VocaVid.ui.formatting import (
     _section_type,
 )
 from VocaVid.ui.projects import (
+    _project_browser_query,
     _project_html,
+    _project_navigation_ids,
     _project_status_payload,
     _projects_html,
 )
@@ -186,6 +188,9 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn("const projectBrowserPreferencesKey = 'vocavid.projectBrowserPreferences'", html)
         self.assertIn("function restoreProjectBrowserPreferences", html)
         self.assertIn("function saveProjectBrowserPreferences", html)
+        self.assertIn("const query = new URLSearchParams(window.location.search)", html)
+        self.assertIn("const context = new URLSearchParams({ filter, sort })", html)
+        self.assertIn("link.setAttribute('href', projectPath + '?' + context.toString())", html)
         self.assertIn("setupProjectBrowserControls();", html)
         self.assertIn('class="project-card-placeholder-mark" aria-label="No preview yet"', body)
         self.assertNotIn(">FS<", body)
@@ -519,6 +524,40 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index('title="Vorhergehendes Projekt"'), html.index("<h1>Demo</h1>"))
         self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
         self.assertIn(".project-nav-button", html)
+
+    def test_project_navigation_respects_project_browser_context(self):
+        projects = [
+            {"id": 4, "name": "Zebra", "final_video_path": "outputs/zebra/final.kdenlive"},
+            {"id": 3, "name": "Äther", "final_video_path": None},
+            {"id": 2, "name": "Beta", "final_video_path": None},
+            {"id": 1, "name": "Alpha", "final_video_path": None},
+        ]
+
+        previous_id, next_id = _project_navigation_ids(
+            projects,
+            2,
+            project_filter="in-progress",
+            project_sort="oldest",
+            project_search="a",
+        )
+
+        self.assertEqual((previous_id, next_id), (1, 3))
+
+    def test_project_navigation_links_keep_browser_context(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        query = _project_browser_query("in-progress", "oldest", "Demo & Song")
+
+        html = _project_html(
+            project,
+            [],
+            previous_project_id=8,
+            next_project_id=6,
+            navigation_query=query,
+        )
+
+        self.assertIn('href="/projects/8?filter=in-progress&amp;sort=oldest&amp;search=Demo+%26+Song"', html)
+        self.assertIn('href="/projects/6?filter=in-progress&amp;sort=oldest&amp;search=Demo+%26+Song"', html)
+        self.assertIn('href="/?filter=in-progress&amp;sort=oldest&amp;search=Demo+%26+Song" aria-label="Back to projects"', html)
 
     def test_project_page_wraps_storyboard_before_advanced_table(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
