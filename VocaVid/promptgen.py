@@ -33,6 +33,7 @@ Motion selection:
 
 * Choose one motion approach that fits this specific scene, section, duration, and energy.
 * Do not default to a slow push-in. Use it only when the scene plan or emotion clearly benefits from that choice.
+* Never describe motion as "almost imperceptible", "barely perceptible", "microscopic", "extremely slow", or "very slow". The selected motion must be clearly visible within the clip duration.
 * Prefer varied controlled motion across segments: lateral tracking, gentle crane rise, rack focus, foreground wipes, slow reveal, parallax drift, subtle handheld tension, locked-off rhythmic environment motion, or a small motivated pan or tilt.
 * For story or atmosphere shots, motion may come from the subject, camera, foreground, weather, light, particles, props already present, or the environment.
 * For performance shots, keep the singer lip-sync stable while making the frame feel alive through expression, light, atmosphere, and motivated camera movement.

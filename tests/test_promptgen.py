@@ -58,6 +58,8 @@ class PromptgenTests(unittest.TestCase):
 
         self.assertIn("Choose one motion approach that fits this specific scene", prompt)
         self.assertIn("Do not default to a slow push-in", prompt)
+        self.assertIn('Never describe motion as "almost imperceptible"', prompt)
+        self.assertIn("The selected motion must be clearly visible within the clip duration", prompt)
         self.assertIn("lateral tracking", prompt)
         self.assertIn("foreground wipes", prompt)
         self.assertIn("Do not invent new props", prompt)
