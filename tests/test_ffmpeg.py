@@ -493,9 +493,11 @@ class AssemblyTests(unittest.TestCase):
             self.assertEqual(transition_properties[0]["a_track"], "2")
             self.assertEqual(transition_properties[0]["b_track"], "3")
             self.assertEqual(transition_properties[0]["reverse"], "0")
+            self.assertEqual(transition_properties[0]["geometry"], "0=0% 0% 100% 100% 0%;-1=0% 0% 100% 100% 100%")
             self.assertEqual(transition_properties[1]["a_track"], "2")
             self.assertEqual(transition_properties[1]["b_track"], "3")
             self.assertEqual(transition_properties[1]["reverse"], "1")
+            self.assertEqual(transition_properties[1]["geometry"], "0=0% 0% 100% 100% 100%;-1=0% 0% 100% 100% 0%")
 
     def test_assemble_kdenlive_project_writes_relative_resource_paths(self):
         with tempfile.TemporaryDirectory() as directory:

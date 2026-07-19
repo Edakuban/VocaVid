@@ -453,7 +453,19 @@ def _add_transition(
     _set_property(transition, "b_track", str(max(from_position, to_position)))
     _set_property(transition, "mlt_service", "luma")
     _set_property(transition, "kdenlive_id", "wipe")
-    _set_property(transition, "reverse", "1" if from_position > to_position else "0")
+    reverse = from_position > to_position
+    _set_property(transition, "reverse", "1" if reverse else "0")
+    # Kdenlive's Wipe transition exposes its direction as the "Revert" switch.
+    # MLT uses ``reverse`` when rendering, while Kdenlive reads ``geometry`` to
+    # render that switch in the project UI. Keep the two values in sync so an
+    # upper-to-lower cut (V2 -> V1) is both rendered and displayed as reverted.
+    _set_property(
+        transition,
+        "geometry",
+        "0=0% 0% 100% 100% 100%;-1=0% 0% 100% 100% 0%"
+        if reverse
+        else "0=0% 0% 100% 100% 0%;-1=0% 0% 100% 100% 100%",
+    )
     _set_property(transition, "softness", "0")
     _set_property(transition, "progressive", "1")
     _set_property(transition, "always_active", "0")

@@ -36,6 +36,12 @@ def _project_redirect(project_id: int) -> RedirectResponse:
     return RedirectResponse(f"/projects/{int(project_id)}", status_code=303)
 
 
+def _has_existing_kdenlive_project(project: object) -> bool:
+    final_video_path = str(project["final_video_path"] or "")
+    project_path = APP_ROOT / final_video_path
+    return project_path.is_file() and project_path.suffix.lower() == ".kdenlive"
+
+
 @dataclass
 class JobOptions:
     autodelete_finished: bool = False
@@ -738,8 +744,12 @@ def create_app() -> FastAPI:
 
     @app.post("/projects/{project_id}/assemble-render")
     def assemble_render(project_id: int):
-        pipeline.assemble(project_id, [])
-        mark_used(project_id, "assemble")
+        # Preserve an existing editable project. Reassembling is reserved for
+        # the explicit Assemble action, which intentionally refreshes its
+        # timeline from the approved clips.
+        if not _has_existing_kdenlive_project(store.get_project(project_id)):
+            pipeline.assemble(project_id, [])
+            mark_used(project_id, "assemble")
         pipeline.render_final_mp4(project_id)
         mark_used(project_id, "render-mp4")
         return _project_redirect(project_id)
