@@ -34,6 +34,8 @@ SCRIPTS = f"""
       const selectedSegments = document.querySelectorAll('.segment-select:checked:not(:disabled)');
       const selectedLines = selectedSegments.length ? selectedSegments : document.querySelectorAll('.line-select:checked:not(:disabled)');
       if (!selectedLines.length) {{
+        const fillsMissingMedia = ['/images', '/avatar-image', '/clips'].some((suffix) => form.action.endsWith(suffix));
+        if (fillsMissingMedia) return true;
         const hasSegments = document.querySelectorAll('.segment-select').length > 0;
         const itemLabel = hasSegments ? 'Segmente' : 'Zeilen';
         if (!confirm('Keine Checkbox markiert. Es werden alle(!) ' + itemLabel + ' verarbeitet. Fortfahren?')) {{
@@ -49,6 +51,25 @@ SCRIPTS = f"""
       }});
       return true;
     }}
+    function selectableProjectItems() {{
+      const segments = document.querySelectorAll('.segment-select:not(:disabled)');
+      return segments.length ? segments : document.querySelectorAll('.line-select:not(:disabled)');
+    }}
+    function syncProjectSelectAll() {{
+      const selectAll = document.getElementById('project-select-all');
+      if (!selectAll) return;
+      const items = Array.from(selectableProjectItems());
+      const selected = items.filter((item) => item.checked).length;
+      selectAll.checked = !!items.length && selected === items.length;
+      selectAll.indeterminate = selected > 0 && selected < items.length;
+    }}
+    function toggleAllProjectItems(checked) {{
+      selectableProjectItems().forEach((item) => {{ item.checked = checked; }});
+      syncProjectSelectAll();
+    }}
+    document.addEventListener('change', (event) => {{
+      if (event.target.matches('.segment-select, .line-select')) syncProjectSelectAll();
+    }});
     function currentProjectId() {{
       const match = window.location.pathname.match(/^\\/projects\\/(\\d+)/);
       return match ? Number(match[1]) : 0;
@@ -67,6 +88,7 @@ SCRIPTS = f"""
       const checkbox = row.querySelector('.segment-select, .line-select');
       if (!checkbox) return;
       checkbox.checked = !checkbox.checked;
+      syncProjectSelectAll();
     }}
     function projectRowChanged(row, replacement) {{
       const previousHtml = projectRowServerHtml.get(row.id) || row.outerHTML;
@@ -408,6 +430,7 @@ SCRIPTS = f"""
         if (row) replaceProjectRow(row, html);
       }});
       if (data.storyboard_html !== undefined) replaceProjectStoryboard(data.storyboard_html, forceStoryboard);
+      syncProjectSelectAll();
       const finalizeData = document.getElementById('finalize-review-data');
       if (finalizeData && data.finalize_items_html !== undefined && !finalizeModalIsOpen()) finalizeData.innerHTML = data.finalize_items_html;
     }}

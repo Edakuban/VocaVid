@@ -150,7 +150,7 @@ def create_app() -> FastAPI:
         label, callback = actions[action]
         item_kind = _action_item_kind(action, bool(store.list_segments(project_id)))
         if action in _SPLIT_ACTIONS:
-            indices = _selected_action_indices(project_id, item_kind, selected, store)
+            indices = _selected_action_indices(project_id, item_kind, selected, store, action)
             if not indices:
                 return False
             for index in indices:
@@ -178,7 +178,7 @@ def create_app() -> FastAPI:
     def submit_prompt_actions(project_id: int, selected_indices: list[int] | None = None) -> bool:
         selected = list(selected_indices or [])
         item_kind = _action_item_kind("prompts", bool(store.list_segments(project_id)))
-        indices = _selected_action_indices(project_id, item_kind, selected, store)
+        indices = _selected_action_indices(project_id, item_kind, selected, store, "prompts")
         if not indices:
             return False
         submitted = False

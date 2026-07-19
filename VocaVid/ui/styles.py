@@ -194,6 +194,9 @@ STYLES = f"""
     .danger-button:hover, .danger-button:focus {{ background: rgba(238,102,117,.2); border-color: var(--danger); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; justify-content: center; }}
     .actions form {{ padding: 0; margin: 0; border: 0; background: transparent; }}
+    .project-selection-toolbar {{ display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 0 0 12px; color: var(--text-muted); font-size: 13px; }}
+    .project-selection-toolbar label {{ display: inline-flex; align-items: center; gap: 7px; margin: 0; color: var(--text-primary); font-weight: 650; cursor: pointer; }}
+    .project-selection-toolbar input {{ width: auto; }}
     .start-dashboard {{ display: grid; gap: 18px; }}
     .start-hero {{ display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(280px, .65fr); gap: 18px; align-items: stretch; }}
     .start-hero > div, .production-status {{

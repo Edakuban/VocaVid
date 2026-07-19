@@ -392,6 +392,23 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('disabled title="Generate all clips first">7. Finalize', html)
         self.assertIn('disabled title="Finish all clips first">8. Assemble &amp; Render MP4', html)
 
+    def test_project_page_offers_select_all_for_explicit_regeneration(self):
+        project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
+        rows = [{
+            "segment_index": 0, "kind": "lyrics", "section": "Verse", "is_chorus": 0,
+            "clean_text": "One", "start_sec": 0.0, "end_sec": 1.0,
+            "prompt": "", "video_prompt": "", "image_path": None,
+            "avatar_image_path": None, "selected_image_source": "avatar", "clip_path": None,
+            "audio_path": None, "last_action": "", "scene_plan": "", "video_approved": 0,
+            "status": "", "error": "",
+        }]
+
+        html = _page("Demo", _project_html(project, [], rows))
+
+        self.assertIn('id="project-select-all"', html)
+        self.assertIn('Alle markieren', html)
+        self.assertIn('bewusst neu erstellt', html)
+
     def test_project_page_includes_reels_button_and_modal(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": "outputs/demo/final.kdenlive"}
 

@@ -481,6 +481,11 @@ def _project_html(
     project_list_href = _attr(f"/?{navigation_query}" if navigation_query else "/")
     initial_setup_banner = _initial_setup_banner_html(active_jobs)
     storyboard = _storyboard_html(project, work_items, item_kind, locked)
+    selection_toolbar = "" if not work_items else """
+  <div class=\"project-selection-toolbar\">
+    <label><input id=\"project-select-all\" type=\"checkbox\" onchange=\"toggleAllProjectItems(this.checked)\"> Alle markieren</label>
+    <span>Ausgewählte Kacheln werden bei der Generierung bewusst neu erstellt.</span>
+  </div>"""
     finalize_modal = _finalize_modal_html(project, work_items, item_kind)
     table = _work_items_html(project, lines, segments, locked, show_generation_columns="scene-plan" in used_actions)
     return f"""
@@ -506,6 +511,7 @@ def _project_html(
   </div>
   {queue_modal}
   {initial_setup_banner}
+  {selection_toolbar}
   {storyboard}
   <section id="project-table-view" class="project-table-view" hidden>
     {table}

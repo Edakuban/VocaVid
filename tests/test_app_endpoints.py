@@ -727,7 +727,7 @@ class AppEndpointTests(unittest.TestCase):
             app_module.UPLOADS = old_uploads
             app_module.DB_PATH = old_db_path
 
-    def test_project_image_action_queues_one_job_per_segment(self):
+    def test_project_image_action_queues_only_segments_without_an_image_by_default(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
         old_db_path = app_module.DB_PATH
@@ -754,6 +754,7 @@ class AppEndpointTests(unittest.TestCase):
                         RenderSegment(1, "lyrics", "Verse", False, False, [1], "Two", 2.0, 3.0),
                     ],
                 )
+                store.update_segment(project_id, 0, image_path="existing.png")
                 calls = []
 
                 class FakePipeline:
@@ -768,14 +769,14 @@ class AppEndpointTests(unittest.TestCase):
 
                 response = client.post(f"/projects/{project_id}/images", follow_redirects=False)
                 for _ in range(20):
-                    if len(calls) == 2:
+                    if calls:
                         break
                     time.sleep(0.01)
 
                 self.assertEqual(response.status_code, 303)
-                self.assertEqual(calls, [[0], [1]])
+                self.assertEqual(calls, [[1]])
                 jobs_html = client.get("/").text
-                self.assertIn("generate images: Demo (segment 1)", jobs_html)
+                self.assertNotIn("generate images: Demo (segment 1)", jobs_html)
                 self.assertIn("generate images: Demo (segment 2)", jobs_html)
         finally:
             app_module.APP_ROOT = old_app_root

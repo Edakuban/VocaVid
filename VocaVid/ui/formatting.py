@@ -24,7 +24,7 @@ def _run_project_action(pipeline, project_id: int, action: str, selected_indices
     return getattr(pipeline, method_names[action])(project_id, selected_indices)
 
 
-def _selected_action_indices(project_id: int, item_kind: str, selected: list[int], store: Store) -> list[int]:
+def _selected_action_indices(project_id: int, item_kind: str, selected: list[int], store: Store, action: str | None = None) -> list[int]:
     if selected:
         selected_set = {int(index) for index in selected}
     else:
@@ -32,7 +32,19 @@ def _selected_action_indices(project_id: int, item_kind: str, selected: list[int
     rows = store.list_segments(project_id) if item_kind == "segments" else store.list_lines(project_id)
     if selected_set:
         rows = [row for row in rows if _row_index(row, item_kind) in selected_set]
-    rows = [row for row in rows if not bool(_row_value(row, "video_approved", 0))]
+    # A header action without an explicit selection fills only missing media.
+    # Selected rows are intentional regenerations and must remain unfiltered,
+    # including rows whose previous clip was approved.
+    missing_field_by_action = {
+        "images": "image_path",
+        "avatar-image": "avatar_image_path",
+        "clips": "clip_path",
+    }
+    missing_field = missing_field_by_action.get(action or "")
+    if not selected_set:
+        rows = [row for row in rows if not bool(_row_value(row, "video_approved", 0))]
+        if missing_field:
+            rows = [row for row in rows if not _row_value(row, missing_field, "")]
     return [_row_index(row, item_kind) for row in rows]
 
 

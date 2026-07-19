@@ -499,14 +499,15 @@ class Pipeline:
     def generate_images(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         selected_segments = self._selected_segments(project_id, selected_line_indices)
         if selected_segments:
-            segments = _editable_rows(selected_segments)
+            segments = selected_segments if selected_line_indices else _editable_rows(selected_segments)
             if not segments:
                 return
             for row in segments:
                 workflow = self.workflows.image_for_reference(bool(row["use_reference"]))
                 self._run_comfy_for_segment(project_id, row, workflow, output_field="image_path", action="images")
             return
-        for row in self._editable_selected_rows(project_id, selected_line_indices):
+        rows = self._selected_rows(project_id, selected_line_indices) if selected_line_indices else self._editable_selected_rows(project_id, selected_line_indices)
+        for row in rows:
             workflow = self.workflows.image_for_reference(bool(row["use_reference"]))
             self._run_comfy_for_line(project_id, row, workflow, output_field="image_path", action="images")
 
@@ -514,13 +515,14 @@ class Pipeline:
         workflow = self.workflows.require_avatar_image()
         selected_segments = self._selected_segments(project_id, selected_line_indices)
         if selected_segments:
-            segments = _editable_rows(selected_segments)
+            segments = selected_segments if selected_line_indices else _editable_rows(selected_segments)
             if not segments:
                 return
             for row in segments:
                 self._run_comfy_for_avatar_segment(project_id, row, workflow)
             return
-        for row in self._editable_selected_rows(project_id, selected_line_indices):
+        rows = self._selected_rows(project_id, selected_line_indices) if selected_line_indices else self._editable_selected_rows(project_id, selected_line_indices)
+        for row in rows:
             self._run_comfy_for_avatar_line(project_id, row, workflow)
 
     def generate_video_prompts(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
@@ -592,14 +594,15 @@ class Pipeline:
     def generate_clips(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         selected_segments = self._selected_segments(project_id, selected_line_indices)
         if selected_segments:
-            segments = _editable_rows(selected_segments)
+            segments = selected_segments if selected_line_indices else _editable_rows(selected_segments)
             if not segments:
                 return
             for row in segments:
                 workflow = self.workflows.require_video()
                 self._run_comfy_for_segment(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
             return
-        for row in self._editable_selected_rows(project_id, selected_line_indices):
+        rows = self._selected_rows(project_id, selected_line_indices) if selected_line_indices else self._editable_selected_rows(project_id, selected_line_indices)
+        for row in rows:
             workflow = self.workflows.require_video()
             self._run_comfy_for_line(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
 
