@@ -1314,6 +1314,11 @@ class Pipeline:
             "fullbody_reference_image_name": Path(fullbody_reference_image_path).name,
             "base_image_path": base_image_path,
             "avatar_image_path": avatar_image_path,
+            # The avatar identity must only constrain video generation when the
+            # avatar-edited image is the actual image-to-video input.  Projects
+            # can inherit a global avatar description without using it for a
+            # particular clip.
+            "using_avatar_image": str(bool(use_avatar)).lower(),
             "source_image_path": source_image_path,
             "input_image_path": base_image_path,
             "image_path": source_image_path or base_image_path,
@@ -1586,10 +1591,12 @@ def _inject_image_audio_video_inputs(workflow: dict, variables: dict[str, str]) 
     image_path = variables.get("image_path", "")
     audio_path = variables.get("audio_path", "")
     duration = variables.get("duration", "")
-    video_prompt = _with_avatar_identity_constraint(
-        variables.get("video_prompt", ""),
-        variables.get("avatar_identity_context", ""),
+    avatar_identity_context = (
+        variables.get("avatar_identity_context", "")
+        if variables.get("using_avatar_image") == "true"
+        else ""
     )
+    video_prompt = _with_avatar_identity_constraint(variables.get("video_prompt", ""), avatar_identity_context)
     if image_path:
         for node in _nodes_by_class(workflow, "LoadImage"):
             inputs = node["inputs"]

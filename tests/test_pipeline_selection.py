@@ -150,6 +150,7 @@ class PipelineSelectionTests(unittest.TestCase):
 
             self.assertEqual(variables["image_path"], "base.png")
             self.assertEqual(variables["source_image_path"], "base.png")
+            self.assertEqual(variables["using_avatar_image"], "false")
             self.assertEqual(variables["avatar_gender"], "female")
             self.assertEqual(variables["avatar_face_description"], "sharp cheekbones, silver hair")
             self.assertEqual(variables["avatar_identity_context"], "female lead vocalist; sharp cheekbones, silver hair")

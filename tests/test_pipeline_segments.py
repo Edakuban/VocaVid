@@ -804,6 +804,7 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(variables["image_path"], "avatar.png")
             self.assertEqual(variables["base_image_path"], "base.png")
             self.assertEqual(variables["avatar_image_path"], "avatar.png")
+            self.assertEqual(variables["using_avatar_image"], "true")
             self.assertEqual(variables["duration"], "3.000")
 
     def test_avatar_variables_use_default_images_when_project_reference_is_missing(self):
@@ -897,6 +898,30 @@ class PipelineSegmentTests(unittest.TestCase):
 
         self.assertEqual(injected["base"]["inputs"]["image"], "segment.png")
         self.assertEqual(injected["avatar"]["inputs"]["image"], "fullbody.png")
+
+    def test_video_workflow_applies_identity_lock_only_when_avatar_image_is_used(self):
+        import VocaVid.pipeline as pipeline_module
+
+        workflow = {
+            "prompt": {
+                "class_type": "PrimitiveStringMultiline",
+                "inputs": {"value": "old prompt"},
+                "_meta": {"title": "Prompt"},
+            }
+        }
+        variables = {
+            "video_prompt": "slow camera push",
+            "avatar_identity_context": "male lead vocalist; dark beard",
+            "using_avatar_image": "false",
+        }
+
+        without_avatar = pipeline_module._inject_image_audio_video_inputs(workflow, variables)
+        self.assertEqual(without_avatar["prompt"]["inputs"]["value"], "slow camera push")
+
+        variables["using_avatar_image"] = "true"
+        with_avatar = pipeline_module._inject_image_audio_video_inputs(workflow, variables)
+        self.assertIn("Identity lock", with_avatar["prompt"]["inputs"]["value"])
+        self.assertIn("male lead vocalist; dark beard", with_avatar["prompt"]["inputs"]["value"])
 
     def test_generate_clips_injects_image_audio_and_duration_into_video_workflow(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
