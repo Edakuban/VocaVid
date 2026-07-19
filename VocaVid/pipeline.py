@@ -735,6 +735,8 @@ class Pipeline:
 
     def clear_project(self, project_id: int) -> None:
         project = self.store.get_project(project_id)
+        lyrics_path = self._project_input_path(project["lyrics_path"])
+        lines = parse_suno_lyrics(lyrics_path.read_text(encoding="utf-8"))
         project_dir = self._project_dir(project).resolve()
         workspace = self.workspace.resolve()
         if workspace not in project_dir.parents:
@@ -742,6 +744,7 @@ class Pipeline:
         if project_dir.exists():
             shutil.rmtree(project_dir)
         self.store.clear_project_generated_state(project_id)
+        self.store.replace_lines(project_id, lines)
 
     def regroup_project(self, project_id: int, force_cpu: bool = False) -> None:
         logger.info("regroup start project_id=%s", project_id)

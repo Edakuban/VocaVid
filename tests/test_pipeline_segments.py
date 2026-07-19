@@ -1736,6 +1736,7 @@ class PipelineSegmentTests(unittest.TestCase):
             pipeline.build_segments(project_id)
             generated_file = root / "outputs" / "demo" / "junk.txt"
             generated_file.write_text("generated", encoding="utf-8")
+            lyrics.write_text("[Chorus]\nNew hook\n", encoding="utf-8")
 
             pipeline.clear_project(project_id)
 
@@ -1747,6 +1748,10 @@ class PipelineSegmentTests(unittest.TestCase):
             self.assertEqual(project["reference_image_paths"], '["ref.png"]')
             self.assertIsNone(project["final_video_path"])
             self.assertIsNone(project["scene_plan"])
+            self.assertEqual(line["section"], "Chorus")
+            self.assertEqual(line["clean_text"], "New hook")
+            self.assertEqual(line["raw_text"], "New hook")
+            self.assertEqual(line["is_chorus"], 1)
             self.assertEqual(store.list_segments(project_id), [])
             self.assertEqual(store.list_used_project_actions(project_id), set())
             self.assertFalse((root / "outputs" / "demo").exists())

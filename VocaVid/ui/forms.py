@@ -406,7 +406,7 @@ def _clear_project_html(project) -> str:
 <details class="danger-panel">
   <summary>Danger Zone</summary>
   <div class="actions">
-    <form class="compact-form" action="/projects/{project['id']}/clear" method="post" onsubmit="return confirm('Projekt wirklich leeren? Generierte Dateien, Segmente, Timings, Prompts und Button-Status werden zurueckgesetzt. Uploads und Settings bleiben erhalten.')">
+    <form class="compact-form" action="/projects/{project['id']}/clear" method="post" onsubmit="return confirm('Projekt wirklich leeren? Generierte Dateien, Segmente, Timings, Prompts und Button-Status werden zurueckgesetzt. Die Lyrics werden aus der aktuell hinterlegten Lyrics-Datei neu eingelesen. Uploads und Settings bleiben erhalten.')">
       <button class="danger-button">Clear Project</button>
     </form>
     <form class="compact-form" action="/projects/{project['id']}/delete" method="post" onsubmit="return confirm('Projekt wirklich loeschen? Datenbankeintrag, Upload-Ordner und generierte Dateien werden entfernt.')">
