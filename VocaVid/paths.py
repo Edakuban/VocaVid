@@ -67,7 +67,7 @@ def is_internal_storage_path(value: str | Path | None) -> bool:
 
 
 def _is_internal_relative_path(normalized: str) -> bool:
-    return normalized.startswith("uploads/") or normalized.startswith("outputs/")
+    return normalized.startswith(("uploads/", "outputs/", "global/"))
 
 
 def _safe_path_text(value: str | Path) -> str:

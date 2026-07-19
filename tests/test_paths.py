@@ -33,6 +33,12 @@ class PathStorageTests(unittest.TestCase):
 
             self.assertEqual(resolve_storage_path(app_root, "outputs/demo/clip.mp4"), app_root / "outputs" / "demo" / "clip.mp4")
 
+    def test_resolve_storage_path_maps_global_avatar_to_app_root(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            app_root = Path(directory) / ".VocaVid"
+
+            self.assertEqual(resolve_storage_path(app_root, "global/avatar.jpeg"), app_root / "global" / "avatar.jpeg")
+
     def test_resolve_storage_path_rejects_internal_traversal(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             app_root = Path(directory) / ".VocaVid"
