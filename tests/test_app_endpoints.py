@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import tempfile
 import subprocess
 import time
@@ -1029,9 +1030,84 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(saved["chorus_group_size"], 2)
                 self.assertEqual(saved["transition_handle_seconds"], 0.8)
                 self.assertEqual(saved["whisper_model_size"], "medium")
+                self.assertEqual(saved["project_browser_sort"], "newest")
                 self.assertEqual(saved["autodelete_finished"], 1)
                 self.assertEqual(saved["shutdown_after_queue"], 0)
                 self.assertTrue((app_module.APP_ROOT / "global" / "band.png").exists())
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
+    def test_project_browser_sort_endpoint_persists_validated_default(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                app = app_module.create_app()
+                client = TestClient(app)
+
+                response = client.post("/settings/project-browser", data={"project_sort": "name-asc"})
+
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.json(), {"project_browser_sort": "name-asc"})
+                self.assertEqual(Store(app_module.DB_PATH).get_global_settings()["project_browser_sort"], "name-asc")
+
+                response = client.post("/settings/project-browser", data={"project_sort": "invalid"})
+
+                self.assertEqual(response.json(), {"project_browser_sort": "newest"})
+                self.assertEqual(Store(app_module.DB_PATH).get_global_settings()["project_browser_sort"], "newest")
+                app.state.jobs.executor.shutdown(wait=True)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+
+    def test_store_migrates_project_browser_sort_default(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            db_path = Path(directory) / "VocaVid.sqlite3"
+            with sqlite3.connect(db_path) as conn:
+                conn.execute("CREATE TABLE global_settings (id INTEGER PRIMARY KEY CHECK (id = 1))")
+                conn.execute("INSERT INTO global_settings (id) VALUES (1)")
+
+            store = Store(db_path)
+
+            self.assertEqual(store.get_global_settings()["project_browser_sort"], "newest")
+            store.update_global_settings(project_browser_sort="oldest")
+            self.assertEqual(store.get_global_settings()["project_browser_sort"], "oldest")
+
+    def test_direct_project_page_uses_saved_sort_for_parameterless_navigation(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                app = app_module.create_app()
+                store = Store(app_module.DB_PATH)
+                project_ids = [
+                    store.create_project(
+                        {"name": name, "audio_path": "song.wav", "lyrics_path": "lyrics.txt", "global_style_prompt": ""},
+                        [],
+                    )
+                    for name in ("Zebra", "Alpha", "Beta")
+                ]
+                store.update_global_settings(project_browser_sort="name-asc")
+
+                response = TestClient(app).get(f"/projects/{project_ids[1]}")
+
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(f'href="/projects/{project_ids[2]}" title="Nachfolgendes Projekt"', response.text)
+                self.assertNotIn("?sort=", response.text)
                 app.state.jobs.executor.shutdown(wait=True)
         finally:
             app_module.APP_ROOT = old_app_root

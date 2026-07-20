@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS global_settings (
     chorus_group_size INTEGER NOT NULL DEFAULT 1,
     transition_handle_seconds REAL NOT NULL DEFAULT 0.5,
     whisper_model_size TEXT NOT NULL DEFAULT 'large-v3',
+    project_browser_sort TEXT NOT NULL DEFAULT 'newest',
     autodelete_finished INTEGER NOT NULL DEFAULT 0,
     shutdown_after_queue INTEGER NOT NULL DEFAULT 0
 );
@@ -186,6 +187,9 @@ class Store:
         return conn
 
     def _migrate(self, conn: sqlite3.Connection) -> None:
+        global_settings_columns = {row["name"] for row in conn.execute("PRAGMA table_info(global_settings)")}
+        if "project_browser_sort" not in global_settings_columns:
+            conn.execute("ALTER TABLE global_settings ADD COLUMN project_browser_sort TEXT NOT NULL DEFAULT 'newest'")
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(lyric_lines)")}
         if "use_reference" not in columns:
             conn.execute("ALTER TABLE lyric_lines ADD COLUMN use_reference INTEGER NOT NULL DEFAULT 0")
@@ -318,6 +322,7 @@ class Store:
             "chorus_group_size",
             "transition_handle_seconds",
             "whisper_model_size",
+            "project_browser_sort",
             "autodelete_finished",
             "shutdown_after_queue",
         }

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from urllib.parse import urlencode
 
 from . import context
 from .context import JobOptions
@@ -58,8 +57,11 @@ def _projects_html(
         "comfy_base_url": "http://127.0.0.1:8188", "output_resolution": "1280x720",
         "fps": 24, "lyric_group_size": 2, "chorus_group_size": 1,
         "transition_handle_seconds": 0.5, "whisper_model_size": "large-v3",
+        "project_browser_sort": "newest",
         "autodelete_finished": 0, "shutdown_after_queue": 0,
     }
+    project_browser_sort = _normalize_project_browser_sort(str(global_settings["project_browser_sort"] or "newest"))
+    projects = _sort_projects(projects, project_browser_sort)
     active_project_ids = {int(job.project_id) for job in jobs if job.project_id and job.status in {"queued", "running"}}
     rows = "".join(_project_list_item_html(p, project_previews.get(int(p["id"]), []), int(p["id"]) in active_project_ids) for p in projects)
     active_count = len([job for job in jobs if job.status in {"queued", "running"}])
@@ -80,10 +82,10 @@ def _projects_html(
         <option value="done">Done</option>
       </select>
       <select id="project-sort" aria-label="Sort projects">
-        <option value="newest" selected>Newest</option>
-        <option value="oldest">Oldest</option>
-        <option value="name-asc">Name asc</option>
-        <option value="name-desc">Name desc</option>
+        <option value="newest"{' selected' if project_browser_sort == 'newest' else ''}>Newest</option>
+        <option value="oldest"{' selected' if project_browser_sort == 'oldest' else ''}>Oldest</option>
+        <option value="name-asc"{' selected' if project_browser_sort == 'name-asc' else ''}>Name asc</option>
+        <option value="name-desc"{' selected' if project_browser_sort == 'name-desc' else ''}>Name desc</option>
       </select>
     </div>
   </div>
@@ -359,7 +361,6 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
     return actions + reels_button
 
 
-_PROJECT_BROWSER_FILTERS = {"all", "in-progress", "done"}
 _PROJECT_BROWSER_SORTS = {"newest", "oldest", "name-asc", "name-desc"}
 
 
@@ -368,58 +369,30 @@ def _normalize_project_browser_text(value) -> str:
     return "".join(character for character in normalized if unicodedata.category(character) != "Mn")
 
 
-def _project_browser_values(
-    project_filter: str | None = None,
-    project_sort: str | None = None,
-    project_search: str | None = None,
-) -> tuple[str, str, str]:
-    normalized_filter = project_filter if project_filter in _PROJECT_BROWSER_FILTERS else "all"
-    normalized_sort = project_sort if project_sort in _PROJECT_BROWSER_SORTS else "newest"
-    return normalized_filter, normalized_sort, str(project_search or "").strip()
+def _normalize_project_browser_sort(project_sort: str | None = None) -> str:
+    return project_sort if project_sort in _PROJECT_BROWSER_SORTS else "newest"
 
 
-def _project_browser_query(
-    project_filter: str | None = None,
-    project_sort: str | None = None,
-    project_search: str | None = None,
-) -> str:
-    normalized_filter, normalized_sort, normalized_search = _project_browser_values(
-        project_filter, project_sort, project_search
-    )
-    values = {"filter": normalized_filter, "sort": normalized_sort}
-    if normalized_search:
-        values["search"] = normalized_search
-    return urlencode(values)
+def _sort_projects(projects, project_sort: str | None = None):
+    normalized_sort = _normalize_project_browser_sort(project_sort)
+    sorted_projects = list(projects)
+    if normalized_sort == "oldest":
+        sorted_projects.sort(key=lambda project: int(project["id"]))
+    elif normalized_sort == "name-asc":
+        sorted_projects.sort(key=lambda project: _normalize_project_browser_text(project["name"]))
+    elif normalized_sort == "name-desc":
+        sorted_projects.sort(key=lambda project: _normalize_project_browser_text(project["name"]), reverse=True)
+    else:
+        sorted_projects.sort(key=lambda project: int(project["id"]), reverse=True)
+    return sorted_projects
 
 
 def _project_navigation_ids(
     projects,
     project_id: int,
-    project_filter: str | None = None,
     project_sort: str | None = None,
-    project_search: str | None = None,
 ) -> tuple[int | None, int | None]:
-    normalized_filter, normalized_sort, normalized_search = _project_browser_values(
-        project_filter, project_sort, project_search
-    )
-    search_text = _normalize_project_browser_text(normalized_search)
-    visible_projects = []
-    for project in projects:
-        project_status = "done" if _is_kdenlive_project_done(project) else "in-progress"
-        if normalized_filter != "all" and project_status != normalized_filter:
-            continue
-        if search_text not in _normalize_project_browser_text(project["name"]):
-            continue
-        visible_projects.append(project)
-    if normalized_sort == "oldest":
-        visible_projects.sort(key=lambda project: int(project["id"]))
-    elif normalized_sort == "name-asc":
-        visible_projects.sort(key=lambda project: _normalize_project_browser_text(project["name"]))
-    elif normalized_sort == "name-desc":
-        visible_projects.sort(key=lambda project: _normalize_project_browser_text(project["name"]), reverse=True)
-    else:
-        visible_projects.sort(key=lambda project: int(project["id"]), reverse=True)
-    project_ids = [int(project["id"]) for project in visible_projects]
+    project_ids = [int(project["id"]) for project in _sort_projects(projects, project_sort)]
     try:
         index = project_ids.index(int(project_id))
     except ValueError:
@@ -429,7 +402,7 @@ def _project_navigation_ids(
     return previous_project_id, next_project_id
 
 
-def _project_nav_html(project_id: int | None, direction: str, navigation_query: str = "") -> str:
+def _project_nav_html(project_id: int | None, direction: str) -> str:
     if direction == "previous":
         symbol = "◀"
         active_title = "Vorhergehendes Projekt"
@@ -440,8 +413,7 @@ def _project_nav_html(project_id: int | None, direction: str, navigation_query: 
         disabled_title = "Kein nachfolgendes Projekt"
     if project_id is None:
         return f'<span class="project-nav-button project-nav-disabled" title="{disabled_title}">{symbol}</span>'
-    query_suffix = f"?{navigation_query}" if navigation_query else ""
-    href = _attr(f"/projects/{project_id}{query_suffix}")
+    href = _attr(f"/projects/{project_id}")
     return f'<a class="project-nav-button" href="{href}" title="{active_title}">{symbol}</a>'
 
 
@@ -458,7 +430,6 @@ def _project_html(
     job_options: JobOptions | None = None,
     previous_project_id: int | None = None,
     next_project_id: int | None = None,
-    navigation_query: str = "",
     reel_analyses=None,
     reel_candidates_by_analysis=None,
     manual_timing_interludes=None,
@@ -476,9 +447,9 @@ def _project_html(
     progress = _project_progress_html(work_items)
     queue_control = _queue_control_html(queue_jobs, average_durations, queue_estimate_seconds, queue_count, job_options)
     queue_modal = _queue_modal_html(queue_jobs, average_durations, queue_estimate_seconds, job_options)
-    previous_project_nav = _project_nav_html(previous_project_id, "previous", navigation_query)
-    next_project_nav = _project_nav_html(next_project_id, "next", navigation_query)
-    project_list_href = _attr(f"/?{navigation_query}" if navigation_query else "/")
+    previous_project_nav = _project_nav_html(previous_project_id, "previous")
+    next_project_nav = _project_nav_html(next_project_id, "next")
+    project_list_href = "/"
     initial_setup_banner = _initial_setup_banner_html(active_jobs)
     storyboard = _storyboard_html(project, work_items, item_kind, locked)
     selection_toolbar = "" if not work_items else """
@@ -632,7 +603,7 @@ __all__ = [
     "_project_preview_row",
     "_is_kdenlive_project_done",
     "_project_actions_html",
-    "_project_browser_query",
+    "_normalize_project_browser_sort",
     "_project_navigation_ids",
     "_project_nav_html",
     "_project_html",

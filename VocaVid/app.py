@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 try:
-    from fastapi import FastAPI, File, Form, Query, UploadFile
+    from fastapi import FastAPI, File, Form, UploadFile
     from fastapi.responses import HTMLResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
 except ImportError as exc:  # pragma: no cover
@@ -313,6 +313,12 @@ def create_app() -> FastAPI:
             shutdown_controller.disable()
         return RedirectResponse("/", status_code=303)
 
+    @app.post("/settings/project-browser")
+    def update_project_browser_settings(project_sort: str = Form("newest")):
+        normalized_sort = _normalize_project_browser_sort(project_sort)
+        store.update_global_settings(project_browser_sort=normalized_sort)
+        return {"project_browser_sort": normalized_sort}
+
     @app.post("/jobs/{job_id}/delete")
     def delete_job(job_id: int):
         jobs.delete_job(job_id)
@@ -387,25 +393,14 @@ def create_app() -> FastAPI:
         return _project_redirect(project_id)
 
     @app.get("/projects/{project_id}", response_class=HTMLResponse)
-    def project_detail(
-        project_id: int,
-        project_filter: str | None = Query(None, alias="filter"),
-        project_sort: str | None = Query(None, alias="sort"),
-        project_search: str | None = Query(None, alias="search"),
-    ):
+    def project_detail(project_id: int):
         project = store.get_project(project_id)
         projects = store.list_projects()
+        project_sort = str(store.get_global_settings()["project_browser_sort"] or "newest")
         previous_project_id, next_project_id = _project_navigation_ids(
             projects,
             project_id,
-            project_filter=project_filter,
             project_sort=project_sort,
-            project_search=project_search,
-        )
-        navigation_query = (
-            _project_browser_query(project_filter, project_sort, project_search)
-            if project_filter is not None or project_sort is not None or project_search is not None
-            else ""
         )
         lines = store.list_lines(project_id)
         manual_timing_interludes = store.list_manual_timing_interludes(project_id)
@@ -436,7 +431,6 @@ def create_app() -> FastAPI:
                 job_options=job_options,
                 previous_project_id=previous_project_id,
                 next_project_id=next_project_id,
-                navigation_query=navigation_query,
                 reel_analyses=reel_analyses,
                 reel_candidates_by_analysis=reel_candidates_by_analysis,
             ),

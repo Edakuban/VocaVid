@@ -584,35 +584,16 @@ SCRIPTS = f"""
     function normalizeSearchText(value) {{
       return String(value || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
     }}
-    const projectBrowserPreferencesKey = 'vocavid.projectBrowserPreferences';
-    function restoreProjectBrowserPreferences() {{
-      const search = document.getElementById('project-search');
-      const filter = document.getElementById('project-filter');
+    function saveProjectBrowserSort() {{
       const sort = document.getElementById('project-sort');
-      if (!filter || !sort) return;
-      try {{
-        const preferences = JSON.parse(localStorage.getItem(projectBrowserPreferencesKey) || '{{}}');
-        if (preferences.filter && Array.from(filter.options).some((option) => option.value === preferences.filter)) filter.value = preferences.filter;
-        if (preferences.sort && Array.from(sort.options).some((option) => option.value === preferences.sort)) sort.value = preferences.sort;
-      }} catch (error) {{
-        // Keep the built-in defaults when browser storage is unavailable or invalid.
-      }}
-      const query = new URLSearchParams(window.location.search);
-      const queryFilter = query.get('filter');
-      const querySort = query.get('sort');
-      if (queryFilter && Array.from(filter.options).some((option) => option.value === queryFilter)) filter.value = queryFilter;
-      if (querySort && Array.from(sort.options).some((option) => option.value === querySort)) sort.value = querySort;
-      if (search && query.has('search')) search.value = query.get('search') || '';
-    }}
-    function saveProjectBrowserPreferences() {{
-      try {{
-        localStorage.setItem(projectBrowserPreferencesKey, JSON.stringify({{
-          filter: document.getElementById('project-filter')?.value || 'all',
-          sort: document.getElementById('project-sort')?.value || 'newest',
-        }}));
-      }} catch (error) {{
-        // Filtering and sorting remain usable when browser storage is unavailable.
-      }}
+      if (!sort) return;
+      fetch('/settings/project-browser', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
+        body: new URLSearchParams({{ project_sort: sort.value }}),
+      }}).catch(() => {{
+        // The visible sort stays usable if saving the default temporarily fails.
+      }});
     }}
     function applyProjectBrowserControls() {{
       const grid = document.getElementById('project-grid');
@@ -627,14 +608,6 @@ SCRIPTS = f"""
         if (sort === 'name-desc') return normalizeSearchText(b.dataset.title || '').localeCompare(normalizeSearchText(a.dataset.title || ''));
         return Number(b.dataset.projectId || 0) - Number(a.dataset.projectId || 0);
       }}).forEach((card) => grid.appendChild(card));
-      const context = new URLSearchParams({{ filter, sort }});
-      if (search) context.set('search', document.getElementById('project-search')?.value.trim() || '');
-      cards.forEach((card) => {{
-        const link = card.querySelector('.project-card-link');
-        if (!link) return;
-        const projectPath = String(link.getAttribute('href') || '').split('?')[0];
-        link.setAttribute('href', projectPath + '?' + context.toString());
-      }});
       let visible = 0;
       cards.forEach((card) => {{
         const titleMatches = normalizeSearchText(card.dataset.title || '').includes(search);
@@ -653,9 +626,7 @@ SCRIPTS = f"""
         element.addEventListener('input', applyProjectBrowserControls);
         element.addEventListener('change', applyProjectBrowserControls);
       }});
-      ['project-filter', 'project-sort'].forEach((id) => {{
-        document.getElementById(id)?.addEventListener('change', saveProjectBrowserPreferences);
-      }});
+      document.getElementById('project-sort')?.addEventListener('change', saveProjectBrowserSort);
       document.querySelectorAll('.project-card video').forEach((video) => {{
         const card = video.closest('.project-card');
         if (!card) return;
@@ -668,7 +639,6 @@ SCRIPTS = f"""
           video.currentTime = 0;
         }});
       }});
-      restoreProjectBrowserPreferences();
       applyProjectBrowserControls();
     }}
     function openProjectSettingsModal() {{

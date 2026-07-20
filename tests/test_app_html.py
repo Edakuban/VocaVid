@@ -16,7 +16,6 @@ from VocaVid.ui.formatting import (
     _section_type,
 )
 from VocaVid.ui.projects import (
-    _project_browser_query,
     _project_html,
     _project_navigation_ids,
     _project_status_payload,
@@ -139,6 +138,7 @@ class AppHtmlTests(unittest.TestCase):
             "chorus_group_size": 2,
             "transition_handle_seconds": 0.8,
             "whisper_model_size": "medium",
+            "project_browser_sort": "name-asc",
             "autodelete_finished": 1,
             "shutdown_after_queue": 0,
         }
@@ -153,6 +153,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('placeholder="http://127.0.0.1:9000"', html)
         self.assertIn('placeholder="1920x1080"', html)
         self.assertIn('<option value="medium" selected>medium</option>', html)
+        self.assertIn('<option value="name-asc" selected>Name asc</option>', html)
         self.assertIn('name="autodelete_finished" checked', html)
 
     def test_start_page_renders_project_cards_and_marks_done_projects(self):
@@ -165,6 +166,7 @@ class AppHtmlTests(unittest.TestCase):
         html = _page("Projects", body)
 
         self.assertIn('class="project-card project-card-done"', body)
+        self.assertLess(body.index('data-project-id="2"'), body.index('data-project-id="1"'))
         self.assertIn('<a class="project-card-link" href="/projects/2">', body)
         self.assertIn("Finished Song", body)
         self.assertIn('class="project-done-badge" aria-label="Done"', body)
@@ -185,12 +187,10 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('id="project-filter"', body)
         self.assertIn('id="project-sort"', body)
         self.assertIn("function applyProjectBrowserControls", html)
-        self.assertIn("const projectBrowserPreferencesKey = 'vocavid.projectBrowserPreferences'", html)
-        self.assertIn("function restoreProjectBrowserPreferences", html)
-        self.assertIn("function saveProjectBrowserPreferences", html)
-        self.assertIn("const query = new URLSearchParams(window.location.search)", html)
-        self.assertIn("const context = new URLSearchParams({ filter, sort })", html)
-        self.assertIn("link.setAttribute('href', projectPath + '?' + context.toString())", html)
+        self.assertIn("function saveProjectBrowserSort", html)
+        self.assertIn("fetch('/settings/project-browser'", html)
+        self.assertNotIn("projectBrowserPreferences", html)
+        self.assertNotIn("localStorage", html)
         self.assertIn("setupProjectBrowserControls();", html)
         self.assertIn('class="project-card-placeholder-mark" aria-label="No preview yet"', body)
         self.assertNotIn(">FS<", body)
@@ -542,7 +542,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
         self.assertIn(".project-nav-button", html)
 
-    def test_project_navigation_respects_project_browser_context(self):
+    def test_project_navigation_uses_saved_sort_over_all_projects(self):
         projects = [
             {"id": 4, "name": "Zebra", "final_video_path": "outputs/zebra/final.kdenlive"},
             {"id": 3, "name": "Äther", "final_video_path": None},
@@ -553,28 +553,24 @@ class AppHtmlTests(unittest.TestCase):
         previous_id, next_id = _project_navigation_ids(
             projects,
             2,
-            project_filter="in-progress",
-            project_sort="oldest",
-            project_search="a",
+            project_sort="name-asc",
         )
 
-        self.assertEqual((previous_id, next_id), (1, 3))
+        self.assertEqual((previous_id, next_id), (3, 4))
 
-    def test_project_navigation_links_keep_browser_context(self):
+    def test_project_navigation_links_are_parameterless(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
-        query = _project_browser_query("in-progress", "oldest", "Demo & Song")
 
         html = _project_html(
             project,
             [],
             previous_project_id=8,
             next_project_id=6,
-            navigation_query=query,
         )
 
-        self.assertIn('href="/projects/8?filter=in-progress&amp;sort=oldest&amp;search=Demo+%26+Song"', html)
-        self.assertIn('href="/projects/6?filter=in-progress&amp;sort=oldest&amp;search=Demo+%26+Song"', html)
-        self.assertIn('href="/?filter=in-progress&amp;sort=oldest&amp;search=Demo+%26+Song" aria-label="Back to projects"', html)
+        self.assertIn('href="/projects/8"', html)
+        self.assertIn('href="/projects/6"', html)
+        self.assertIn('href="/" aria-label="Back to projects"', html)
 
     def test_project_page_wraps_storyboard_before_advanced_table(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}
