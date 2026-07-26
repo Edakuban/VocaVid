@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 try:
-    from fastapi import FastAPI, File, Form, UploadFile
+    from fastapi import FastAPI, File, Form, Request, UploadFile
     from fastapi.responses import HTMLResponse, RedirectResponse
     from fastapi.staticfiles import StaticFiles
 except ImportError as exc:  # pragma: no cover
@@ -30,6 +30,7 @@ DB_PATH = APP_ROOT / "VocaVid.sqlite3"
 ICON_ROOT = Path.cwd() / "icon"
 logger = logging.getLogger(__name__)
 _SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
+_MANUAL_TIMING_MAX_FORM_FIELDS = 10_000
 
 
 def _project_redirect(project_id: int) -> RedirectResponse:
@@ -629,17 +630,19 @@ def create_app() -> FastAPI:
         return _project_redirect(project_id)
 
     @app.post("/projects/{project_id}/manual-timing")
-    def save_manual_timing(
-        project_id: int,
-        line_indices: list[str] = Form(...),
-        clean_texts: list[str] = Form(...),
-        sections: list[str] = Form(...),
-        start_secs: list[str] = Form(...),
-        end_secs: list[str] = Form(...),
-        row_types: list[str] = Form(default=[]),
-        interlude_after_line_indices: list[str] = Form(default=[]),
-        manual_segment_starts: list[int] = Form(default=[]),
-    ):
+    async def save_manual_timing(project_id: int, request: Request):
+        # A manual timing row has six or more form controls.  The Starlette
+        # default of 1,000 fields therefore rejects longer lyric sheets before
+        # this handler can save them.
+        form = await request.form(max_fields=_MANUAL_TIMING_MAX_FORM_FIELDS)
+        line_indices = form.getlist("line_indices")
+        clean_texts = form.getlist("clean_texts")
+        sections = form.getlist("sections")
+        start_secs = form.getlist("start_secs")
+        end_secs = form.getlist("end_secs")
+        row_types = form.getlist("row_types")
+        interlude_after_line_indices = form.getlist("interlude_after_line_indices")
+        manual_segment_starts = form.getlist("manual_segment_starts")
         starts = {int(index) for index in manual_segment_starts}
         row_count = len(line_indices)
         if not all(len(values) == row_count for values in (clean_texts, sections, start_secs, end_secs)) or row_types and len(row_types) != row_count:

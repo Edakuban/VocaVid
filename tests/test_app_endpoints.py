@@ -1497,6 +1497,63 @@ class AppEndpointTests(unittest.TestCase):
             app_module.UPLOADS = old_uploads
             app_module.DB_PATH = old_db_path
 
+    def test_manual_timing_endpoint_accepts_more_than_default_form_field_limit(self):
+        old_app_root = app_module.APP_ROOT
+        old_uploads = app_module.UPLOADS
+        old_db_path = app_module.DB_PATH
+        old_pipeline = app_module.Pipeline
+        calls = []
+
+        class RecordingPipeline:
+            def __init__(self, store, *_args, **_kwargs):
+                self.store = store
+
+            def save_manual_timing(self, project_id, rows):
+                calls.append((project_id, rows))
+
+        try:
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+                root = Path(directory)
+                app_module.APP_ROOT = root / ".VocaVid"
+                app_module.UPLOADS = app_module.APP_ROOT / "uploads"
+                app_module.DB_PATH = app_module.APP_ROOT / "VocaVid.sqlite3"
+                store = Store(app_module.DB_PATH)
+                project_id = store.create_project(
+                    {
+                        "name": "Long song",
+                        "audio_path": "song.wav",
+                        "lyrics_path": "lyrics.txt",
+                        "global_style_prompt": "cinematic",
+                    },
+                    [],
+                )
+                app_module.Pipeline = RecordingPipeline
+                client = TestClient(app_module.create_app())
+                row_count = 170  # Six fields per row exceeds Starlette's 1,000-field default.
+
+                response = client.post(
+                    f"/projects/{project_id}/manual-timing",
+                    data={
+                        "line_indices": [str(index) for index in range(row_count)],
+                        "clean_texts": [f"Line {index}" for index in range(row_count)],
+                        "sections": ["Verse"] * row_count,
+                        "start_secs": [str(index) for index in range(row_count)],
+                        "end_secs": [str(index + 1) for index in range(row_count)],
+                        "row_types": ["lyric"] * row_count,
+                        "manual_segment_starts": ["0"],
+                    },
+                    follow_redirects=False,
+                )
+
+                self.assertEqual(response.status_code, 303)
+                self.assertEqual(len(calls), 1)
+                self.assertEqual(len(calls[0][1]), row_count)
+        finally:
+            app_module.APP_ROOT = old_app_root
+            app_module.UPLOADS = old_uploads
+            app_module.DB_PATH = old_db_path
+            app_module.Pipeline = old_pipeline
+
     def test_reels_analyze_endpoint_accepts_upload_fallback_and_queues_job(self):
         old_app_root = app_module.APP_ROOT
         old_uploads = app_module.UPLOADS
