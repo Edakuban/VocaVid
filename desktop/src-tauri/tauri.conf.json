@@ -1,0 +1,59 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "VocaVid",
+  "version": "1.1.1",
+  "identifier": "de.vocavid.desktop",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "VocaVid",
+        "width": 1180,
+        "height": 820,
+        "minWidth": 760,
+        "minHeight": 600,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' asset: https://asset.localhost; style-src 'self' 'unsafe-inline'; script-src 'self'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
+    "publisher": "VocaVid Project",
+    "shortDescription": "AI music video production with a managed local ComfyUI runtime",
+    "icon": [
+      "../../icon/favicon.ico",
+      "../../icon/VocaVid_icon.png"
+    ],
+    "externalBin": [
+      "binaries/vocavid-bootstrap"
+    ],
+    "resources": {
+      "../resources/stack.lock.json": "resources/stack.lock.json",
+      "../resources/vocavid-app.zip": "resources/vocavid-app.zip"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": true,
+        "languages": [
+          "German",
+          "English"
+        ]
+      }
+    }
+  }
+}

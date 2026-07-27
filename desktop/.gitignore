@@ -1,0 +1,10 @@
+.build/
+build/
+dist/
+node_modules/
+resources/vocavid-app.zip
+resources/stack.lock.json
+src-tauri/binaries/*.exe
+src-tauri/gen/
+src-tauri/target/
+*.spec

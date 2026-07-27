@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VocaVid Setup</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <section class="brand">
+        <span class="eyebrow">LOCAL AI MUSIC VIDEO STUDIO</span>
+        <h1>VocaVid</h1>
+        <p id="subtitle">Deine lokale Laufzeit wird geprüft.</p>
+      </section>
+
+      <section class="card">
+        <div class="status-row">
+          <span id="status-dot" class="dot pulse"></span>
+          <div>
+            <strong id="status-title">Systemprüfung</strong>
+            <p id="status-detail">Einen Moment …</p>
+          </div>
+        </div>
+
+        <div id="install-info" class="install-info hidden">
+          <label class="profile-label" for="comfy-mode">ComfyUI</label>
+          <select id="comfy-mode">
+            <option value="managed">Verwaltete, isolierte ComfyUI (empfohlen)</option>
+            <option value="external">Vorhandene laufende ComfyUI verwenden (Expertenmodus)</option>
+          </select>
+
+          <label class="profile-label" for="profile">Modellpaket</label>
+          <select id="profile">
+            <option value="creator" data-size="ca. 94 GB" data-required="110">Creator – alle aktiven Workflows (empfohlen)</option>
+            <option value="starter" data-size="ca. 24 GB" data-required="32">Starter – nur Z-Image Turbo</option>
+          </select>
+          <div class="facts">
+            <div><span>Modellpaket</span><strong id="profile-name">Creator</strong></div>
+            <div><span>Download</span><strong id="profile-size">ca. 94 GB</strong></div>
+            <div><span>Hardware</span><strong id="gpu-name">NVIDIA GPU</strong></div>
+          </div>
+
+          <div id="managed-options" class="setup-options">
+            <label for="shared-model-root">Vorhandene Modelle wiederverwenden <small>(optional)</small></label>
+            <input id="shared-model-root" placeholder="D:\ComfyUI oder D:\ComfyUI\models">
+            <small>Passende Dateien werden per SHA-256 geprüft und über <code>extra_model_paths.yaml</code> eingebunden.</small>
+          </div>
+
+          <div id="external-options" class="setup-options hidden">
+            <label for="external-comfy-url">Lokale ComfyUI-Adresse</label>
+            <div class="inline-action">
+              <input id="external-comfy-url" value="http://127.0.0.1:8188" spellcheck="false">
+              <button id="validate-external-button" class="secondary" type="button">Prüfen</button>
+            </div>
+            <small id="external-result">ComfyUI muss laufen. Nodes und Modelle werden vor der Installation geprüft.</small>
+          </div>
+
+          <div id="flux-options" class="license-panel">
+            <strong>FLUX.2 [klein] 9B Base</strong>
+            <p>Das Avatar-Image-Modell ist gated. Akzeptiere zuerst die Modelllizenz und verwende anschließend einen Hugging-Face-Token mit Leserechten.</p>
+            <button id="open-flux-license" class="secondary" type="button">Lizenzseite im Browser öffnen</button>
+            <label class="check-row">
+              <input id="flux-license-accepted" type="checkbox">
+              Ich habe die FLUX Non-Commercial License und Acceptable Use Policy gelesen und akzeptiert.
+            </label>
+            <label for="huggingface-token">Hugging-Face-Read-Token</label>
+            <input id="huggingface-token" type="password" autocomplete="off" placeholder="hf_…">
+            <small>Der Token wird nur an den Downloadprozess übergeben und nicht gespeichert.</small>
+          </div>
+
+          <p class="notice">
+            ComfyUI, Python, FFmpeg und die geprüften Modelle werden nur für deinen
+            Windows-Benutzer installiert. Der Installer benötigt keine Admin-Rechte.
+            Eine vorhandene ComfyUI-Installation wird nicht verändert.
+          </p>
+          <button id="install-button">VocaVid installieren</button>
+        </div>
+
+        <div id="progress-area" class="hidden">
+          <div class="progress-track"><div id="progress-bar"></div></div>
+          <pre id="log"></pre>
+        </div>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

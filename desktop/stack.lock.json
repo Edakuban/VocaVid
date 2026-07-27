@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "stack_version": "1.1.0",
+  "runtime": {
+    "kind": "github_release_asset",
+    "repository": "Comfy-Org/ComfyUI",
+    "tag": "v0.20.1",
+    "asset_pattern": "^ComfyUI_windows_portable_nvidia\\.7z$",
+    "python": "python_embeded/python.exe",
+    "comfy_main": "ComfyUI/main.py",
+    "estimated_download_gb": 2
+  },
+  "application": {
+    "requirements": "requirements.txt",
+    "pip_packages": [
+      "imageio-ffmpeg>=0.5,<0.7"
+    ],
+    "module": "VocaVid",
+    "host": "127.0.0.1",
+    "port": 8000
+  },
+  "comfyui": {
+    "host": "127.0.0.1",
+    "port": 8188,
+    "extra_args": [
+      "--disable-auto-launch"
+    ],
+    "required_nodes": [
+      "CFGGuider",
+      "CLIPLoader",
+      "CLIPTextEncode",
+      "CheckpointLoaderSimple",
+      "ComfyMathExpression",
+      "ComfySwitchNode",
+      "ConditioningZeroOut",
+      "CreateVideo",
+      "EmptyFlux2LatentImage",
+      "EmptyLTXVLatentVideo",
+      "EmptySD3LatentImage",
+      "Flux2Scheduler",
+      "GetImageSize",
+      "GetVideoComponents",
+      "ImageScaleToTotalPixels",
+      "KSampler",
+      "KSamplerSelect",
+      "LTXAVTextEncoderLoader",
+      "LTXVAudioVAEDecode",
+      "LTXVAudioVAEEncode",
+      "LTXVAudioVAELoader",
+      "LTXVConcatAVLatent",
+      "LTXVConditioning",
+      "LTXVCropGuides",
+      "LTXVImgToVideoInplace",
+      "LTXVLatentUpsampler",
+      "LTXVPreprocess",
+      "LTXVSeparateAVLatent",
+      "LatentUpscaleModelLoader",
+      "LoadAudio",
+      "LoadImage",
+      "LoadVideo",
+      "LoraLoader",
+      "LoraLoaderModelOnly",
+      "ManualSigmas",
+      "ModelSamplingAuraFlow",
+      "PreviewAny",
+      "PrimitiveBoolean",
+      "PrimitiveFloat",
+      "PrimitiveInt",
+      "PrimitiveStringMultiline",
+      "RandomNoise",
+      "ReferenceLatent",
+      "ResizeImageMaskNode",
+      "ResizeImagesByLongerEdge",
+      "SamplerCustomAdvanced",
+      "SaveImage",
+      "SaveVideo",
+      "SetLatentNoiseMask",
+      "SolidMask",
+      "TextGenerate",
+      "TextGenerateLTX2Prompt",
+      "TrimAudioDuration",
+      "UNETLoader",
+      "VAEDecode",
+      "VAEDecodeTiled",
+      "VAEEncode",
+      "VAELoader"
+    ]
+  },
+  "profiles": {
+    "starter": {
+      "label": "Starter (Z-Image Turbo)",
+      "description": "Das verwaltete Bildmodell für image_z_image_turbo.json.",
+      "estimated_download_gb": 21,
+      "models": [
+        "z-image-text-encoder",
+        "z-image-diffusion",
+        "z-image-vae"
+      ],
+      "required_nodes": [
+        "CLIPLoader",
+        "CLIPTextEncode",
+        "ConditioningZeroOut",
+        "EmptySD3LatentImage",
+        "KSampler",
+        "ModelSamplingAuraFlow",
+        "SaveImage",
+        "UNETLoader",
+        "VAEDecode",
+        "VAELoader"
+      ],
+      "custom_nodes": []
+    },
+    "creator": {
+      "label": "Creator (empfohlen)",
+      "description": "Alle Modelle für die aktiven Prompt-, Bild-, Avatar- und Video-Workflows.",
+      "estimated_download_gb": 92,
+      "models": [
+        "prompt-gemma4",
+        "z-image-text-encoder",
+        "z-image-diffusion",
+        "z-image-vae",
+        "ltx-2.3-checkpoint",
+        "ltx-2.3-upscaler",
+        "ltx-2.3-distilled-lora",
+        "ltx-gemma-text-encoder",
+        "ltx-gemma-abliterated-lora",
+        "flux-qwen-text-encoder",
+        "flux-small-decoder",
+        "flux-base-9b-fp8"
+      ],
+      "custom_nodes": []
+    }
+  },
+  "models": {
+    "prompt-gemma4": {
+      "url": "https://huggingface.co/Comfy-Org/gemma-4/resolve/main/text_encoders/gemma4_e4b_it_fp8_scaled.safetensors",
+      "target": "models/text_encoders/gemma4_e4b_it_fp8_scaled.safetensors",
+      "sha256": "bf0b4fa2e41a25684dc9e9b256cd505564f02fed09be3da95ce024e653e2c52b"
+    },
+    "z-image-text-encoder": {
+      "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/text_encoders/qwen_3_4b.safetensors",
+      "target": "models/text_encoders/qwen_3_4b.safetensors",
+      "sha256": "6c671498573ac2f7a5501502ccce8d2b08ea6ca2f661c458e708f36b36edfc5a"
+    },
+    "z-image-diffusion": {
+      "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/diffusion_models/z_image_turbo_bf16.safetensors",
+      "target": "models/diffusion_models/z_image_turbo_bf16.safetensors",
+      "sha256": "2407613050b809ffdff18a4ac99af83ea6b95443ecebdf80e064a79c825574a6"
+    },
+    "z-image-vae": {
+      "url": "https://huggingface.co/Comfy-Org/z_image_turbo/resolve/main/split_files/vae/ae.safetensors",
+      "target": "models/vae/ae.safetensors",
+      "sha256": "afc8e28272cd15db3919bacdb6918ce9c1ed22e96cb12c4d5ed0fba823529e38"
+    },
+    "ltx-2.3-checkpoint": {
+      "url": "https://huggingface.co/Lightricks/LTX-2.3-fp8/resolve/main/ltx-2.3-22b-dev-fp8.safetensors",
+      "target": "models/checkpoints/ltx-2.3-22b-dev-fp8.safetensors",
+      "sha256": "28606c5b5a06ce56f896d4dfcb20f212739e07a68fbe48e53638188449d26450"
+    },
+    "ltx-2.3-upscaler": {
+      "url": "https://huggingface.co/Lightricks/LTX-2.3/resolve/main/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "target": "models/latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors",
+      "sha256": "5f416311fa8172b65af67530758964708d29a317b830d689a51143b7f91913ed"
+    },
+    "ltx-2.3-distilled-lora": {
+      "url": "https://huggingface.co/Comfy-Org/ltx-2.3/resolve/main/split_files/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
+      "target": "models/loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors",
+      "sha256": "31e0c0195fb841bf31af78e8b60858f489e87ddcea4a5239abc80943da65e3ac"
+    },
+    "ltx-gemma-text-encoder": {
+      "url": "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
+      "target": "models/text_encoders/gemma_3_12B_it_fp4_mixed.safetensors",
+      "sha256": "aaca463d11e6d8d2a4bdb0d6299214c15ef78a3f73e0ef8113d5a9d0219b3f6d"
+    },
+    "ltx-gemma-abliterated-lora": {
+      "url": "https://huggingface.co/Comfy-Org/ltx-2/resolve/main/split_files/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors",
+      "target": "models/loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors",
+      "sha256": "87bcabeac9bec9f374232b5122d6511c2b2112d479e50176149e944b3712eb4a"
+    },
+    "flux-qwen-text-encoder": {
+      "url": "https://huggingface.co/Comfy-Org/vae-text-encorder-for-flux-klein-9b/resolve/main/split_files/text_encoders/qwen_3_8b_fp8mixed.safetensors",
+      "target": "models/text_encoders/qwen_3_8b_fp8mixed.safetensors",
+      "sha256": "abad16806e0cbabc54e0325d6565847443fe396d5f0be38bb3cd3fe75a1201d6"
+    },
+    "flux-small-decoder": {
+      "url": "https://huggingface.co/black-forest-labs/FLUX.2-small-decoder/resolve/main/full_encoder_small_decoder.safetensors",
+      "target": "models/vae/full_encoder_small_decoder.safetensors",
+      "sha256": "ea4273f02d1fafbf8e1d1c2cf6018ed8748652eb0bf34f2dd91171f16f15ab62"
+    },
+    "flux-base-9b-fp8": {
+      "url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-base-9b-fp8/resolve/main/flux-2-klein-base-9b-fp8.safetensors",
+      "target": "models/diffusion_models/flux-2-klein-base-9b-fp8.safetensors",
+      "sha256": "a9f5028c24a7a96f4f45beb883aad287d9bccc246227a6803edc898ddda42cf4",
+      "gated": true,
+      "license_url": "https://huggingface.co/black-forest-labs/FLUX.2-klein-base-9b-fp8"
+    }
+  },
+  "custom_nodes": {}
+}
