@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VocaVid est un workflow ComfyUI local dédié aux clips musicaux : il permet de transformer des chansons, des paroles et des storyboards en vidéos, projets Kdenlive et Reels, scène par scène.">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#0b1012">
+  <link rel="canonical" href="https://vocavid.de/fr/"><link rel="alternate" hreflang="de" href="https://vocavid.de/"><link rel="alternate" hreflang="en" href="https://vocavid.de/en/"><link rel="alternate" hreflang="fr" href="https://vocavid.de/fr/"><link rel="alternate" hreflang="es" href="https://vocavid.de/es/"><link rel="alternate" hreflang="cs" href="https://vocavid.de/cs/"><link rel="alternate" hreflang="x-default" href="https://vocavid.de/">
+  <link rel="alternate" hreflang="de" href="https://vocavid.de/fr/"><link rel="alternate" hreflang="en" href="https://vocavid.de/en/"><link rel="alternate" hreflang="x-default" href="https://vocavid.de/fr/">
+  <meta property="og:type" content="site web">
+  <meta property="og:locale" content="fr_FR">
+  <meta property="og:site_name" content="VocaVid">
+  <meta property="og:title" content="VocaVid – Clips musicaux. Scène par scène.">
+  <meta property="og:description" content="Flux de travail ComfyUI local pour la création de clips musicaux à partir d&#x27;une chanson, de paroles et d&#x27;un storyboard.">
+  <meta property="og:url" content="https://vocavid.de/fr/">
+  <meta property="og:image" content="https://vocavid.de/assets/images/vocavid-social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VocaVid – Clips musicaux. Scène par scène.">
+  <meta name="twitter:description" content="Flux de travail ComfyUI local pour la création de clips musicaux à partir d&#x27;une chanson, de paroles et d&#x27;un storyboard.">
+  <meta name="twitter:image" content="https://vocavid.de/assets/images/vocavid-social-preview.png">
+  <title>VocaVid – Clips musicaux ComfyUI locaux, scène par scène</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/vocavid-icon.svg">
+  <script type="application/ld+json">{&quot;@context&quot;:&quot;https://schema.org&quot;,&quot;@type&quot;:&quot;SoftwareApplication&quot;,&quot;name&quot;:&quot;VocaVid&quot;,&quot;url&quot;:&quot;https://vocavid.de/&quot;,&quot;image&quot;:&quot;https://vocavid.de/assets/images/vocavid-social-preview.png&quot;,&quot;description&quot;:&quot;Lokaler, storyboard-basierter ComfyUI-Workflow für Musikvideos aus Song, Lyrics, Stilideen und Referenzbildern.&quot;,&quot;applicationCategory&quot;:&quot;MultimediaApplication&quot;,&quot;operatingSystem&quot;:&quot;Python 3.11+&quot;,&quot;softwareLicense&quot;:&quot;https://www.gnu.org/licenses/agpl-3.0.html&quot;,&quot;offers&quot;:{&quot;@type&quot;:&quot;Offer&quot;,&quot;price&quot;:&quot;0&quot;,&quot;priceCurrency&quot;:&quot;EUR&quot;},&quot;sameAs&quot;:&quot;https://github.com/Edakuban/VocaVid&quot;}</script>
+  <link rel="preload" as="image" href="../assets/images/vocavid-storyboard.webp" type="image/webp" fetchpriority="high">
+  <link rel="stylesheet" href="../styles.css"><link rel="stylesheet" href="../navigation.css">
+  <link rel="stylesheet" href="../effects.css">
+  <link rel="stylesheet" href="../polish.css">
+  <link rel="stylesheet" href="../donate.css" media="print" onload="this.media='all'">
+  <style>html{max-width:100%;overflow-x:clip}body{max-width:100%;overflow-x:visible}.hero{position:relative}.case-study{overflow:hidden}body::before{display:none}.interface img{height:auto}</style>
+<link rel="stylesheet" href="../language.css"><link rel="stylesheet" href="../mobile-navigation.css"><link rel="stylesheet" href="../release.css"></head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Page d&#x27;accueil de VocaVid"><img src="../assets/icons/vocavid-icon.svg" alt="" width="37" height="37">VOCA <span>VID</span></a>
+    <nav aria-label="Main navigation"><a href="index.html#workflow">Workflow</a><a href="index.html#features">Fonctionnalit&eacute;s</a><a href="showcase.html">Showcase</a><a href="faq.html">FAQ</a><a class="nav-cta" href="documentation.html">Documentation</a><details class="language-switcher"><summary aria-label="Choose language">FR</summary><div><a href="../index.html" hreflang="de" lang="de">Deutsch</a><a href="../en/index.html" hreflang="en" lang="en">English</a><a href="index.html" hreflang="fr" lang="fr" aria-current="true">Fran&ccedil;ais</a><a href="../es/index.html" hreflang="es" lang="es">Espa&ntilde;ol</a><a href="../cs/index.html" hreflang="cs" lang="cs">&#268;e&#353;tina</a><a href="../ja/index.html" hreflang="ja" lang="ja">&#26085;&#26412;&#35486;</a></div></details></nav><button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <svg class="hero-signal" viewBox="0 0 1600 520" aria-hidden="true" focusable="false"><path class="signal-cyan" d="M0 280 H110 L145 246 L190 316 L238 151 L290 387 L340 264 L390 280 H492 L526 210 L567 350 L620 92 L678 430 L732 280 H850 L894 240 L938 330 L986 180 L1038 368 L1080 280 H1195 L1234 232 L1282 326 L1330 132 L1386 413 L1439 280 H1600"/><path class="signal-pink" d="M0 310 H180 L220 275 L258 338 L303 223 L348 364 L390 300 H560 L600 265 L641 337 L690 188 L742 385 L795 307 H960 L1006 260 L1048 345 L1095 204 L1144 394 L1190 300 H1360 L1402 270 L1446 333 L1491 228 L1540 369 L1582 306 H1600"/></svg>
+      <div class="hero-copy">
+        <p class="eyebrow">FLUX DE TRAVAIL LOCAL POUR VIDÉOS MUSICAUX AVEC IA</p>
+        <h1>Clips musicaux.<br><em>Scène par scène.</em></h1>
+        <p class="lede">VocaVid associe la chanson, les paroles et ComfyUI pour former un workflow visuel que vous ne vous contentez pas de lancer, mais que vous contrôlez.</p>
+        <div class="actions"><a class="button" href="#systemfehler">Voir l&#x27;erreur système 01. </a><a class="text-link" href="documentation.html">Comment fonctionne VocaVid <span>→</span></a></div>
+        <p class="quiet">Local. Reprenant. Open source.</p>
+        <div class="hero-counters" aria-label="Exemple d&#x27;état de production VocaVid"><span><i></i>PAROLES <i></i>ALIGNÉES 42 <i></i>SEGMENTSCLIPS APPROUVÉS</span></div>
+      </div>
+      <div class="hero-visual" aria-label="Aperçu du storyboard VocaVid">
+        <div class="scanline"></div><span class="status">SYSTÈME // EN LIGNE</span>
+        <video autoplay muted loop playsinline preload="metadata" poster="assets/images/vocavid-storyboard.webp">
+          <source media="(max-width: 600px)" src="https://vocavid.de/assets/video/systemfehler-01-instrumental-break-reel-480.mp4" type="video/mp4">
+          <source src="https://vocavid.de/assets/video/systemfehler-01-instrumental-break-reel-web.mp4" type="video/mp4">
+        </video>
+        <div class="video-label"><b>Erreur </b><span>système </span><b>01 </b><span>Démarrage du système · Film terminé</span></div>
+      </div>
+    </section>
+
+    <section class="statement" id="workflow">
+      <p class="eyebrow">PAS DE BOÎTE NOIRE</p>
+      <h2>Une chanson n’est pas une simple consigne.</h2>
+      <p>VocaVid décompose tes paroles en moments vérifiables. Tu développes un fil conducteur, tu examines chaque scène, tu recrées les clips faibles — tout en conservant les bons résultats.</p>
+    </section>
+
+    <section class="process" aria-label="Flux de travail VocaVid">
+      <article><span>01</span><h3>Importer la chanson</h3><p>Fichier WAV, paroles SUNO, style et références constituent le point de départ.</p></article>
+      <article><span>02</span><h3>Planifier l&#x27;histoire</h3><p>Les paroles sont mises en ordre chronologique et transformées en un plan visuel.</p></article>
+      <article><span>03</span><h3>Créer les scènes</h3><p>Les consignes, les images et les clips sont créés segment par segment dans ComfyUI.</p></article>
+      <article><span>04</span><h3>Finalisation</h3><p>Vérifier, protéger et monter les clips, puis les exporter sous forme de vidéo ou de Reel.</p></article>
+    </section>
+
+    <section class="case-study" id="systemfehler">
+      <div class="case-copy"><p class="eyebrow">ÉTUDE DE CAS 01</p><h2>Erreur système 01 :<br><em>démarrage du système</em></h2><p>Le prélude à une série dystopique : des systèmes froids, des perturbations du signal, un monde au bord de la déviation. Le film final a été réalisé scène par scène dans le flux de travail VocaVid.</p><a class="text-link" href="showcase.html">Vers la vitrine <span>→</span></a></div>
+      <div class="case-media"><video controls playsinline preload="none" poster="assets/images/vocavid-storyboard.webp"><source src="https://vocavid.de/assets/video/systemfehler-01-systemstart-web.mp4" type="video/mp4"></video><p>Erreur système 01 · exportation finale</p></div>
+    </section>
+
+    <section class="feature-section" id="features">
+      <p class="eyebrow">CONÇU POUR L&#x27;ITÉRATION</p><h2>Votre processus reste le vôtre.</h2>
+      <div class="features">
+        <article><b>01</b><h3>Le storyboard d’abord</h3><p>Ayez une vue d&#x27;ensemble du timing, des scènes et des médias avant que les différents clips ne soient assemblés pour former un film.</p></article>
+        <article><b>02</b><h3>Réussir ciblée</h3><p>Un clip ne convient pas ? Recréez uniquement cette partie — sans perdre le reste.</p></article>
+        <article><b>03</b><h3>Contrôle local</h3><p>L&#x27;état du projet, les médias et les tâches de rendu restent sur votre système et sur votre GPU.</p></article>
+        <article><b>04</b><h3>De la chanson au format</h3><p>Monter les vidéos finales, sélectionner les extraits pour la bande-annonce verticale et exporter les différentes versions.</p></article>
+      </div>
+    </section>
+
+    <section class="interface">
+      <div><p class="eyebrow">L&#x27;ATELIER</p><h2>Du premier beat à l’exportation finale.</h2><p>VocaVid coordonne une production que tu devrais autrement répartir entre de nombreux outils distincts.</p><a class="button button-secondary" href="documentation.html">Vers la documentation</a></div>
+      <img src="../assets/images/vocavid-storyboard.webp" alt="Storyboard VocaVid avec fiches de scène et inspecteur" width="1265" height="712" loading="lazy" decoding="async">
+    </section>
+
+    <section class="release"><div><p class="eyebrow">PREMI&Egrave;RE VERSION PUBLIQUE</p><h2>VocaVid 1.0.0</h2><p>La premi&egrave;re version utilisable de VocaVid : de la chanson et des paroles aux clips, &agrave; Kdenlive, MP4 et reels.</p></div><a class="button" href="https://github.com/Edakuban/VocaVid/releases/tag/v1.0.0" target="_blank" rel="noreferrer">Voir la version sur GitHub</a></section><section class="closing"><p class="eyebrow">PRÊT LORSQUE VOUS L&#x27;ÊTES</p><h2>Créez tout un univers à partir d’une chanson<br>.</h2><div class="closing-actions"><a class="button" href="https://github.com/Edakuban/VocaVid" target="_blank" rel="noreferrer">VocaVid sur GitHub</a><div class="donate"><p>Si VocaVid vous aide, vous pouvez soutenir son développement.</p><div id="donate-button-container" class="donate-consent"><button class="paypal-load" id="load-paypal-donate" type="button">Charger le bouton de don PayPal</button><p class="donate-privacy">Le chargement établit une connexion avec PayPal. <a href="datenschutz.html#paypal">Protection des données</a></p></div></div></div></section>
+  </main>
+  <script src="../site.js"></script>
+  <footer><a class="brand" href="index.html"><img src="../assets/icons/vocavid-icon.svg" alt="">VOCA<span>VID</span></a><span><a href="impressum.html">Mentions l&eacute;gales</a><a href="datenschutz.html">Confidentialit&eacute;</a></span></footer>
+<script src="../navigation.js"></script></body>
+</html>

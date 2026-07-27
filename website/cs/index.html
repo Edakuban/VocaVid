@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VocaVid je lokální pracovní postup v ComfyUI určený pro hudební videa: umožňuje převádět skladby, texty písní a storyboardy scéna po scéně do videí, projektů v Kdenlive a Reels.">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#0b1012">
+  <link rel="canonical" href="https://vocavid.de/cs/"><link rel="alternate" hreflang="de" href="https://vocavid.de/"><link rel="alternate" hreflang="en" href="https://vocavid.de/en/"><link rel="alternate" hreflang="fr" href="https://vocavid.de/fr/"><link rel="alternate" hreflang="es" href="https://vocavid.de/es/"><link rel="alternate" hreflang="cs" href="https://vocavid.de/cs/"><link rel="alternate" hreflang="x-default" href="https://vocavid.de/">
+  <link rel="alternate" hreflang="de" href="https://vocavid.de/cs/"><link rel="alternate" hreflang="en" href="https://vocavid.de/en/"><link rel="alternate" hreflang="x-default" href="https://vocavid.de/cs/">
+  <meta property="og:type" content="webové stránky">
+  <meta property="og:locale" content="de_DE">
+  <meta property="og:site_name" content="VocaVid">
+  <meta property="og:title" content="VocaVid – hudební videoklipy. Scéna po scéně.">
+  <meta property="og:description" content="Místní pracovní postup v ComfyUI pro tvorbu hudebních videoklipů na základě skladby, textu písně a storyboardu.">
+  <meta property="og:url" content="https://vocavid.de/cs/">
+  <meta property="og:image" content="https://vocavid.de/assets/images/vocavid-social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VocaVid – hudební videoklipy. Scéna po scéně.">
+  <meta name="twitter:description" content="Místní pracovní postup v ComfyUI pro tvorbu hudebních videoklipů na základě skladby, textu písně a storyboardu.">
+  <meta name="twitter:image" content="https://vocavid.de/assets/images/vocavid-social-preview.png">
+  <title>VocaVid – Lokální hudební videa v ComfyUI, scéna po scéně</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/vocavid-icon.svg">
+  <script type="application/ld+json">{&quot;@context&quot;:&quot;https://schema.org&quot;,&quot;@type&quot;:&quot;SoftwareApplication&quot;,&quot;name&quot;:&quot;VocaVid&quot;,&quot;url&quot;:&quot;https://vocavid.de/&quot;,&quot;image&quot;:&quot;https://vocavid.de/assets/images/vocavid-social-preview.png&quot;,&quot;description&quot;:&quot;Lokaler, storyboard-basierter ComfyUI-Workflow für Musikvideos aus Song, Lyrics, Stilideen und Referenzbildern.&quot;,&quot;applicationCategory&quot;:&quot;MultimediaApplication&quot;,&quot;operatingSystem&quot;:&quot;Python 3.11+&quot;,&quot;softwareLicense&quot;:&quot;https://www.gnu.org/licenses/agpl-3.0.html&quot;,&quot;offers&quot;:{&quot;@type&quot;:&quot;Offer&quot;,&quot;price&quot;:&quot;0&quot;,&quot;priceCurrency&quot;:&quot;EUR&quot;},&quot;sameAs&quot;:&quot;https://github.com/Edakuban/VocaVid&quot;}</script>
+  <link rel="preload" as="image" href="../assets/images/vocavid-storyboard.webp" type="image/webp" fetchpriority="high">
+  <link rel="stylesheet" href="../styles.css"><link rel="stylesheet" href="../navigation.css">
+  <link rel="stylesheet" href="../effects.css">
+  <link rel="stylesheet" href="../polish.css">
+  <link rel="stylesheet" href="../donate.css" media="print" onload="this.media='all'">
+  <style>html{max-width:100%;overflow-x:clip}body{max-width:100%;overflow-x:visible}.hero{position:relative}.case-study{overflow:hidden}body::before{display:none}.interface img{height:auto}</style>
+<link rel="stylesheet" href="../language.css"><link rel="stylesheet" href="../mobile-navigation.css"><link rel="stylesheet" href="../release.css"></head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="index.html" aria-label="Úvodní stránka VocaVid"><img src="../assets/icons/vocavid-icon.svg" alt="" width="37" height="37">VOCA <span>VID</span></a>
+    <nav aria-label="Main navigation"><a href="index.html#workflow">Postup</a><a href="index.html#features">Funkce</a><a href="showcase.html">Uk&aacute;zky</a><a href="faq.html">FAQ</a><a class="nav-cta" href="documentation.html">Dokumentace</a><details class="language-switcher"><summary aria-label="Choose language">CS</summary><div><a href="../index.html" hreflang="de" lang="de">Deutsch</a><a href="../en/index.html" hreflang="en" lang="en">English</a><a href="../fr/index.html" hreflang="fr" lang="fr">Fran&ccedil;ais</a><a href="../es/index.html" hreflang="es" lang="es">Espa&ntilde;ol</a><a href="index.html" hreflang="cs" lang="cs" aria-current="true">&#268;e&#353;tina</a><a href="../ja/index.html" hreflang="ja" lang="ja">&#26085;&#26412;&#35486;</a></div></details></nav><button class="nav-toggle" type="button" aria-label="Open navigation" aria-expanded="false">&#9776;</button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <svg class="hero-signal" viewBox="0 0 1600 520" aria-hidden="true" focusable="false"><path class="signal-cyan" d="M0 280 H110 L145 246 L190 316 L238 151 L290 387 L340 264 L390 280 H492 L526 210 L567 350 L620 92 L678 430 L732 280 H850 L894 240 L938 330 L986 180 L1038 368 L1080 280 H1195 L1234 232 L1282 326 L1330 132 L1386 413 L1439 280 H1600"/><path class="signal-pink" d="M0 310 H180 L220 275 L258 338 L303 223 L348 364 L390 300 H560 L600 265 L641 337 L690 188 L742 385 L795 307 H960 L1006 260 L1048 345 L1095 204 L1144 394 L1190 300 H1360 L1402 270 L1446 333 L1491 228 L1540 369 L1582 306 H1600"/></svg>
+      <div class="hero-copy">
+        <p class="eyebrow">PRACOVNÍ POSTUP PRO LOKÁLNÍ HUDEBNÍ VIDEA S VYUŽITÍM UMĚLÉ INTELIGENCE</p>
+        <h1>Hudební videa.<br><em>Scéna po scéně.</em></h1>
+        <p class="lede">VocaVid propojuje skladbu, text písně a ComfyUI do vizuálního pracovního postupu, který nejen spustíš, ale také ovládáš.</p>
+        <div class="actions"><a class="button" href="#systemfehler">Zobrazit systémovou chybu 01 </a><a class="text-link" href="documentation.html">Jak funguje VocaVid <span>→</span></a></div>
+        <p class="quiet">Lokální. Obnovitelné. Open source.</p>
+        <div class="hero-counters" aria-label="Příklad stavu výroby VocaVid"><span><i></i>SLAGY <i></i>SLADĚNY 42 <i></i>SEGMENTŮ SCHVÁLENÉ KLIPY</span></div>
+      </div>
+      <div class="hero-visual" aria-label="Náhled storyboardu VocaVid">
+        <div class="scanline"></div><span class="status">SYSTÉM // ONLINE</span>
+        <video autoplay muted loop playsinline preload="metadata" poster="assets/images/vocavid-storyboard.webp">
+          <source media="(max-width: 600px)" src="https://vocavid.de/assets/video/systemfehler-01-instrumental-break-reel-480.mp4" type="video/mp4">
+          <source src="https://vocavid.de/assets/video/systemfehler-01-instrumental-break-reel-web.mp4" type="video/mp4">
+        </video>
+        <div class="video-label"><b>Systémová chyba 01 </b><span>Spuštění systému · hotový film</span></div>
+      </div>
+    </section>
+
+    <section class="statement" id="workflow">
+      <p class="eyebrow">ŽÁDNÁ ČERNÁ SKŘÍŇKA</p>
+      <h2>Píseň není jen jeden jediný podnět.</h2>
+      <p>VocaVid rozdělí tvé texty na ověřitelné momenty. Vytvoříš červenou nit, prohlédneš si každou scénu, slabé klipy přepracuješ — a zachováš dobré výsledky.</p>
+    </section>
+
+    <section class="process" aria-label="Pracovní postup VocaVid">
+      <article><span>01</span><h3>Vložte skladbu</h3><p>WAV, texty SUNO, styl a reference tvoří výchozí bod.</p></article>
+      <article><span>02</span><h3>Naplánujte příběh</h3><p>Texty se časově rozvrhnou a vytvoří se z nich vizuální plán.</p></article>
+      <article><span>03</span><h3>Tvorba scén</h3><p>V aplikaci ComfyUI vznikají po jednotlivých segmentech podněty, obrázky a klipy.</p></article>
+      <article><span>04</span><h3>Dokončení</h3><p>Zkontrolujte klipy, zabezpečte je, sestříhejte a exportujte jako video nebo Reel.</p></article>
+    </section>
+
+    <section class="case-study" id="systemfehler">
+      <div class="case-copy"><p class="eyebrow">PŘÍPADOVÁ STUDIE 01</p><h2>Systémová chyba 01:<br><em>Spuštění systému</em></h2><p>Úvod dystopické série: studené systémy, poruchy signálu, svět na pokraji odchylky. Hotový film vznikl scéna po scéně v rámci pracovního postupu VocaVid.</p><a class="text-link" href="showcase.html">K ukázce <span>→</span></a></div>
+      <div class="case-media"><video controls playsinline preload="none" poster="assets/images/vocavid-storyboard.webp"><source src="https://vocavid.de/assets/video/systemfehler-01-systemstart-web.mp4" type="video/mp4"></video><p>Systémová chyba 01 · finální export</p></div>
+    </section>
+
+    <section class="feature-section" id="features">
+      <p class="eyebrow">VYTVOŘENO PRO ITERACI</p><h2>Tvůj proces zůstane tvým.</h2>
+      <div class="features">
+        <article><b>01</b><h3>Nejprve storyboard</h3><p>Získejte přehled o časování, scénách a médiích ještě předtím, než se z jednotlivých klipů stane film.</p></article>
+        <article><b>02</b><h3>Cílené opakování</h3><p>Nějaký klip nesedí? Vytvořte pouze tuto část znovu – aniž byste přišli o zbytek.</p></article>
+        <article><b>03</b><h3>Místní kontrola</h3><p>Stav projektu, média a renderovací úlohy zůstávají na vašem systému a na vaší grafické kartě.</p></article>
+        <article><b>04</b><h3>Z písně se stane formát</h3><p>Střih finálních videí, vyhledávání kandidátů pro vertikální reely a export variant.</p></article>
+      </div>
+    </section>
+
+    <section class="interface">
+      <div><p class="eyebrow">DÍLNA</p><h2>Od prvního beatu až po finální export.</h2><p>VocaVid koordinuje produkci, kterou bys jinak musel rozdělit mezi mnoho jednotlivých nástrojů.</p><a class="button button-secondary" href="documentation.html">K dokumentaci</a></div>
+      <img src="../assets/images/vocavid-storyboard.webp" alt="Storyboard VocaVid se scénickými kartami a inspektorem" width="1265" height="712" loading="lazy" decoding="async">
+    </section>
+
+    <section class="release"><div><p class="eyebrow">PRVN&Iacute; VE&#344;EJN&Eacute; VYD&Aacute;N&Iacute;</p><h2>VocaVid 1.0.0</h2><p>Prvn&iacute; pou&#382;iteln&aacute; verze VocaVid: od skladby a textu a&#382; po klipy, Kdenlive, MP4 a reels.</p></div><a class="button" href="https://github.com/Edakuban/VocaVid/releases/tag/v1.0.0" target="_blank" rel="noreferrer">Zobrazit vyd&aacute;n&iacute; na GitHubu</a></section><section class="closing"><p class="eyebrow">PŘIPRAVENO, AŽ BUDETE PŘIPRAVENI</p><h2>Vytvořte ze skladby<br>celý svět.</h2><div class="closing-actions"><a class="button" href="https://github.com/Edakuban/VocaVid" target="_blank" rel="noreferrer">VocaVid na GitHubu</a><div class="donate"><p>Pokud ti VocaVid pomáhá, můžeš podpořit jeho další vývoj.</p><div id="donate-button-container" class="donate-consent"><button class="paypal-load" id="load-paypal-donate" type="button">Načíst tlačítko pro darování přes PayPal</button><p class="donate-privacy">Načtením se naváže spojení s PayPal. <a href="datenschutz.html#paypal">Ochrana osobních údajů</a></p></div></div></div></section>
+  </main>
+  <script src="../site.js"></script>
+  <footer><a class="brand" href="index.html"><img src="../assets/icons/vocavid-icon.svg" alt="">VOCA<span>VID</span></a><span><a href="impressum.html">Pr&aacute;vn&iacute; informace</a><a href="datenschutz.html">Soukrom&iacute;</a></span></footer>
+<script src="../navigation.js"></script></body>
+</html>

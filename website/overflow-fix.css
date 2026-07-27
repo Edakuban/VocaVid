@@ -1,0 +1,2 @@
+/* Keep decorative, animated elements from expanding the document width. */
+html,body{max-width:100%;overflow-x:hidden}.hero{position:relative}.case-study{overflow:hidden}

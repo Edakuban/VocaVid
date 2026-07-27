@@ -18,6 +18,7 @@ env/
 .musicvideo[g]en/
 .superpowers/
 images/
+website/assets/video/*.mp4
 VocaVid.sqlite3
 musicvideo[g]en.sqlite3
 *.sqlite
