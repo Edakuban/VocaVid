@@ -100,6 +100,13 @@ There is also a batch file for this local machine:
 start.bat
 ```
 
+### Standalone Windows app
+
+The managed desktop launcher lives in [`desktop/`](desktop/README.md). It builds
+an NSIS installer, opens VocaVid in its own WebView, starts ComfyUI in the
+background, and installs versioned model packages on first launch. End users do
+not need Python, Git, Node.js, or Docker.
+
 ## How the Workflow Feels
 
 1. Follow the [ComfyUI Quick Start Guide](https://docs.comfy.org/get_started) to install and launch ComfyUI.
@@ -251,6 +258,7 @@ Default workflow lookup is handled by `VocaVid/workflows.py`.
 | Purpose | Preferred file | Fallback/alias | Required |
 | --- | --- | --- | --- |
 | Text generation for global style, scene plan, image prompts, and video prompts | `workflows/promptgen.json` | none | No |
+| Avatar face description | `workflows/avatar_description.json` | none | Yes when no manual face description is supplied |
 | Still image generation | `workflows/image.json` | `workflows/image_z_image_turbo.json` | Yes |
 | Reference-image still generation | `workflows/image_reference.json` | falls back to image workflow | No |
 | Avatar/reference-person image edit | `workflows/avatartoimage_flux.json` | none | Yes for `Gen Avatar Image` |
@@ -260,9 +268,14 @@ Default workflow lookup is handled by `VocaVid/workflows.py`.
 The repository includes example workflow files for the current local setup:
 
 - `workflows/promptgen.json`
+- `workflows/avatar_description.json`
 - `workflows/image_z_image_turbo.json`
 - `workflows/avatartoimage_flux.json`
 - `workflows/imageaudiotovideo.json`
+
+Archived workflows that are intentionally not loaded by VocaVid use the
+`_unused_` filename prefix. Currently this applies to
+`workflows/_unused_avatartoimage.json`.
 
 Exported ComfyUI UI-format workflows are accepted; VocaVid converts them to API
 prompt format internally.

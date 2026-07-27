@@ -584,13 +584,14 @@ SCRIPTS = f"""
     function normalizeSearchText(value) {{
       return String(value || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '');
     }}
-    function saveProjectBrowserSort() {{
+    function saveProjectBrowserSettings() {{
       const sort = document.getElementById('project-sort');
-      if (!sort) return;
+      const filter = document.getElementById('project-filter');
+      if (!sort || !filter) return;
       fetch('/settings/project-browser', {{
         method: 'POST',
         headers: {{ 'Content-Type': 'application/x-www-form-urlencoded' }},
-        body: new URLSearchParams({{ project_sort: sort.value }}),
+        body: new URLSearchParams({{ project_sort: sort.value, project_filter: filter.value }}),
       }}).catch(() => {{
         // The visible sort stays usable if saving the default temporarily fails.
       }});
@@ -626,7 +627,9 @@ SCRIPTS = f"""
         element.addEventListener('input', applyProjectBrowserControls);
         element.addEventListener('change', applyProjectBrowserControls);
       }});
-      document.getElementById('project-sort')?.addEventListener('change', saveProjectBrowserSort);
+      ['project-filter', 'project-sort'].forEach((id) => {{
+        document.getElementById(id)?.addEventListener('change', saveProjectBrowserSettings);
+      }});
       document.querySelectorAll('.project-card video').forEach((video) => {{
         const card = video.closest('.project-card');
         if (!card) return;

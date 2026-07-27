@@ -7,6 +7,28 @@ from VocaVid.workflows import WorkflowPaths
 
 
 class WorkflowPathTests(unittest.TestCase):
+    def test_all_bundled_workflows_are_runtime_candidates_or_marked_unused(self):
+        repo_root = Path(__file__).resolve().parents[1]
+        paths = WorkflowPaths.defaults(repo_root)
+        runtime_candidates = {
+            paths.promptgen,
+            paths.avatar_description,
+            paths.image,
+            *paths.image_aliases,
+            paths.image_reference,
+            paths.avatar_image,
+            paths.video,
+            *paths.video_aliases,
+            paths.chorus,
+        }
+        unclassified = {
+            path
+            for path in (repo_root / "workflows").glob("*.json")
+            if not path.name.startswith("_unused_") and path not in runtime_candidates
+        }
+
+        self.assertEqual(unclassified, set())
+
     def test_default_paths_use_project_workflows_directory(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

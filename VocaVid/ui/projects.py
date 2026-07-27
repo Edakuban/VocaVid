@@ -58,9 +58,11 @@ def _projects_html(
         "fps": 24, "lyric_group_size": 2, "chorus_group_size": 1,
         "transition_handle_seconds": 0.5, "whisper_model_size": "large-v3",
         "project_browser_sort": "newest",
+        "project_browser_filter": "all",
         "autodelete_finished": 0, "shutdown_after_queue": 0,
     }
     project_browser_sort = _normalize_project_browser_sort(str(global_settings["project_browser_sort"] or "newest"))
+    project_browser_filter = _normalize_project_browser_filter(str(global_settings["project_browser_filter"] or "all"))
     projects = _sort_projects(projects, project_browser_sort)
     active_project_ids = {int(job.project_id) for job in jobs if job.project_id and job.status in {"queued", "running"}}
     rows = "".join(_project_list_item_html(p, project_previews.get(int(p["id"]), []), int(p["id"]) in active_project_ids) for p in projects)
@@ -77,9 +79,9 @@ def _projects_html(
     <div class="project-browser-controls">
       <input id="project-search" type="search" placeholder="Search projects" aria-label="Search projects">
       <select id="project-filter" aria-label="Filter projects">
-        <option value="all" selected>All</option>
-        <option value="in-progress">In progress</option>
-        <option value="done">Done</option>
+        <option value="all"{' selected' if project_browser_filter == 'all' else ''}>All</option>
+        <option value="in-progress"{' selected' if project_browser_filter == 'in-progress' else ''}>In progress</option>
+        <option value="done"{' selected' if project_browser_filter == 'done' else ''}>Done</option>
       </select>
       <select id="project-sort" aria-label="Sort projects">
         <option value="newest"{' selected' if project_browser_sort == 'newest' else ''}>Newest</option>
@@ -361,6 +363,7 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
     return actions + reels_button
 
 
+_PROJECT_BROWSER_FILTERS = {"all", "in-progress", "done"}
 _PROJECT_BROWSER_SORTS = {"newest", "oldest", "name-asc", "name-desc"}
 
 
@@ -371,6 +374,10 @@ def _normalize_project_browser_text(value) -> str:
 
 def _normalize_project_browser_sort(project_sort: str | None = None) -> str:
     return project_sort if project_sort in _PROJECT_BROWSER_SORTS else "newest"
+
+
+def _normalize_project_browser_filter(project_filter: str | None = None) -> str:
+    return project_filter if project_filter in _PROJECT_BROWSER_FILTERS else "all"
 
 
 def _sort_projects(projects, project_sort: str | None = None):
@@ -391,8 +398,16 @@ def _project_navigation_ids(
     projects,
     project_id: int,
     project_sort: str | None = None,
+    project_filter: str | None = None,
 ) -> tuple[int | None, int | None]:
-    project_ids = [int(project["id"]) for project in _sort_projects(projects, project_sort)]
+    normalized_filter = _normalize_project_browser_filter(project_filter)
+    visible_projects = [
+        project
+        for project in projects
+        if normalized_filter == "all"
+        or ("done" if _is_kdenlive_project_done(project) else "in-progress") == normalized_filter
+    ]
+    project_ids = [int(project["id"]) for project in _sort_projects(visible_projects, project_sort)]
     try:
         index = project_ids.index(int(project_id))
     except ValueError:
@@ -604,6 +619,7 @@ __all__ = [
     "_is_kdenlive_project_done",
     "_project_actions_html",
     "_normalize_project_browser_sort",
+    "_normalize_project_browser_filter",
     "_project_navigation_ids",
     "_project_nav_html",
     "_project_html",

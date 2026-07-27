@@ -1031,6 +1031,7 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(saved["transition_handle_seconds"], 0.8)
                 self.assertEqual(saved["whisper_model_size"], "medium")
                 self.assertEqual(saved["project_browser_sort"], "newest")
+                self.assertEqual(saved["project_browser_filter"], "all")
                 self.assertEqual(saved["autodelete_finished"], 1)
                 self.assertEqual(saved["shutdown_after_queue"], 0)
                 self.assertTrue((app_module.APP_ROOT / "global" / "band.png").exists())
@@ -1053,16 +1054,21 @@ class AppEndpointTests(unittest.TestCase):
                 app = app_module.create_app()
                 client = TestClient(app)
 
-                response = client.post("/settings/project-browser", data={"project_sort": "name-asc"})
+                response = client.post(
+                    "/settings/project-browser",
+                    data={"project_sort": "name-asc", "project_filter": "in-progress"},
+                )
 
                 self.assertEqual(response.status_code, 200)
-                self.assertEqual(response.json(), {"project_browser_sort": "name-asc"})
+                self.assertEqual(response.json(), {"project_browser_sort": "name-asc", "project_browser_filter": "in-progress"})
                 self.assertEqual(Store(app_module.DB_PATH).get_global_settings()["project_browser_sort"], "name-asc")
+                self.assertEqual(Store(app_module.DB_PATH).get_global_settings()["project_browser_filter"], "in-progress")
 
                 response = client.post("/settings/project-browser", data={"project_sort": "invalid"})
 
-                self.assertEqual(response.json(), {"project_browser_sort": "newest"})
+                self.assertEqual(response.json(), {"project_browser_sort": "newest", "project_browser_filter": "all"})
                 self.assertEqual(Store(app_module.DB_PATH).get_global_settings()["project_browser_sort"], "newest")
+                self.assertEqual(Store(app_module.DB_PATH).get_global_settings()["project_browser_filter"], "all")
                 app.state.jobs.executor.shutdown(wait=True)
         finally:
             app_module.APP_ROOT = old_app_root
@@ -1079,6 +1085,7 @@ class AppEndpointTests(unittest.TestCase):
             store = Store(db_path)
 
             self.assertEqual(store.get_global_settings()["project_browser_sort"], "newest")
+            self.assertEqual(store.get_global_settings()["project_browser_filter"], "all")
             store.update_global_settings(project_browser_sort="oldest")
             self.assertEqual(store.get_global_settings()["project_browser_sort"], "oldest")
 

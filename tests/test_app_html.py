@@ -139,6 +139,7 @@ class AppHtmlTests(unittest.TestCase):
             "transition_handle_seconds": 0.8,
             "whisper_model_size": "medium",
             "project_browser_sort": "name-asc",
+            "project_browser_filter": "in-progress",
             "autodelete_finished": 1,
             "shutdown_after_queue": 0,
         }
@@ -154,6 +155,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('placeholder="1920x1080"', html)
         self.assertIn('<option value="medium" selected>medium</option>', html)
         self.assertIn('<option value="name-asc" selected>Name asc</option>', html)
+        self.assertIn('<option value="in-progress" selected>In progress</option>', html)
         self.assertIn('name="autodelete_finished" checked', html)
 
     def test_start_page_renders_project_cards_and_marks_done_projects(self):
@@ -187,7 +189,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertIn('id="project-filter"', body)
         self.assertIn('id="project-sort"', body)
         self.assertIn("function applyProjectBrowserControls", html)
-        self.assertIn("function saveProjectBrowserSort", html)
+        self.assertIn("function saveProjectBrowserSettings", html)
         self.assertIn("fetch('/settings/project-browser'", html)
         self.assertNotIn("projectBrowserPreferences", html)
         self.assertNotIn("localStorage", html)
@@ -542,7 +544,7 @@ class AppHtmlTests(unittest.TestCase):
         self.assertLess(html.index("<h1>Demo</h1>"), html.index('title="Nachfolgendes Projekt"'))
         self.assertIn(".project-nav-button", html)
 
-    def test_project_navigation_uses_saved_sort_over_all_projects(self):
+    def test_project_navigation_uses_saved_filter_and_sort(self):
         projects = [
             {"id": 4, "name": "Zebra", "final_video_path": "outputs/zebra/final.kdenlive"},
             {"id": 3, "name": "Äther", "final_video_path": None},
@@ -554,9 +556,10 @@ class AppHtmlTests(unittest.TestCase):
             projects,
             2,
             project_sort="name-asc",
+            project_filter="in-progress",
         )
 
-        self.assertEqual((previous_id, next_id), (3, 4))
+        self.assertEqual((previous_id, next_id), (3, None))
 
     def test_project_navigation_links_are_parameterless(self):
         project = {"id": 7, "name": "Demo", "audio_path": "song.wav", "final_video_path": None}

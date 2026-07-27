@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -83,6 +84,9 @@ def create_app() -> FastAPI:
         logger.warning("marked %s interrupted running project items as failed", interrupted_items)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
     reels_pipeline = ReelsPipeline(store, APP_ROOT)
+    desktop_comfy_url = os.environ.get("VOCAVID_COMFY_BASE_URL", "").strip().rstrip("/")
+    if desktop_comfy_url:
+        store.update_global_settings(comfy_base_url=desktop_comfy_url)
     saved_global_settings = store.get_global_settings()
     job_options = JobOptions(
         autodelete_finished=bool(saved_global_settings["autodelete_finished"]),
@@ -315,10 +319,17 @@ def create_app() -> FastAPI:
         return RedirectResponse("/", status_code=303)
 
     @app.post("/settings/project-browser")
-    def update_project_browser_settings(project_sort: str = Form("newest")):
+    def update_project_browser_settings(
+        project_sort: str = Form("newest"),
+        project_filter: str = Form("all"),
+    ):
         normalized_sort = _normalize_project_browser_sort(project_sort)
-        store.update_global_settings(project_browser_sort=normalized_sort)
-        return {"project_browser_sort": normalized_sort}
+        normalized_filter = _normalize_project_browser_filter(project_filter)
+        store.update_global_settings(
+            project_browser_sort=normalized_sort,
+            project_browser_filter=normalized_filter,
+        )
+        return {"project_browser_sort": normalized_sort, "project_browser_filter": normalized_filter}
 
     @app.post("/jobs/{job_id}/delete")
     def delete_job(job_id: int):
@@ -397,11 +408,14 @@ def create_app() -> FastAPI:
     def project_detail(project_id: int):
         project = store.get_project(project_id)
         projects = store.list_projects()
-        project_sort = str(store.get_global_settings()["project_browser_sort"] or "newest")
+        browser_settings = store.get_global_settings()
+        project_sort = str(browser_settings["project_browser_sort"] or "newest")
+        project_filter = str(browser_settings["project_browser_filter"] or "all")
         previous_project_id, next_project_id = _project_navigation_ids(
             projects,
             project_id,
             project_sort=project_sort,
+            project_filter=project_filter,
         )
         lines = store.list_lines(project_id)
         manual_timing_interludes = store.list_manual_timing_interludes(project_id)

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS global_settings (
     transition_handle_seconds REAL NOT NULL DEFAULT 0.5,
     whisper_model_size TEXT NOT NULL DEFAULT 'large-v3',
     project_browser_sort TEXT NOT NULL DEFAULT 'newest',
+    project_browser_filter TEXT NOT NULL DEFAULT 'all',
     autodelete_finished INTEGER NOT NULL DEFAULT 0,
     shutdown_after_queue INTEGER NOT NULL DEFAULT 0
 );
@@ -190,6 +191,8 @@ class Store:
         global_settings_columns = {row["name"] for row in conn.execute("PRAGMA table_info(global_settings)")}
         if "project_browser_sort" not in global_settings_columns:
             conn.execute("ALTER TABLE global_settings ADD COLUMN project_browser_sort TEXT NOT NULL DEFAULT 'newest'")
+        if "project_browser_filter" not in global_settings_columns:
+            conn.execute("ALTER TABLE global_settings ADD COLUMN project_browser_filter TEXT NOT NULL DEFAULT 'all'")
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(lyric_lines)")}
         if "use_reference" not in columns:
             conn.execute("ALTER TABLE lyric_lines ADD COLUMN use_reference INTEGER NOT NULL DEFAULT 0")
@@ -323,6 +326,7 @@ class Store:
             "transition_handle_seconds",
             "whisper_model_size",
             "project_browser_sort",
+            "project_browser_filter",
             "autodelete_finished",
             "shutdown_after_queue",
         }
