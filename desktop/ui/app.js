@@ -12,6 +12,9 @@ const profileSize = document.querySelector("#profile-size");
 const gpuName = document.querySelector("#gpu-name");
 const progressArea = document.querySelector("#progress-area");
 const progressBar = document.querySelector("#progress-bar");
+const downloadStats = document.querySelector("#download-stats");
+const downloadVolume = document.querySelector("#download-volume");
+const downloadMeta = document.querySelector("#download-meta");
 const log = document.querySelector("#log");
 const comfyMode = document.querySelector("#comfy-mode");
 const managedOptions = document.querySelector("#managed-options");
@@ -28,6 +31,75 @@ const openFluxLicense = document.querySelector("#open-flux-license");
 let phaseProgress = 8;
 let freeGb = 0;
 let externalValidated = false;
+let lastDownloadLog = "";
+let downloadTotalBytes = 0;
+let downloadedByFile = new Map();
+let lastDownloadSample = null;
+let smoothedBytesPerSecond = 0;
+
+function formatBytes(bytes) {
+  const gib = bytes / (1024 ** 3);
+  if (gib >= 1) return `${gib.toFixed(gib >= 10 ? 1 : 2)} GB`;
+  const mib = bytes / (1024 ** 2);
+  return `${mib.toFixed(mib >= 10 ? 0 : 1)} MB`;
+}
+
+function formatEta(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "ETA wird berechnet …";
+  if (seconds < 60) return "ETA < 1 Min.";
+  const minutes = Math.ceil(seconds / 60);
+  if (minutes < 60) return `ETA ca. ${minutes} Min.`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `ETA ca. ${hours} Std.${remainingMinutes ? ` ${remainingMinutes} Min.` : ""}`;
+}
+
+function resetDownloadProgress() {
+  downloadTotalBytes = 0;
+  downloadedByFile = new Map();
+  lastDownloadSample = null;
+  smoothedBytesPerSecond = 0;
+  lastDownloadLog = "";
+  downloadStats.classList.add("hidden");
+}
+
+function updateDownloadProgress(payload) {
+  if (payload.kind === "download-plan") {
+    downloadTotalBytes = Number(payload.total) || 0;
+    downloadStats.classList.toggle("hidden", !downloadTotalBytes);
+    downloadVolume.textContent = `0 GB / ca. ${formatBytes(downloadTotalBytes)}`;
+    downloadMeta.textContent = "Geschwindigkeit und ETA werden berechnet …";
+    return;
+  }
+  if (!payload.file || !Number.isFinite(Number(payload.current))) return;
+
+  const now = performance.now();
+  const previousTotal = [...downloadedByFile.values()].reduce((sum, value) => sum + value, 0);
+  downloadedByFile.set(payload.file, Math.max(0, Number(payload.current)));
+  const currentTotal = [...downloadedByFile.values()].reduce((sum, value) => sum + value, 0);
+
+  if (!payload.initial && lastDownloadSample && currentTotal >= previousTotal) {
+    const elapsedSeconds = (now - lastDownloadSample.time) / 1000;
+    const byteDelta = currentTotal - lastDownloadSample.bytes;
+    if (elapsedSeconds > 0.1 && byteDelta > 0) {
+      const instantSpeed = byteDelta / elapsedSeconds;
+      smoothedBytesPerSecond = smoothedBytesPerSecond
+        ? (smoothedBytesPerSecond * 0.75) + (instantSpeed * 0.25)
+        : instantSpeed;
+    }
+  }
+  lastDownloadSample = { time: now, bytes: currentTotal };
+
+  const displayedTotal = Math.max(downloadTotalBytes, currentTotal);
+  downloadStats.classList.remove("hidden");
+  downloadVolume.textContent = `${formatBytes(currentTotal)} / ca. ${formatBytes(displayedTotal)}`;
+  const etaSeconds = smoothedBytesPerSecond
+    ? Math.max(0, displayedTotal - currentTotal) / smoothedBytesPerSecond
+    : Number.NaN;
+  downloadMeta.textContent = smoothedBytesPerSecond
+    ? `${formatBytes(smoothedBytesPerSecond)}/s · ${formatEta(etaSeconds)}`
+    : "Geschwindigkeit und ETA werden berechnet …";
+}
 
 function setStatus(nextTitle, nextDetail, state = "working") {
   title.textContent = nextTitle;
@@ -42,7 +114,16 @@ function appendLog(message) {
 }
 
 function handleProgress(payload) {
-  appendLog(payload.message);
+  updateDownloadProgress(payload);
+  if (payload.kind === "download-plan") return;
+  if (payload.kind === "download") {
+    if (payload.message !== lastDownloadLog) {
+      appendLog(payload.message);
+      lastDownloadLog = payload.message;
+    }
+  } else {
+    appendLog(payload.message);
+  }
   if (payload.kind === "phase") {
     phaseProgress = Math.min(88, phaseProgress + 16);
     progressBar.style.width = `${phaseProgress}%`;
@@ -140,6 +221,7 @@ installButton.addEventListener("click", async () => {
   updateInstallButton();
   if (installButton.disabled) return;
   installButton.disabled = true;
+  resetDownloadProgress();
   installInfo.classList.add("hidden");
   progressArea.classList.remove("hidden");
   setStatus("Installation wird vorbereitet", "Bitte VocaVid während des Downloads geöffnet lassen.");

@@ -21,6 +21,7 @@ from typing import Any, Iterable
 
 USER_AGENT = "VocaVid-Desktop/1.0"
 MARKER_NAME = "install-state.json"
+SEVEN_ZIP_NAME = "7zr.exe"
 
 
 class BootstrapError(RuntimeError):
@@ -28,7 +29,7 @@ class BootstrapError(RuntimeError):
 
 
 def emit(kind: str, message: str, **data: Any) -> None:
-    print(json.dumps({"kind": kind, "message": message, **data}, ensure_ascii=False), flush=True)
+    print(json.dumps({"kind": kind, "message": message, **data}, ensure_ascii=True), flush=True)
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
@@ -102,7 +103,13 @@ def download(
     headers = dict(request_headers or {})
     if existing:
         headers["Range"] = f"bytes={existing}-"
-    emit("download", f"Lade {target.name}", current=existing)
+    emit(
+        "download",
+        f"Lade {target.name}",
+        file=target.name,
+        current=existing,
+        initial=True,
+    )
     try:
         response = urllib.request.urlopen(_request(url, headers), timeout=60)
     except urllib.error.HTTPError as exc:
@@ -129,7 +136,13 @@ def download(
             downloaded += len(chunk)
             now = time.monotonic()
             if now - last_update >= 0.5:
-                emit("download", f"Lade {target.name}", current=downloaded, total=total)
+                emit(
+                    "download",
+                    f"Lade {target.name}",
+                    file=target.name,
+                    current=downloaded,
+                    total=total,
+                )
                 last_update = now
     if expected_sha256:
         emit("verify", f"Prüfe {target.name}")
@@ -138,7 +151,13 @@ def download(
             partial.unlink(missing_ok=True)
             raise BootstrapError(f"SHA-256 stimmt nicht für {target.name}: {actual}")
     partial.replace(target)
-    emit("downloaded", f"{target.name} vollständig", current=downloaded, total=total)
+    emit(
+        "downloaded",
+        f"{target.name} vollständig",
+        file=target.name,
+        current=downloaded,
+        total=total,
+    )
 
 
 def _within(path: Path, root: Path) -> bool:
@@ -158,6 +177,30 @@ def safe_remove(path: Path, root: Path) -> None:
         path.unlink(missing_ok=True)
 
 
+def seven_zip_executable() -> Path:
+    candidates: list[Path] = []
+    override = os.environ.get("VOCAVID_7ZR")
+    if override:
+        candidates.append(Path(override))
+    bundle_root = getattr(sys, "_MEIPASS", None)
+    if bundle_root:
+        candidates.append(Path(bundle_root) / SEVEN_ZIP_NAME)
+    candidates.extend(
+        [
+            Path(sys.executable).resolve().parent / SEVEN_ZIP_NAME,
+            Path(__file__).resolve().parent / SEVEN_ZIP_NAME,
+        ]
+    )
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    for command in ("7zr.exe", "7z.exe", "7zr", "7z"):
+        located = shutil.which(command)
+        if located:
+            return Path(located)
+    raise BootstrapError("Der gebündelte 7-Zip-Entpacker fehlt")
+
+
 def extract_archive(archive: Path, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     emit("extract", f"Entpacke {archive.name}")
@@ -166,12 +209,17 @@ def extract_archive(archive: Path, target: Path) -> None:
             bundle.extractall(target)
         return
     if archive.suffix.lower() == ".7z":
-        try:
-            import py7zr
-        except ImportError as exc:
-            raise BootstrapError("py7zr fehlt im Bootstrapper") from exc
-        with py7zr.SevenZipFile(archive, mode="r") as bundle:
-            bundle.extractall(path=target)
+        run_checked(
+            [
+                str(seven_zip_executable()),
+                "x",
+                str(archive),
+                f"-o{target}",
+                "-y",
+                "-bso0",
+                "-bsp0",
+            ]
+        )
         return
     raise BootstrapError(f"Unbekanntes Archivformat: {archive.suffix}")
 
@@ -264,7 +312,21 @@ def configure_shared_models(runtime_root: Path, models_root: Path | None) -> Non
 def deploy_runtime(root: Path, manifest: dict[str, Any]) -> None:
     runtime_root, python, comfy_main = runtime_paths(root, manifest)
     if python.is_file() and comfy_main.is_file():
-        emit("skip", "ComfyUI-Runtime ist bereits vorhanden")
+        data: dict[str, Any] = {}
+        asset_pattern = manifest["runtime"].get("asset_pattern")
+        downloads = root / "downloads"
+        if asset_pattern and downloads.is_dir():
+            archive = next(
+                (
+                    item
+                    for item in downloads.iterdir()
+                    if item.is_file() and re.search(asset_pattern, item.name, re.IGNORECASE)
+                ),
+                None,
+            )
+            if archive:
+                data = {"file": archive.name, "current": archive.stat().st_size, "initial": True}
+        emit("skip", "ComfyUI-Runtime ist bereits vorhanden", **data)
         return
     url, expected, filename = resolve_archive(manifest["runtime"])
     archive = root / "downloads" / filename
@@ -373,14 +435,26 @@ def install_models(
         target = comfy_root / model["target"]
         expected = model["sha256"]
         if target.is_file() and sha256_file(target).lower() == expected.lower():
-            emit("skip", f"Modell bereits vorhanden: {target.name}")
+            emit(
+                "skip",
+                f"Modell bereits vorhanden: {target.name}",
+                file=target.name,
+                current=target.stat().st_size,
+                initial=True,
+            )
             continue
         if shared_models_root is not None:
             relative = Path(model["target"])
             parts = relative.parts[1:] if relative.parts and relative.parts[0].lower() == "models" else relative.parts
             shared_target = shared_models_root.joinpath(*parts)
             if shared_target.is_file() and sha256_file(shared_target).lower() == expected.lower():
-                emit("skip", f"Modell aus vorhandenem Ordner eingebunden: {target.name}")
+                emit(
+                    "skip",
+                    f"Modell aus vorhandenem Ordner eingebunden: {target.name}",
+                    file=target.name,
+                    current=shared_target.stat().st_size,
+                    initial=True,
+                )
                 continue
         headers: dict[str, str] = {}
         if model.get("gated"):
@@ -507,6 +581,19 @@ def install(
     external_url = normalize_local_comfy_url(external_comfy_url or "") if comfy_mode == "external" else None
     shared_models = resolve_shared_models_root(shared_model_root)
     root.mkdir(parents=True, exist_ok=True)
+    if comfy_mode == "managed" and not skip_models:
+        profile_download_gb = sum(
+            manifest.get("profiles", {}).get(profile, {}).get("estimated_download_gb", 0)
+            for profile in profiles
+        )
+        runtime_download_gb = manifest.get("runtime", {}).get("estimated_download_gb", 0)
+        estimated_download_bytes = int((profile_download_gb + runtime_download_gb) * 1024**3)
+        emit(
+            "download-plan",
+            "Gesamtdownload wird vorbereitet",
+            total=estimated_download_bytes,
+            approximate=True,
+        )
     if not (root / MARKER_NAME).is_file() and not skip_models and comfy_mode == "managed":
         profile_definitions = []
         for profile in profiles:
@@ -887,7 +974,7 @@ def main(argv: list[str] | None = None) -> int:
         manifest = load_manifest(args.manifest)
         root = args.root.resolve()
         if args.command == "status":
-            print(json.dumps(status(root, manifest), ensure_ascii=False))
+            print(json.dumps(status(root, manifest), ensure_ascii=True))
         elif args.command == "install":
             if not args.payload:
                 raise BootstrapError("--payload wird für install benötigt")
@@ -909,7 +996,7 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 json.dumps(
                     probe_comfy(args.external_comfy_url, manifest, args.profiles or ["creator"]),
-                    ensure_ascii=False,
+                    ensure_ascii=True,
                 )
             )
         else:
@@ -917,6 +1004,9 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     except (BootstrapError, OSError, subprocess.SubprocessError) as exc:
         emit("error", str(exc))
+        return 1
+    except Exception as exc:
+        emit("error", f"Unerwarteter Installerfehler ({type(exc).__name__}): {exc}")
         return 1
 
 

@@ -109,6 +109,17 @@ button:disabled { opacity: .5; cursor: wait; }
 #progress-area { margin-top: 24px; }
 .progress-track { height: 6px; border-radius: 99px; overflow: hidden; background: rgba(255, 255, 255, .08); }
 #progress-bar { width: 8%; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #7350ff, #ff4a94); transition: width .2s ease; }
+.download-stats {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  color: #aaa5b9;
+  font-size: 13px;
+}
+.download-stats strong { color: #f4f0ff; }
+.download-stats span { text-align: right; }
+.download-stats.hidden { display: none; }
 pre { max-height: 220px; overflow: auto; margin: 18px 0 0; color: #aaa5b9; white-space: pre-wrap; font: 12px/1.55 ui-monospace, "Cascadia Code", monospace; }
 .hidden { display: none; }
 
@@ -116,4 +127,6 @@ pre { max-height: 220px; overflow: auto; margin: 18px 0 0; color: #aaa5b9; white
   main { width: min(100% - 28px, 760px); padding-top: 6vh; }
   .card { padding: 20px; }
   .facts { grid-template-columns: 1fr; }
+  .download-stats { display: block; }
+  .download-stats span { display: block; margin-top: 4px; text-align: left; }
 }

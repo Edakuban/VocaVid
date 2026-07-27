@@ -1,2 +1,1 @@
-py7zr>=0.22,<2
 pyinstaller>=6.10,<7

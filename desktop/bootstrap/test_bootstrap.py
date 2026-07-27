@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import socket
 import sqlite3
 import tempfile
@@ -14,6 +15,15 @@ import vocavid_bootstrap as bootstrap
 
 
 class BootstrapTests(unittest.TestCase):
+    @patch("builtins.print")
+    def test_emit_uses_ascii_safe_json_transport(self, print_mock) -> None:
+        bootstrap.emit("command", "Führe python.exe aus")
+
+        serialized = print_mock.call_args.args[0]
+        self.assertEqual(serialized.encode("ascii").decode("ascii"), serialized)
+        self.assertIn(r"F\u00fchre", serialized)
+        self.assertEqual(json.loads(serialized)["message"], "Führe python.exe aus")
+
     def test_sha256_file(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "value.bin"
@@ -60,6 +70,34 @@ class BootstrapTests(unittest.TestCase):
             root = Path(directory)
             with self.assertRaises(bootstrap.BootstrapError):
                 bootstrap.safe_remove(root, root)
+
+    def test_seven_zip_executable_uses_explicit_override(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "7zr.exe"
+            executable.touch()
+            with patch.dict(os.environ, {"VOCAVID_7ZR": str(executable)}):
+                self.assertEqual(bootstrap.seven_zip_executable(), executable)
+
+    @patch("vocavid_bootstrap.run_checked")
+    @patch("vocavid_bootstrap.seven_zip_executable", return_value=Path("C:/tools/7zr.exe"))
+    def test_extract_7z_uses_native_seven_zip(self, _executable, run_checked) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / "runtime.7z"
+            archive.touch()
+            target = root / "runtime"
+            bootstrap.extract_archive(archive, target)
+            run_checked.assert_called_once_with(
+                [
+                    "C:\\tools\\7zr.exe",
+                    "x",
+                    str(archive),
+                    f"-o{target}",
+                    "-y",
+                    "-bso0",
+                    "-bsp0",
+                ]
+            )
 
     def test_normalize_local_comfy_url_rejects_remote_hosts(self) -> None:
         self.assertEqual(

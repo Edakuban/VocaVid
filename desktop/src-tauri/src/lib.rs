@@ -60,6 +60,51 @@ fn last_nonempty_line(bytes: &[u8]) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
+fn complete_lines(buffer: &mut Vec<u8>, chunk: &[u8]) -> Vec<String> {
+    buffer.extend_from_slice(chunk);
+    let mut lines = Vec::new();
+    while let Some(newline) = buffer.iter().position(|byte| *byte == b'\n') {
+        let bytes: Vec<u8> = buffer.drain(..=newline).collect();
+        let line = String::from_utf8_lossy(&bytes[..bytes.len() - 1])
+            .trim_end_matches('\r')
+            .trim()
+            .to_string();
+        if !line.is_empty() {
+            lines.push(line);
+        }
+    }
+    lines
+}
+
+fn remaining_line(buffer: &mut Vec<u8>) -> Option<String> {
+    if buffer.is_empty() {
+        return None;
+    }
+    let bytes = std::mem::take(buffer);
+    let line = String::from_utf8_lossy(&bytes).trim().to_string();
+    (!line.is_empty()).then_some(line)
+}
+
+fn stream_payload(line: String, is_error: bool) -> Value {
+    serde_json::from_str::<Value>(&line).unwrap_or_else(|_| {
+        serde_json::json!({
+            "kind": if is_error { "error" } else { "log" },
+            "message": line
+        })
+    })
+}
+
+fn emit_stream_line(
+    app: &tauri::AppHandle,
+    event: &str,
+    line: String,
+    is_error: bool,
+) -> Value {
+    let payload = stream_payload(line, is_error);
+    let _ = app.emit(event, payload.clone());
+    payload
+}
+
 fn parse_bootstrap_output(output: &Output, context: &str) -> Result<Value, String> {
     let stdout_line = last_nonempty_line(&output.stdout);
     if !output.status.success() {
@@ -147,24 +192,27 @@ async fn install_runtime(
         .map_err(|error| error.to_string())?;
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        let mut stdout_buffer = Vec::new();
+        let mut stderr_buffer = Vec::new();
         while let Some(event) = receiver.recv().await {
             match event {
                 CommandEvent::Stdout(bytes) => {
-                    let line = String::from_utf8_lossy(&bytes).trim().to_string();
-                    if !line.is_empty() {
-                        let payload = serde_json::from_str::<Value>(&line)
-                            .unwrap_or_else(|_| serde_json::json!({"kind":"log","message":line}));
-                        let _ = app_handle.emit("bootstrap-progress", payload);
+                    for line in complete_lines(&mut stdout_buffer, &bytes) {
+                        emit_stream_line(&app_handle, "bootstrap-progress", line, false);
                     }
                 }
                 CommandEvent::Stderr(bytes) => {
-                    let line = String::from_utf8_lossy(&bytes).trim().to_string();
-                    let _ = app_handle.emit(
-                        "bootstrap-progress",
-                        serde_json::json!({"kind":"error","message":line}),
-                    );
+                    for line in complete_lines(&mut stderr_buffer, &bytes) {
+                        emit_stream_line(&app_handle, "bootstrap-progress", line, true);
+                    }
                 }
                 CommandEvent::Terminated(status) => {
+                    if let Some(line) = remaining_line(&mut stdout_buffer) {
+                        emit_stream_line(&app_handle, "bootstrap-progress", line, false);
+                    }
+                    if let Some(line) = remaining_line(&mut stderr_buffer) {
+                        emit_stream_line(&app_handle, "bootstrap-progress", line, true);
+                    }
                     let _ = app_handle.emit(
                         "bootstrap-finished",
                         serde_json::json!({"code":status.code}),
@@ -223,21 +271,40 @@ async fn start_services(app: tauri::AppHandle, state: tauri::State<'_, ServiceSt
     *state.0.lock().map_err(|_| "Service lock poisoned")? = Some(child);
     let app_handle = app.clone();
     tauri::async_runtime::spawn(async move {
+        let mut stdout_buffer = Vec::new();
+        let mut stderr_buffer = Vec::new();
         while let Some(event) = receiver.recv().await {
-            if let CommandEvent::Stdout(bytes) = event {
-                let line = String::from_utf8_lossy(&bytes).trim().to_string();
-                let payload = serde_json::from_str::<Value>(&line)
-                    .unwrap_or_else(|_| serde_json::json!({"kind":"log","message":line}));
-                let _ = app_handle.emit("service-progress", payload.clone());
-                if payload.get("kind").and_then(Value::as_str) == Some("ready") {
-                    if let Some(url) = payload.get("url").and_then(Value::as_str) {
-                        if let Ok(parsed) = url.parse() {
-                            if let Some(window) = app_handle.get_webview_window("main") {
-                                let _ = window.navigate(parsed);
+            match event {
+                CommandEvent::Stdout(bytes) => {
+                    for line in complete_lines(&mut stdout_buffer, &bytes) {
+                        let payload =
+                            emit_stream_line(&app_handle, "service-progress", line, false);
+                        if payload.get("kind").and_then(Value::as_str) == Some("ready") {
+                            if let Some(url) = payload.get("url").and_then(Value::as_str) {
+                                if let Ok(parsed) = url.parse() {
+                                    if let Some(window) = app_handle.get_webview_window("main") {
+                                        let _ = window.navigate(parsed);
+                                    }
+                                }
                             }
                         }
                     }
                 }
+                CommandEvent::Stderr(bytes) => {
+                    for line in complete_lines(&mut stderr_buffer, &bytes) {
+                        emit_stream_line(&app_handle, "service-progress", line, true);
+                    }
+                }
+                CommandEvent::Terminated(_) => {
+                    if let Some(line) = remaining_line(&mut stdout_buffer) {
+                        emit_stream_line(&app_handle, "service-progress", line, false);
+                    }
+                    if let Some(line) = remaining_line(&mut stderr_buffer) {
+                        emit_stream_line(&app_handle, "service-progress", line, true);
+                    }
+                    break;
+                }
+                _ => {}
             }
         }
         if let Ok(mut service) = app_handle.state::<ServiceState>().0.lock() {
@@ -264,13 +331,27 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{bundled_resource, last_nonempty_line};
+    use super::{bundled_resource, complete_lines, last_nonempty_line, remaining_line};
     use std::fs;
 
     #[test]
     fn last_nonempty_line_ignores_trailing_blank_lines() {
         let output = b"diagnostic\r\n{\"ok\":true}\r\n  \r\n";
         assert_eq!(last_nonempty_line(output).as_deref(), Some("{\"ok\":true}"));
+    }
+
+    #[test]
+    fn complete_lines_preserves_split_utf8_and_partial_json() {
+        let message = "{\"kind\":\"verify\",\"message\":\"Prüfe Archiv\"}\r\n";
+        let bytes = message.as_bytes();
+        let split = message.find('ü').unwrap() + 1;
+        let mut buffer = Vec::new();
+        assert!(complete_lines(&mut buffer, &bytes[..split]).is_empty());
+        assert_eq!(
+            complete_lines(&mut buffer, &bytes[split..]),
+            vec!["{\"kind\":\"verify\",\"message\":\"Prüfe Archiv\"}"]
+        );
+        assert!(remaining_line(&mut buffer).is_none());
     }
 
     #[test]

@@ -4,6 +4,10 @@ $desktopRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $bootstrap = Join-Path $desktopRoot "bootstrap"
 $binaryDirectory = Join-Path $desktopRoot "src-tauri\binaries"
 $distDirectory = Join-Path $desktopRoot "dist"
+$pyInstallerWorkDirectory = Join-Path $desktopRoot ".build\pyinstaller"
+$pyInstallerSpecDirectory = Join-Path $desktopRoot ".build"
+$toolsDirectory = Join-Path $desktopRoot ".build\tools"
+$sevenZipExecutable = Join-Path $toolsDirectory "7zr.exe"
 
 $python = $env:VOCAVID_BUILD_PYTHON
 if (-not $python) {
@@ -38,7 +42,11 @@ $env:CARGO_PROFILE_DEV_DEBUG = "0"
 if ($LASTEXITCODE -ne 0) {
     throw "Python dependency installation failed"
 }
-& $python -m PyInstaller --noconfirm --clean --onefile --name vocavid-bootstrap --distpath $distDirectory (Join-Path $bootstrap "vocavid_bootstrap.py")
+& $python (Join-Path $PSScriptRoot "prepare_sevenzip.py") $sevenZipExecutable
+if ($LASTEXITCODE -ne 0) {
+    throw "7-Zip preparation failed"
+}
+& $python -m PyInstaller --noconfirm --clean --onefile --name vocavid-bootstrap --distpath $distDirectory --workpath $pyInstallerWorkDirectory --specpath $pyInstallerSpecDirectory --add-binary "$sevenZipExecutable;." (Join-Path $bootstrap "vocavid_bootstrap.py")
 if ($LASTEXITCODE -ne 0) {
     throw "PyInstaller build failed"
 }

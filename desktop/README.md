@@ -57,6 +57,11 @@ Weitere Pakete werden ergänzt, indem unter `models` bzw. `custom_nodes` feste
 Downloads eingetragen und einem Profil zugeordnet werden. Gated Modelle dürfen
 nicht ohne explizite Lizenzannahme automatisiert heruntergeladen werden.
 
+Das Buildskript lädt den öffentlichen `7zr.exe`-Entpacker in Version 26.02
+direkt von 7-Zip, prüft die festgeschriebene SHA-256-Prüfsumme und bettet ihn
+in den Bootstrapper ein. Dadurch werden auch ComfyUI-Archive mit BCJ2-Filter
+ohne eine vorhandene 7-Zip-Installation unterstützt.
+
 ## Bootstrapper testen
 
 ```powershell
