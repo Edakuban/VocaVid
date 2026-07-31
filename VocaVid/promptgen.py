@@ -1,10 +1,29 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import re
 from typing import Any
 
 from .comfy import render_template
 from .prompt_templates import load_named_prompt_template, load_prompt_template, render_prompt_template
+
+
+_THINKING_END_RE = re.compile(r"</think\s*>", re.IGNORECASE)
+_THINKING_TAG_RE = re.compile(r"</?think(?:\s+[^>]*)?>", re.IGNORECASE)
+
+
+def clean_generated_text(value: object) -> str:
+    """Return the usable model response without leaked reasoning blocks.
+
+    Some local text-generation models emit their chain of thought before a
+    ``</think>`` delimiter.  Keep only the answer that follows the final
+    delimiter; this also covers models that omit the opening ``<think>`` tag.
+    """
+    text = str(value or "").strip()
+    endings = list(_THINKING_END_RE.finditer(text))
+    if endings:
+        text = text[endings[-1].end():]
+    return _THINKING_TAG_RE.sub("", text).strip()
 
 
 DEFAULT_VIDEOPROMPT_TEMPLATE = """Create one concise image-to-video motion prompt for a music video segment.

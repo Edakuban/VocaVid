@@ -18,7 +18,7 @@ from .comfy import ComfyClient, load_workflow, with_output_prefix
 from .lyrics import is_chorus_section, is_instrumental_section, parse_suno_lyrics
 from .models import LineTiming, LyricLine, RenderSegment
 from .paths import project_output_file_stem, resolve_storage_path, slug_folder_name, storage_relative_path
-from .promptgen import inject_promptgen_context, inject_raw_text_prompt, inject_scenefill_context, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
+from .promptgen import clean_generated_text, inject_promptgen_context, inject_raw_text_prompt, inject_scenefill_context, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
 from .prompt_templates import load_named_prompt_template, render_prompt_template
 from .sceneplan import fallback_scene_plans, make_sceneplan_concept_prompt, make_sceneplan_prompt, parse_scene_plan_text
 from .segments import build_render_segments
@@ -373,7 +373,7 @@ class Pipeline:
             workflow = load_workflow(workflow_path)
             client = ComfyClient(project["comfy_base_url"])
             concept_result = client.run_workflow(inject_raw_text_prompt(workflow, make_sceneplan_concept_prompt(project, segments)), {})
-            video_bible = concept_result.text_outputs[0].strip() if concept_result.ok and concept_result.text_outputs else ""
+            video_bible = clean_generated_text(concept_result.text_outputs[0]) if concept_result.ok and concept_result.text_outputs else ""
             plans = {}
             fallback_indices: list[int] = []
             batches = _scene_plan_batches(segments)
@@ -390,7 +390,7 @@ class Pipeline:
                 )
                 result = client.run_workflow(inject_raw_text_prompt(workflow, prompt), {})
                 expected_indices = [int(row["segment_index"]) for row in batch]
-                parsed = parse_scene_plan_text(result.text_outputs[0].strip(), expected_indices) if result.ok and result.text_outputs else {}
+                parsed = parse_scene_plan_text(clean_generated_text(result.text_outputs[0]), expected_indices) if result.ok and result.text_outputs else {}
                 fallback = fallback_scene_plans(project, batch)
                 for index in expected_indices:
                     plans[index] = parsed.get(index) or fallback[index]
@@ -429,7 +429,7 @@ class Pipeline:
             client = ComfyClient(project["comfy_base_url"])
             result = client.run_workflow(inject_raw_text_prompt(workflow, prompt), {})
             if result.ok and result.text_outputs:
-                style_prompt = result.text_outputs[0].strip()
+                style_prompt = clean_generated_text(result.text_outputs[0])
         if not style_prompt:
             genre = str(project["genre"] or "music video").strip() or "music video"
             style_prompt = (
@@ -464,7 +464,7 @@ class Pipeline:
             pass
         result = ComfyClient(project["comfy_base_url"]).run_workflow(workflow, variables)
         if result.ok and result.text_outputs:
-            self.store.update_project(project_id, avatar_face_description=result.text_outputs[0].strip())
+            self.store.update_project(project_id, avatar_face_description=clean_generated_text(result.text_outputs[0]))
             return
         raise RuntimeError(result.error or "No avatar face description text output")
 
@@ -1113,7 +1113,7 @@ class Pipeline:
             self.store.update_line(
                 project_id,
                 row["line_index"],
-                prompt=result.text_outputs[0].strip(),
+                prompt=clean_generated_text(result.text_outputs[0]),
                 status="prompted",
                 error="",
             )
@@ -1144,7 +1144,7 @@ class Pipeline:
             self.store.update_segment(
                 project_id,
                 row["segment_index"],
-                prompt=result.text_outputs[0].strip(),
+                prompt=clean_generated_text(result.text_outputs[0]),
                 status="prompted",
                 error="",
             )
@@ -1175,7 +1175,7 @@ class Pipeline:
             self.store.update_line(
                 project_id,
                 row["line_index"],
-                video_prompt=result.text_outputs[0].strip(),
+                video_prompt=clean_generated_text(result.text_outputs[0]),
                 clip_path=None,
                 video_approved=0,
                 status="video prompted",
@@ -1210,7 +1210,7 @@ class Pipeline:
             self.store.update_segment(
                 project_id,
                 row["segment_index"],
-                video_prompt=result.text_outputs[0].strip(),
+                video_prompt=clean_generated_text(result.text_outputs[0]),
                 clip_path=None,
                 video_approved=0,
                 status="video prompted",
@@ -1251,7 +1251,7 @@ class Pipeline:
         result = client.run_workflow(prompt_workflow, {})
         output_text = ""
         if result.ok and result.text_outputs:
-            output_text = result.text_outputs[0].strip()
+            output_text = clean_generated_text(result.text_outputs[0])
         elif result.ok and result.output_files:
             output_text = json.dumps(result.output_files)
         if not output_text:

@@ -1,9 +1,17 @@
 import unittest
 
-from VocaVid.promptgen import inject_promptgen_context, make_global_style_prompt, make_promptgen_prompt, make_videoprompt_prompt
+from VocaVid.promptgen import clean_generated_text, inject_promptgen_context, make_global_style_prompt, make_promptgen_prompt, make_videoprompt_prompt
 
 
 class PromptgenTests(unittest.TestCase):
+    def test_clean_generated_text_keeps_answer_after_thinking_delimiter(self):
+        output = "Internal analysis that must not be saved.\n</think> A cinematic final image prompt."
+
+        self.assertEqual(clean_generated_text(output), "A cinematic final image prompt.")
+
+    def test_clean_generated_text_leaves_normal_response_unchanged(self):
+        self.assertEqual(clean_generated_text("  A cinematic final image prompt.  "), "A cinematic final image prompt.")
+
     def test_make_promptgen_prompt_contains_line_context_and_output_instruction(self):
         prompt = make_promptgen_prompt(
             lyric_text="I fall through neon rain",
