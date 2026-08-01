@@ -57,6 +57,7 @@ def _projects_html(
         "comfy_base_url": "http://127.0.0.1:8188", "output_resolution": "1280x720",
         "fps": 24, "lyric_group_size": 2, "chorus_group_size": 1,
         "transition_handle_seconds": 0.5, "whisper_model_size": "large-v3",
+        "text_model_profile": "qwen35",
         "project_browser_sort": "newest",
         "project_browser_filter": "all",
         "autodelete_finished": 0, "shutdown_after_queue": 0,
@@ -123,6 +124,7 @@ def _new_project_modal_html(global_settings=None) -> str:
         "comfy_base_url": "http://127.0.0.1:8188", "output_resolution": "1280x720",
         "fps": 24, "lyric_group_size": 2, "chorus_group_size": 1,
         "transition_handle_seconds": 0.5, "whisper_model_size": "large-v3",
+        "text_model_profile": "qwen35",
     }
     if settings["avatar_path"]:
         avatar_default_html = (
@@ -190,6 +192,8 @@ def _global_settings_modal_html(settings) -> str:
         <label>Refrain-Zeilen pro Clip</label><input name="chorus_group_size" type="number" min="1" max="8" value="{_attr(settings['chorus_group_size'])}" required>
         <label>Transition Handle hinten (Sek.)</label><input name="transition_handle_seconds" type="number" min="0" step="0.1" value="{_attr(settings['transition_handle_seconds'])}" required>
         <label>Whisper Model</label>{_whisper_model_select_html(str(settings['whisper_model_size']))}
+        <label>Text model</label>{_text_model_profile_select_html(str(_row_value(settings, 'text_model_profile', 'qwen35') or 'qwen35'))}
+        <small class="settings-default-hint">Qwen 3.5 is the fast local default. Gemma 4 remains available for comparison.</small>
       </fieldset>
       <fieldset><legend>Queue &amp; System</legend>
         <label class="global-checkbox"><input type="checkbox" name="autodelete_finished"{autodelete_checked}> Autodelete finished</label>
@@ -200,6 +204,18 @@ def _global_settings_modal_html(settings) -> str:
   </div>
 </div>
 """
+
+
+def _text_model_profile_select_html(selected: str) -> str:
+    profile = "qwen35" if selected == "qwen35" else "gemma4"
+    options = [
+        ("qwen35", "Qwen 3.5 4B — fast (recommended)"),
+        ("gemma4", "Gemma 4 — slower / legacy"),
+    ]
+    return '<select name="text_model_profile">' + "".join(
+        f'<option value="{_attr(value)}"{" selected" if value == profile else ""}>{_text(label)}</option>'
+        for value, label in options
+    ) + "</select>"
 
 
 def _start_hero_html(projects, jobs, queue_estimate_seconds: float | None, queue_count: int = 0) -> str:

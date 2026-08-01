@@ -103,7 +103,11 @@ def _job_average_seconds(job, average_durations: dict[str, float]) -> float | No
     action = job.action or _action_from_job_name(job.name)
     if not action:
         return None
-    return average_durations.get(action)
+    average = average_durations.get(action)
+    if action == "clips":
+        video_seconds = float(getattr(job, "video_seconds", 0.0) or 0.0)
+        return average * video_seconds if average is not None and video_seconds > 0 else None
+    return average
 
 
 def _action_from_job_name(name: str) -> str:

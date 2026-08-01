@@ -8,6 +8,8 @@ from pathlib import Path
 class WorkflowPaths:
     promptgen: Path
     avatar_description: Path
+    qwen35_promptgen: Path
+    qwen35_avatar_description: Path
     image: Path
     image_aliases: tuple[Path, ...]
     image_reference: Path
@@ -23,6 +25,8 @@ class WorkflowPaths:
         return cls(
             promptgen=directory / "promptgen.json",
             avatar_description=directory / "avatar_description.json",
+            qwen35_promptgen=directory / "qwen35_text_promptgen.json",
+            qwen35_avatar_description=directory / "qwen35_avatar_description.json",
             image=directory / "image.json",
             image_aliases=(directory / "image_z_image_turbo.json",),
             image_reference=directory / "image_reference.json",
@@ -35,8 +39,16 @@ class WorkflowPaths:
     def optional_promptgen(self) -> Path | None:
         return self.promptgen if self.promptgen.exists() else None
 
+    def optional_promptgen_for_profile(self, profile: str) -> Path | None:
+        path = self.qwen35_promptgen if profile == "qwen35" and self.qwen35_promptgen.exists() else self.promptgen
+        return path if path.exists() else None
+
     def optional_avatar_description(self) -> Path | None:
         return self.avatar_description if self.avatar_description.exists() else None
+
+    def optional_avatar_description_for_profile(self, profile: str) -> Path | None:
+        path = self.qwen35_avatar_description if profile == "qwen35" and self.qwen35_avatar_description.exists() else self.avatar_description
+        return path if path.exists() else None
 
     def require_image(self) -> Path:
         if self.image.exists():

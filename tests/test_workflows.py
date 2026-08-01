@@ -13,6 +13,8 @@ class WorkflowPathTests(unittest.TestCase):
         runtime_candidates = {
             paths.promptgen,
             paths.avatar_description,
+            paths.qwen35_promptgen,
+            paths.qwen35_avatar_description,
             paths.image,
             *paths.image_aliases,
             paths.image_reference,
@@ -36,6 +38,8 @@ class WorkflowPathTests(unittest.TestCase):
             paths = WorkflowPaths.defaults(root)
 
             self.assertEqual(paths.promptgen, root / "workflows" / "promptgen.json")
+            self.assertEqual(paths.qwen35_promptgen, root / "workflows" / "qwen35_text_promptgen.json")
+            self.assertEqual(paths.qwen35_avatar_description, root / "workflows" / "qwen35_avatar_description.json")
             self.assertEqual(paths.avatar_description, root / "workflows" / "avatar_description.json")
             self.assertEqual(paths.image, root / "workflows" / "image.json")
             self.assertEqual(paths.image_aliases[0], root / "workflows" / "image_z_image_turbo.json")

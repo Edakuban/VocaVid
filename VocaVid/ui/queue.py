@@ -183,6 +183,11 @@ def _queue_estimate_seconds(active_jobs, average_durations: dict[str, float]) ->
         average = average_durations.get(job.action)
         if average is None:
             continue
+        if job.action == "clips":
+            video_seconds = float(getattr(job, "video_seconds", 0.0) or 0.0)
+            if video_seconds <= 0:
+                continue
+            average *= video_seconds
         remaining = float(average)
         if job.status == "running" and job.started_at:
             try:

@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS global_settings (
     chorus_group_size INTEGER NOT NULL DEFAULT 1,
     transition_handle_seconds REAL NOT NULL DEFAULT 0.5,
     whisper_model_size TEXT NOT NULL DEFAULT 'large-v3',
+    text_model_profile TEXT NOT NULL DEFAULT 'qwen35',
     project_browser_sort TEXT NOT NULL DEFAULT 'newest',
     project_browser_filter TEXT NOT NULL DEFAULT 'all',
     autodelete_finished INTEGER NOT NULL DEFAULT 0,
@@ -128,6 +129,8 @@ CREATE TABLE IF NOT EXISTS job_runs (
     item_count INTEGER NOT NULL DEFAULT 1,
     duration_seconds REAL NOT NULL,
     status TEXT NOT NULL,
+    text_model_profile TEXT NOT NULL DEFAULT '',
+    video_seconds REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -193,6 +196,13 @@ class Store:
             conn.execute("ALTER TABLE global_settings ADD COLUMN project_browser_sort TEXT NOT NULL DEFAULT 'newest'")
         if "project_browser_filter" not in global_settings_columns:
             conn.execute("ALTER TABLE global_settings ADD COLUMN project_browser_filter TEXT NOT NULL DEFAULT 'all'")
+        if "text_model_profile" not in global_settings_columns:
+            conn.execute("ALTER TABLE global_settings ADD COLUMN text_model_profile TEXT NOT NULL DEFAULT 'qwen35'")
+        job_run_columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_runs)")}
+        if "text_model_profile" not in job_run_columns:
+            conn.execute("ALTER TABLE job_runs ADD COLUMN text_model_profile TEXT NOT NULL DEFAULT ''")
+        if "video_seconds" not in job_run_columns:
+            conn.execute("ALTER TABLE job_runs ADD COLUMN video_seconds REAL NOT NULL DEFAULT 0")
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(lyric_lines)")}
         if "use_reference" not in columns:
             conn.execute("ALTER TABLE lyric_lines ADD COLUMN use_reference INTEGER NOT NULL DEFAULT 0")
@@ -325,6 +335,7 @@ class Store:
             "chorus_group_size",
             "transition_handle_seconds",
             "whisper_model_size",
+            "text_model_profile",
             "project_browser_sort",
             "project_browser_filter",
             "autodelete_finished",
@@ -537,28 +548,55 @@ class Store:
                 for row in conn.execute("SELECT action FROM project_actions WHERE project_id = ?", (project_id,))
             }
 
-    def record_job_run(self, action: str, item_kind: str, item_count: int, duration_seconds: float, status: str) -> None:
+    def record_job_run(
+        self,
+        action: str,
+        item_kind: str,
+        item_count: int,
+        duration_seconds: float,
+        status: str,
+        text_model_profile: str = "",
+        video_seconds: float = 0.0,
+    ) -> None:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO job_runs (action, item_kind, item_count, duration_seconds, status)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO job_runs (action, item_kind, item_count, duration_seconds, status, text_model_profile, video_seconds)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (action, item_kind, max(1, int(item_count)), max(0.0, float(duration_seconds)), status),
+                (
+                    action,
+                    item_kind,
+                    max(1, int(item_count)),
+                    max(0.0, float(duration_seconds)),
+                    status,
+                    text_model_profile,
+                    max(0.0, float(video_seconds)),
+                ),
             )
 
-    def average_job_durations(self) -> dict[str, float]:
+    def average_job_durations(self, text_model_profile: str = "qwen35") -> dict[str, float]:
         with self._connect() as conn:
             return {
                 str(row["action"]): float(row["average_duration"])
                 for row in conn.execute(
                     """
-                    SELECT action, AVG(duration_seconds / item_count) AS average_duration
+                    SELECT action,
+                           CASE
+                             WHEN action = 'clips' THEN SUM(duration_seconds) / NULLIF(SUM(video_seconds), 0)
+                             ELSE AVG(duration_seconds / item_count)
+                           END AS average_duration
                     FROM job_runs
                     WHERE status = 'done' AND item_count > 0
+                      AND (
+                        action NOT IN ('global-style-prompt', 'scene-plan', 'prompts', 'video-prompts', 'ai-fill-image', 'ai-fill-video', 'avatar-description')
+                        OR text_model_profile = ?
+                      )
                     GROUP BY action
+                    HAVING action != 'clips' OR SUM(video_seconds) > 0
                     ORDER BY action
-                    """
+                    """,
+                    (text_model_profile,),
                 )
             }
 

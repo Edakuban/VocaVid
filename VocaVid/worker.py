@@ -19,6 +19,8 @@ class Job:
     project_id: int | None = None
     action: str = ""
     item_kind: str = ""
+    text_model_profile: str = ""
+    video_seconds: float = 0.0
     selected_indices: list[int] | None = None
     started_at: str | None = None
     finished_at: str | None = None
@@ -41,6 +43,8 @@ class JobQueue:
         project_id: int | None = None,
         action: str = "",
         item_kind: str = "",
+        text_model_profile: str = "",
+        video_seconds: float = 0.0,
         selected_indices: list[int] | None = None,
     ) -> int:
         job_id = next(self._ids)
@@ -53,6 +57,8 @@ class JobQueue:
                 project_id=project_id,
                 action=action,
                 item_kind=item_kind,
+                text_model_profile=text_model_profile,
+                video_seconds=max(0.0, float(video_seconds)),
                 selected_indices=list(selected_indices or []),
             )
         future = self.executor.submit(self._run, job_id, func)
@@ -140,6 +146,8 @@ class JobQueue:
                 project_id=job.project_id,
                 action=job.action,
                 item_kind=job.item_kind,
+                text_model_profile=job.text_model_profile,
+                video_seconds=job.video_seconds,
                 selected_indices=list(job.selected_indices or []),
                 started_at=job.started_at,
                 finished_at=job.finished_at,

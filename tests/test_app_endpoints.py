@@ -1012,6 +1012,7 @@ class AppEndpointTests(unittest.TestCase):
                         "chorus_group_size": "2",
                         "transition_handle_seconds": "0.8",
                         "whisper_model_size": "medium",
+                        "text_model_profile": "gemma4",
                         "autodelete_finished": "on",
                     },
                     files={"avatar": ("band.png", b"fake image", "image/png")},
@@ -1030,6 +1031,7 @@ class AppEndpointTests(unittest.TestCase):
                 self.assertEqual(saved["chorus_group_size"], 2)
                 self.assertEqual(saved["transition_handle_seconds"], 0.8)
                 self.assertEqual(saved["whisper_model_size"], "medium")
+                self.assertEqual(saved["text_model_profile"], "gemma4")
                 self.assertEqual(saved["project_browser_sort"], "newest")
                 self.assertEqual(saved["project_browser_filter"], "all")
                 self.assertEqual(saved["autodelete_finished"], 1)

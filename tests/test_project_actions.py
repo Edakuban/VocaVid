@@ -66,9 +66,28 @@ class ProjectActionTests(unittest.TestCase):
             store.record_job_run("images", "segments", 1, 10.0, "done")
             store.record_job_run("images", "segments", 1, 20.0, "done")
             store.record_job_run("images", "segments", 1, 99.0, "failed")
-            store.record_job_run("clips", "segments", 1, 120.0, "done")
+            store.record_job_run("clips", "segments", 1, 120.0, "done", video_seconds=6.0)
 
-            self.assertEqual(store.average_job_durations(), {"clips": 120.0, "images": 15.0})
+            self.assertEqual(store.average_job_durations(), {"clips": 20.0, "images": 15.0})
+
+    def test_clip_average_is_weighted_by_generated_video_seconds(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            store = Store(Path(directory) / "test.sqlite3")
+
+            store.record_job_run("clips", "segments", 1, 20.0, "done", video_seconds=2.0)
+            store.record_job_run("clips", "segments", 1, 90.0, "done", video_seconds=6.0)
+
+            self.assertEqual(store.average_job_durations()["clips"], 13.75)
+
+    def test_text_job_averages_are_separated_by_model_profile(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            store = Store(Path(directory) / "test.sqlite3")
+
+            store.record_job_run("prompts", "segments", 1, 45.0, "done", text_model_profile="gemma4")
+            store.record_job_run("prompts", "segments", 1, 7.0, "done", text_model_profile="qwen35")
+
+            self.assertEqual(store.average_job_durations("qwen35"), {"prompts": 7.0})
+            self.assertEqual(store.average_job_durations("gemma4"), {"prompts": 45.0})
 
     def test_interrupted_running_items_are_marked_failed(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:

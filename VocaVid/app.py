@@ -31,6 +31,7 @@ DB_PATH = APP_ROOT / "VocaVid.sqlite3"
 ICON_ROOT = Path.cwd() / "icon"
 logger = logging.getLogger(__name__)
 _SPLIT_ACTIONS = {"prompts", "video-prompts", "images", "avatar-image", "clips"}
+_TEXT_ACTIONS = {"global-style-prompt", "scene-plan", "prompts", "video-prompts", "ai-fill-image", "ai-fill-video", "avatar-description"}
 _MANUAL_TIMING_MAX_FORM_FIELDS = 10_000
 
 
@@ -104,6 +105,8 @@ def create_app() -> FastAPI:
                 max(1, len(job.selected_indices or [])),
                 job.duration_seconds,
                 job.status,
+                job.text_model_profile,
+                job.video_seconds,
             )
         if job_options.autodelete_finished:
             jobs.delete_finished_jobs()
@@ -111,6 +114,9 @@ def create_app() -> FastAPI:
             shutdown_controller.schedule_after_queue_empty()
 
     jobs = JobQueue(max_workers=1, on_finish=record_finished_job)
+
+    def current_text_model_profile() -> str:
+        return "qwen35" if str(store.get_global_settings()["text_model_profile"] or "") == "qwen35" else "gemma4"
     app = FastAPI(title="VocaVid")
     app.state.jobs = jobs
     app.state.reels_pipeline = reels_pipeline
@@ -121,6 +127,20 @@ def create_app() -> FastAPI:
 
     def mark_used(project_id: int, action: str) -> None:
         store.mark_project_action_used(project_id, action)
+
+    def clip_video_seconds(project_id: int, item_kind: str, indices: list[int]) -> float:
+        if not indices:
+            return 0.0
+        project = store.get_project(project_id)
+        rows = store.list_segments(project_id) if item_kind == "segments" else store.list_lines(project_id)
+        index_key = "segment_index" if item_kind == "segments" else "line_index"
+        selected = {int(index) for index in indices}
+        handle = max(0.0, float(project["transition_handle_seconds"] or 0.0))
+        return sum(
+            max(0.0, float(row["end_sec"] or 0.0) - float(row["start_sec"] or 0.0)) + handle
+            for row in rows
+            if int(row[index_key]) in selected
+        )
 
     def regroup_now(project_id: int, log_label: str, force_cpu: bool = False) -> None:
         try:
@@ -153,6 +173,7 @@ def create_app() -> FastAPI:
         if action not in actions:
             return False
         label, callback = actions[action]
+        text_model_profile = current_text_model_profile() if action in _TEXT_ACTIONS else ""
         item_kind = _action_item_kind(action, bool(store.list_segments(project_id)))
         if action in _SPLIT_ACTIONS:
             indices = _selected_action_indices(project_id, item_kind, selected, store, action)
@@ -160,6 +181,7 @@ def create_app() -> FastAPI:
                 return False
             for index in indices:
                 shutdown_controller.cancel_pending()
+                video_seconds = clip_video_seconds(project_id, item_kind, [index]) if action == "clips" else 0.0
                 jobs.submit(
                     _job_name(label, project["name"], [index], item_kind=item_kind),
                     lambda selected_index=index: _run_project_action(pipeline, project_id, action, [selected_index]),
@@ -167,6 +189,8 @@ def create_app() -> FastAPI:
                     action=action,
                     item_kind=item_kind,
                     selected_indices=[index],
+                    text_model_profile=text_model_profile,
+                    video_seconds=video_seconds,
                 )
             return True
         shutdown_controller.cancel_pending()
@@ -177,6 +201,8 @@ def create_app() -> FastAPI:
             action=action,
             item_kind=item_kind,
             selected_indices=selected,
+            text_model_profile=text_model_profile,
+            video_seconds=clip_video_seconds(project_id, item_kind, selected) if action == "clips" else 0.0,
         )
         return True
 
@@ -201,6 +227,7 @@ def create_app() -> FastAPI:
             lambda: pipeline.generate_global_style_prompt(project_id),
             project_id=project_id,
             action="global-style-prompt",
+            text_model_profile=current_text_model_profile(),
         )
 
     def submit_initial_project_jobs(project_id: int, *, describe_avatar: bool = False) -> None:
@@ -211,6 +238,7 @@ def create_app() -> FastAPI:
                 lambda: pipeline.describe_avatar_face(project_id),
                 project_id=project_id,
                 action="avatar-description",
+                text_model_profile=current_text_model_profile(),
             )
         submit_global_style_prompt(project_id)
         if submit_project_action(project_id, "align"):
@@ -223,7 +251,7 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index():
         active_jobs = jobs.active_jobs()
-        average_durations = store.average_job_durations()
+        average_durations = store.average_job_durations(current_text_model_profile())
         projects = store.list_projects()
         global_settings = store.get_global_settings()
         project_previews = {int(project["id"]): store.list_segments(int(project["id"])) for project in projects}
@@ -244,7 +272,7 @@ def create_app() -> FastAPI:
     @app.get("/jobs/status")
     def jobs_status():
         active_jobs = jobs.active_jobs()
-        average_durations = store.average_job_durations()
+        average_durations = store.average_job_durations(current_text_model_profile())
         queue_estimate_seconds = _queue_estimate_seconds(active_jobs, average_durations)
         listed_jobs = jobs.list_jobs()
         return {
@@ -287,6 +315,7 @@ def create_app() -> FastAPI:
         chorus_group_size: int = Form(1),
         transition_handle_seconds: float = Form(0.5),
         whisper_model_size: str = Form("large-v3"),
+        text_model_profile: str = Form("qwen35"),
         autodelete_finished: str | None = Form(None),
         shutdown_after_queue: str | None = Form(None),
     ):
@@ -307,6 +336,7 @@ def create_app() -> FastAPI:
             chorus_group_size=max(1, int(chorus_group_size)),
             transition_handle_seconds=max(0.0, float(transition_handle_seconds)),
             whisper_model_size=normalize_whisper_model_size(whisper_model_size),
+            text_model_profile="qwen35" if text_model_profile == "qwen35" else "gemma4",
             autodelete_finished=int(job_options.autodelete_finished),
             shutdown_after_queue=int(job_options.shutdown_after_queue),
         )
@@ -429,7 +459,7 @@ def create_app() -> FastAPI:
         active_jobs = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
         listed_jobs = jobs.list_jobs()
-        averages = store.average_job_durations()
+        averages = store.average_job_durations(current_text_model_profile())
         return _page(
             project["name"],
             _project_html(
@@ -460,7 +490,7 @@ def create_app() -> FastAPI:
         used_actions = store.list_used_project_actions(project_id)
         active = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
-        return _project_status_payload(project, lines, segments, active, store.average_job_durations(), used_actions=used_actions, queue_jobs=queue_jobs)
+        return _project_status_payload(project, lines, segments, active, store.average_job_durations(current_text_model_profile()), used_actions=used_actions, queue_jobs=queue_jobs)
 
     @app.get("/projects/{project_id}/reels/status")
     def reels_status(project_id: int):
@@ -561,6 +591,7 @@ def create_app() -> FastAPI:
             lambda: pipeline.describe_avatar_face(project_id),
             project_id=project_id,
             action="avatar-description",
+            text_model_profile=current_text_model_profile(),
         )
         return _project_redirect(project_id)
 
@@ -822,6 +853,7 @@ def create_app() -> FastAPI:
             action="ai-fill-image",
             item_kind="lines",
             selected_indices=[line_index],
+            text_model_profile=current_text_model_profile(),
         )
         return _project_redirect(project_id)
 
@@ -836,6 +868,7 @@ def create_app() -> FastAPI:
             action="ai-fill-video",
             item_kind="lines",
             selected_indices=[line_index],
+            text_model_profile=current_text_model_profile(),
         )
         return _project_redirect(project_id)
 
@@ -865,6 +898,7 @@ def create_app() -> FastAPI:
             action="ai-fill-image",
             item_kind="segments",
             selected_indices=[segment_index],
+            text_model_profile=current_text_model_profile(),
         )
         return _project_redirect(project_id)
 
@@ -879,6 +913,7 @@ def create_app() -> FastAPI:
             action="ai-fill-video",
             item_kind="segments",
             selected_indices=[segment_index],
+            text_model_profile=current_text_model_profile(),
         )
         return _project_redirect(project_id)
 

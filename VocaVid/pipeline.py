@@ -67,6 +67,16 @@ class Pipeline:
         self.kdenlive_template = Path.cwd() / "templates" / "kdenlivetemplate.kdenlive"
         self.workspace.mkdir(parents=True, exist_ok=True)
 
+    def _text_model_profile(self) -> str:
+        settings = self.store.get_global_settings()
+        return "qwen35" if str(settings["text_model_profile"] or "").strip() == "qwen35" else "gemma4"
+
+    def _promptgen_workflow_path(self) -> Path | None:
+        return self.workflows.optional_promptgen_for_profile(self._text_model_profile())
+
+    def _avatar_description_workflow_path(self) -> Path | None:
+        return self.workflows.optional_avatar_description_for_profile(self._text_model_profile())
+
     def align_evenly(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         project = self.store.get_project(project_id)
         lines = [
@@ -366,7 +376,7 @@ class Pipeline:
         segments = self._selected_segments(project_id, selected_segment_indices)
         if not segments:
             return
-        workflow_path = self.workflows.optional_promptgen()
+        workflow_path = self._promptgen_workflow_path()
         plans: dict[int, str]
         full_plan = ""
         if workflow_path:
@@ -423,7 +433,7 @@ class Pipeline:
         lyrics = "\n".join(str(row["clean_text"]) for row in self.store.list_lines(project_id) if str(row["clean_text"]).strip())
         prompt = make_global_style_prompt(str(project["genre"] or ""), lyrics)
         style_prompt = ""
-        workflow_path = self.workflows.optional_promptgen()
+        workflow_path = self._promptgen_workflow_path()
         if workflow_path:
             workflow = load_workflow(workflow_path)
             client = ComfyClient(project["comfy_base_url"])
@@ -440,7 +450,7 @@ class Pipeline:
 
     def describe_avatar_face(self, project_id: int) -> None:
         project = self.store.get_project(project_id)
-        workflow_path = self.workflows.optional_avatar_description()
+        workflow_path = self._avatar_description_workflow_path()
         if not workflow_path:
             raise FileNotFoundError(f"avatar_description workflow is missing: put the exported ComfyUI workflow at {self.workflows.avatar_description}")
         reference_image_path = self._project_avatar_reference_path(project)
@@ -475,7 +485,7 @@ class Pipeline:
             segments = _editable_rows(selected_segments)
             if not segments:
                 return
-            workflow_path = self.workflows.optional_promptgen()
+            workflow_path = self._promptgen_workflow_path()
             if not workflow_path:
                 for row in segments:
                     scene_plan = f"\nScene plan: {row['scene_plan']}" if row["scene_plan"] else ""
@@ -486,7 +496,7 @@ class Pipeline:
             for row in segments:
                 self._run_comfy_for_segment_prompt(project_id, row, workflow_path)
             return
-        workflow_path = self.workflows.optional_promptgen()
+        workflow_path = self._promptgen_workflow_path()
         if not workflow_path:
             for row in self._editable_selected_rows(project_id, selected_line_indices):
                 avatar_context = f"\nAvatar identity: {_avatar_identity_context(project)}" if _avatar_identity_context(project) else ""
@@ -532,7 +542,7 @@ class Pipeline:
             segments = _editable_rows(selected_segments)
             if not segments:
                 return
-            workflow_path = self.workflows.optional_promptgen()
+            workflow_path = self._promptgen_workflow_path()
             if not workflow_path:
                 for row in segments:
                     prompt = make_videoprompt_prompt(
@@ -561,7 +571,7 @@ class Pipeline:
                 self._run_comfy_for_segment_video_prompt(project_id, row, workflow_path)
             return
 
-        workflow_path = self.workflows.optional_promptgen()
+        workflow_path = self._promptgen_workflow_path()
         if not workflow_path:
             for row in self._editable_selected_rows(project_id, selected_line_indices):
                 duration = 0.0
@@ -1230,7 +1240,7 @@ class Pipeline:
             self.store.update_segment(project_id, row["segment_index"], status="failed", error=result.error or "No text output")
 
     def _run_comfy_for_scene_fill(self, project_id: int, row, item_kind: str, target_field: str, draft_text: str) -> None:
-        workflow_path = self.workflows.optional_promptgen()
+        workflow_path = self._promptgen_workflow_path()
         row_key = "segment_index" if item_kind == "segments" else "line_index"
         update = self.store.update_segment if item_kind == "segments" else self.store.update_line
         action_name = "ai-fill-video" if target_field == "video" else "ai-fill-image"
