@@ -135,19 +135,22 @@ def make_promptgen_prompt(
     lyric_text: str,
     section: str = "",
     is_chorus: bool = False,
+    use_reference: bool | None = None,
     global_style: str = "",
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
     avatar_identity_context: str = "",
 ) -> str:
-    mode = "chorus/refrain featuring the singer" if is_chorus else "non-chorus story visual"
+    use_reference = is_chorus if use_reference is None else use_reference
+    mode = "reference-performer performance shot" if use_reference else "song-world story visual; singer only if the scene plan explicitly calls for an occasional performance fragment"
     return render_prompt_template(
         load_prompt_template(),
         _prompt_variables(
             lyric_text=lyric_text,
             section=section,
             is_chorus=is_chorus,
+            use_reference=use_reference,
             mode=mode,
             global_style=global_style,
             duration=duration,
@@ -163,13 +166,15 @@ def make_videoprompt_prompt(
     image_prompt: str = "",
     section: str = "",
     is_chorus: bool = False,
+    use_reference: bool | None = None,
     global_style: str = "",
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
     avatar_identity_context: str = "",
 ) -> str:
-    mode = "performance shot featuring the singer" if is_chorus else "story or atmosphere shot"
+    use_reference = is_chorus if use_reference is None else use_reference
+    mode = "reference-performer performance shot" if use_reference else "song-world story or atmosphere shot; singer only if the scene plan explicitly calls for an occasional performance fragment"
     return render_prompt_template(
         load_named_prompt_template("videoprompt.txt", DEFAULT_VIDEOPROMPT_TEMPLATE),
         _prompt_variables(
@@ -177,6 +182,7 @@ def make_videoprompt_prompt(
             image_prompt=image_prompt,
             section=section,
             is_chorus=is_chorus,
+            use_reference=use_reference,
             mode=mode,
             global_style=global_style,
             duration=duration,
@@ -202,13 +208,15 @@ def make_scenefill_prompt(
     video_prompt: str = "",
     section: str = "",
     is_chorus: bool = False,
+    use_reference: bool | None = None,
     global_style: str = "",
     duration: str = "",
     genre: str = "",
     scene_plan: str = "",
     avatar_identity_context: str = "",
 ) -> str:
-    mode = "performance shot featuring the singer" if is_chorus else "story or atmosphere shot"
+    use_reference = is_chorus if use_reference is None else use_reference
+    mode = "reference-performer performance shot" if use_reference else "song-world story or atmosphere shot; singer only if the scene plan explicitly calls for an occasional performance fragment"
     return render_prompt_template(
         load_named_prompt_template("scenefill.txt", DEFAULT_SCENEFILL_TEMPLATE),
         {
@@ -217,6 +225,7 @@ def make_scenefill_prompt(
                 image_prompt=image_prompt,
                 section=section,
                 is_chorus=is_chorus,
+                use_reference=use_reference,
                 mode=mode,
                 global_style=global_style,
                 duration=duration,
@@ -239,6 +248,7 @@ def _prompt_variables(
     image_prompt: str = "",
     section: str = "",
     is_chorus: bool = False,
+    use_reference: bool | None = None,
     mode: str = "",
     global_style: str = "",
     duration: str = "",
@@ -257,6 +267,8 @@ def _prompt_variables(
         "SECTION": section,
         "is_chorus": str(is_chorus).lower(),
         "IS_CHORUS": str(is_chorus).lower(),
+        "use_reference": str(is_chorus if use_reference is None else use_reference).lower(),
+        "USE_REFERENCE": str(is_chorus if use_reference is None else use_reference).lower(),
         "mode": mode,
         "MODE": mode,
         "global_style": global_style,
@@ -281,6 +293,7 @@ def inject_promptgen_context(workflow_template: dict[str, Any], variables: dict[
         lyric_text=str(variables.get("lyric_text", "")),
         section=str(variables.get("section", "")),
         is_chorus=str(variables.get("is_chorus", "")).lower() == "true",
+        use_reference=str(variables.get("use_reference", "")).lower() == "true",
         global_style=str(variables.get("global_style", "")),
         duration=str(variables.get("duration", "")),
         genre=str(variables.get("genre", "")),
@@ -304,6 +317,7 @@ def inject_videoprompt_context(workflow_template: dict[str, Any], variables: dic
         image_prompt=str(variables.get("image_prompt", variables.get("prompt", ""))),
         section=str(variables.get("section", "")),
         is_chorus=str(variables.get("is_chorus", "")).lower() == "true",
+        use_reference=str(variables.get("use_reference", "")).lower() == "true",
         global_style=str(variables.get("global_style", "")),
         duration=str(variables.get("duration", "")),
         genre=str(variables.get("genre", "")),
@@ -327,6 +341,7 @@ def inject_scenefill_context(workflow_template: dict[str, Any], variables: dict[
         video_prompt=str(variables.get("video_prompt", "")),
         section=str(variables.get("section", "")),
         is_chorus=str(variables.get("is_chorus", "")).lower() == "true",
+        use_reference=str(variables.get("use_reference", "")).lower() == "true",
         global_style=str(variables.get("global_style", "")),
         duration=str(variables.get("duration", "")),
         genre=str(variables.get("genre", "")),

@@ -9,10 +9,11 @@ Lyrics lines per chorus/refrain clip: {CHORUS_GROUP_SIZE}
 Use the fixed render segments below to infer the song structure and energy curve.
 
 Performance intent:
-The performer appears in chorus/refrain sections whenever the lyrics and genre support it.
+Every chorus/refrain segment with uses_reference=True features the reference performer as the focus person in visible singing or lip-sync performance.
+Segments with uses_reference=False are primarily song-world visuals: story, locations, symbols, objects, crowds, landscapes, abstraction, and environmental detail. The performer may appear only occasionally in these segments, never as the main subject in consecutive non-reference segments or in more than 1 out of 4 non-reference segments.
 Use live performance language for band-friendly genres: microphone, stage, band, backlights, crowd energy, and dramatic music-video scale.
 For electronic, EDM, synth, techno, ambient, or DJ-oriented genres, avoid forcing a classic band; use a microphone, DJ/controller setup, light rig, club, LED wall, or solo electronic performance when appropriate.
-Every scene that includes the performer must be planned as visible singing or lip-sync, never silent posing.
+Every scene that includes the performer must be planned as visible singing or lip-sync, never silent posing. Do not make the reference singer's identity a recurring background element in non-reference segments.
 
 Return only these sections:
 Core concept: one sentence

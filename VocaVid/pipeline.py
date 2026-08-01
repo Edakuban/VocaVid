@@ -489,7 +489,11 @@ class Pipeline:
             if not workflow_path:
                 for row in segments:
                     scene_plan = f"\nScene plan: {row['scene_plan']}" if row["scene_plan"] else ""
-                    avatar_context = f"\nAvatar identity: {_avatar_identity_context(project)}" if _avatar_identity_context(project) else ""
+                    avatar_context = (
+                        f"\nAvatar identity: {_avatar_identity_context(project)}"
+                        if bool(row["use_reference"]) and _avatar_identity_context(project)
+                        else ""
+                    )
                     prompt = f"{row['clean_text']}.{scene_plan} {project['global_style_prompt']}{avatar_context}".strip()
                     self.store.update_segment(project_id, row["segment_index"], prompt=prompt, status="prompted", error="", last_action="prompts")
                 return
@@ -499,7 +503,11 @@ class Pipeline:
         workflow_path = self._promptgen_workflow_path()
         if not workflow_path:
             for row in self._editable_selected_rows(project_id, selected_line_indices):
-                avatar_context = f"\nAvatar identity: {_avatar_identity_context(project)}" if _avatar_identity_context(project) else ""
+                avatar_context = (
+                    f"\nAvatar identity: {_avatar_identity_context(project)}"
+                    if bool(row["use_reference"]) and _avatar_identity_context(project)
+                    else ""
+                )
                 prompt = f"{row['clean_text']}. {project['global_style_prompt']}{avatar_context}".strip()
                 self.store.update_line(project_id, row["line_index"], prompt=prompt, status="prompted", error="", last_action="prompts")
             return
@@ -554,7 +562,7 @@ class Pipeline:
                         duration=f"{float(row['end_sec']) - float(row['start_sec']):.3f}",
                         genre=str(project["genre"] or ""),
                         scene_plan=str(row["scene_plan"] or ""),
-                        avatar_identity_context=_avatar_identity_context(project),
+                        avatar_identity_context=_avatar_identity_context(project) if bool(row["use_reference"]) else "",
                     )
                     self.store.update_segment(
                         project_id,
@@ -585,7 +593,7 @@ class Pipeline:
                     global_style=str(project["global_style_prompt"]),
                     duration=f"{duration:.3f}",
                     genre=str(project["genre"] or ""),
-                    avatar_identity_context=_avatar_identity_context(project),
+                    avatar_identity_context=_avatar_identity_context(project) if bool(row["use_reference"]) else "",
                 )
                 self.store.update_line(
                     project_id,
@@ -1311,6 +1319,7 @@ class Pipeline:
         duration = 0.0
         if row["start_sec"] is not None and row["end_sec"] is not None:
             duration = float(row["end_sec"]) - float(row["start_sec"])
+        avatar_identity_context = _avatar_identity_context(project) if bool(_row_value(row, "use_reference", 0)) else ""
         return {
             "lyric_text": row["clean_text"],
             "section": row["section"],
@@ -1319,7 +1328,7 @@ class Pipeline:
             "global_style": project["global_style_prompt"],
             "avatar_gender": _normalize_avatar_gender(_row_value(project, "avatar_gender", "")),
             "avatar_face_description": _row_value(project, "avatar_face_description", "") or "",
-            "avatar_identity_context": _avatar_identity_context(project),
+            "avatar_identity_context": avatar_identity_context,
             "duration": f"{duration:.3f}",
             "fps": str(project["fps"]),
             "output_resolution": project["output_resolution"],

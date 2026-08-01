@@ -17,16 +17,17 @@ The scene plan must feel like a real edited music video, not a sequence of simil
 
 Chorus/refrain performance policy:
 
-* Prefer chorus/refrain segments as performance shots with the reference performer as the focus person, especially when the segment has uses_reference=True.
+* Every chorus/refrain segment with uses_reference=True must feature the reference performer as the focus person in a visible singing or lip-sync performance. Do not replace these segments with an environment, object, crowd, or anonymous figure.
 * For rock, metal, punk, pop-rock, country, folk, soul, gospel, and similar band-friendly genres, performance shots may include a microphone, live band, stage, backlights, crowd energy, dramatic silhouettes, and concert-scale lighting.
 * For electronic, EDM, synth, techno, ambient, DJ, or club-oriented genres, do not force a classic live band. Use genre-appropriate performance language such as microphone, DJ/controller setup, light rig, club, LED wall, projection, solo performer, or electronic stage.
-* Not every scene must include the performer. Every scene that includes the performer must show visible singing or lip-sync to the lyrics.
-* Verse and bridge segments should mix story, atmosphere, symbols, inserts, locations, and occasional performance fragments.
+* Segments with uses_reference=False are song-world shots first: prioritize story, atmosphere, symbols, inserts, locations, objects, crowds, landscapes, abstraction, and environmental storytelling.
+* In segments with uses_reference=False, the singer may appear only as an occasional, brief performance fragment; never make the singer the primary subject in more than 1 out of 4 such segments in this batch, and never use consecutive singer-focused non-reference segments.
+* Every scene that includes the performer must show visible singing or lip-sync to the lyrics.
 
 Shot variety requirements:
 
 * Maximum 1 out of 3 consecutive segments may primarily show the main character walking or standing.
-* At least 30% of all segments must focus on something other than the main character.
+* At least 50% of all segments must focus on something other than the main character.
 * Include a balanced mix of:
 
   * performance shots,
@@ -45,8 +46,8 @@ Continuity rules:
 * Keep locations, motifs, color language, props, characters, atmosphere, and visual symbolism consistent across the full timeline.
 * Build a clear emotional progression from the beginning to the end.
 * Chorus/refrain segments should feel connected through recurring performance, identity, scale, or symbolic shots, but should escalate with each repetition.
-* Segments with uses_reference=True should be shots that can feature the singer/person from the reference images.
-* Segments with uses_reference=False should preferably be used for worldbuilding, objects, machinery, symbolic imagery, crowds, landscapes, abstract rhythm shots, or environmental storytelling.
+* Segments with uses_reference=True are mandatory reference-performer shots.
+* Segments with uses_reference=False must be used predominantly for worldbuilding, objects, machinery, symbolic imagery, crowds, landscapes, abstract rhythm shots, or environmental storytelling; do not describe the reference singer, their face, or their distinctive identity unless this is one of the occasional performance fragments permitted above.
 
 Creative interpretation rules:
 

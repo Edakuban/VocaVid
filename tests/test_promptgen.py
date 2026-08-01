@@ -91,6 +91,24 @@ class PromptgenTests(unittest.TestCase):
         self.assertIn("mouth movement", prompt)
         self.assertIn("silent posing", prompt)
 
+    def test_reference_flag_controls_performer_mode_independently_of_section(self):
+        verse_prompt = make_promptgen_prompt(
+            lyric_text="A distant light fades",
+            section="Verse",
+            is_chorus=False,
+            use_reference=False,
+        )
+        refrain_prompt = make_promptgen_prompt(
+            lyric_text="Bring me home",
+            section="Refrain",
+            is_chorus=True,
+            use_reference=True,
+        )
+
+        self.assertIn("song-world story visual", verse_prompt)
+        self.assertIn("occasional performance fragment", verse_prompt)
+        self.assertIn("reference-performer performance shot", refrain_prompt)
+
     def test_make_global_style_prompt_contains_genre_and_lyrics_request(self):
         prompt = make_global_style_prompt("industrial rock", "One line\nHook line")
 
