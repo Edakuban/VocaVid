@@ -9,6 +9,10 @@ from time import perf_counter
 from typing import Callable
 
 
+class RetryableJobError(RuntimeError):
+    """A failed job that is safe to place at the end of the queue once."""
+
+
 @dataclass
 class Job:
     id: int
@@ -25,6 +29,8 @@ class Job:
     started_at: str | None = None
     finished_at: str | None = None
     duration_seconds: float | None = None
+    retry_count: int = 0
+    callback: Callable[[], object] | None = None
 
 
 class JobQueue:
@@ -46,6 +52,7 @@ class JobQueue:
         text_model_profile: str = "",
         video_seconds: float = 0.0,
         selected_indices: list[int] | None = None,
+        retry_count: int = 0,
     ) -> int:
         job_id = next(self._ids)
         with self._lock:
@@ -60,6 +67,8 @@ class JobQueue:
                 text_model_profile=text_model_profile,
                 video_seconds=max(0.0, float(video_seconds)),
                 selected_indices=list(selected_indices or []),
+                retry_count=retry_count,
+                callback=func,
             )
         future = self.executor.submit(self._run, job_id, func)
         future.add_done_callback(lambda item: self._finish(job_id, item))
@@ -123,6 +132,7 @@ class JobQueue:
 
     def _finish(self, job_id: int, future: Future) -> None:
         finished_job = None
+        retry_args = None
         with self._lock:
             if job_id not in self._jobs:
                 return
@@ -152,6 +162,22 @@ class JobQueue:
                 started_at=job.started_at,
                 finished_at=job.finished_at,
                 duration_seconds=job.duration_seconds,
+                retry_count=job.retry_count,
             )
+            retry = isinstance(future.exception(), RetryableJobError) and job.retry_count < 1 and job.callback is not None
+            if retry:
+                retry_args = {
+                    "name": f"{job.name} (retry {job.retry_count + 1}/1)",
+                    "func": job.callback,
+                    "project_id": job.project_id,
+                    "action": job.action,
+                    "item_kind": job.item_kind,
+                    "text_model_profile": job.text_model_profile,
+                    "video_seconds": job.video_seconds,
+                    "selected_indices": job.selected_indices,
+                    "retry_count": job.retry_count + 1,
+                }
+        if retry_args is not None:
+            self.submit(**retry_args)
         if self._on_finish is not None and finished_job is not None:
             self._on_finish(finished_job)

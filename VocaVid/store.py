@@ -600,6 +600,21 @@ class Store:
                 )
             }
 
+    def completed_job_count(self, action: str, text_model_profile: str = "qwen35") -> int:
+        """Number of comparable completed jobs available for a timeout policy."""
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) AS job_count
+                FROM job_runs
+                WHERE status = 'done' AND action = ?
+                  AND (action NOT IN ('global-style-prompt', 'scene-plan', 'prompts', 'video-prompts', 'ai-fill-image', 'ai-fill-video', 'avatar-description')
+                       OR text_model_profile = ?)
+                """,
+                (action, text_model_profile),
+            ).fetchone()
+            return int(row["job_count"] if row else 0)
+
     def delete_project(self, project_id: int) -> None:
         with self._connect() as conn:
             analysis_ids = [row["id"] for row in conn.execute("SELECT id FROM reel_analyses WHERE project_id = ?", (project_id,))]

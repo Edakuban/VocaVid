@@ -103,7 +103,22 @@ class ComfyClient:
             if poll_interval_sec:
                 time.sleep(poll_interval_sec)
 
-        return ComfyResult(prompt_id=prompt_id, ok=False, output_files=[], error="Timed out waiting for ComfyUI job")
+        self.interrupt()
+        return ComfyResult(
+            prompt_id=prompt_id,
+            ok=False,
+            output_files=[],
+            error=f"COMFY_TIMEOUT: exceeded {timeout_sec:.0f}s; sent interrupt to ComfyUI",
+        )
+
+    def interrupt(self) -> None:
+        """Best-effort cancellation of ComfyUI's current execution."""
+        try:
+            self.transport.post_json(f"{self.base_url}/interrupt", {})
+        except (OSError, urllib.error.URLError, urllib.error.HTTPError, ValueError):
+            # A timeout must still release VocaVid's worker even if ComfyUI is
+            # too unhealthy to acknowledge the interrupt request.
+            pass
 
     @staticmethod
     def http_error_message(exc: urllib.error.HTTPError) -> str:

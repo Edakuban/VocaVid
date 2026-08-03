@@ -136,3 +136,11 @@ class ComfyTests(unittest.TestCase):
         )
 
         self.assertIn("bad node", ComfyClient.http_error_message(error))
+
+    def test_comfy_client_interrupts_current_execution(self):
+        transport = FakeTransport()
+        client = ComfyClient("http://127.0.0.1:8188", transport=transport)
+
+        client.interrupt()
+
+        self.assertEqual(transport.posts, [("http://127.0.0.1:8188/interrupt", {})])

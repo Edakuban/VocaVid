@@ -1,7 +1,7 @@
 import unittest
 from datetime import datetime
 
-from VocaVid.worker import JobQueue
+from VocaVid.worker import JobQueue, RetryableJobError
 
 
 class WorkerTests(unittest.TestCase):
@@ -127,6 +127,24 @@ class WorkerTests(unittest.TestCase):
         self.assertGreaterEqual(jobs[0].duration_seconds, 0.0)
         datetime.fromisoformat(jobs[0].started_at)
         datetime.fromisoformat(jobs[0].finished_at)
+
+    def test_retryable_job_is_requeued_once_at_the_end(self):
+        attempts = []
+
+        def retry_once():
+            attempts.append("run")
+            if len(attempts) == 1:
+                raise RetryableJobError("Comfy timed out")
+
+        queue = JobQueue(max_workers=1)
+        queue.submit("clip", retry_once, action="clips")
+        queue.executor.shutdown(wait=True)
+
+        jobs = queue.list_jobs()
+        self.assertEqual(attempts, ["run", "run"])
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual([job.status for job in jobs], ["done", "failed"])
+        self.assertEqual(jobs[0].retry_count, 1)
 
 
 class queue_gate:

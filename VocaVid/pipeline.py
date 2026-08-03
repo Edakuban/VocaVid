@@ -25,11 +25,16 @@ from .segments import build_render_segments
 from .store import Store
 from .timing import apply_manual_timing, distribute_evenly
 from .workflows import WorkflowPaths
+from .worker import RetryableJobError
 
 
 logger = logging.getLogger(__name__)
 MIN_CONFIDENT_ALIGNMENT_RATIO = 0.30
 SCENE_PLAN_BATCH_SIZE = 12
+COMFY_TIMEOUT_SAMPLE_SIZE = 50
+COMFY_TIMEOUT_MULTIPLIER = 10
+COMFY_TIMEOUT_MIN_SEC = 300.0
+COMFY_CLIP_TIMEOUT_MIN_SEC = 900.0
 DEFAULT_AVATAR_IMAGE_TEMPLATE = """Edit Image 1 by replacing only the primary focus person with the identity from Image 2.
 
 Image prompt context:
@@ -988,7 +993,7 @@ class Pipeline:
         except Exception as exc:
             self.store.update_line(project_id, row["line_index"], status="failed", error=str(exc))
             return
-        result = client.run_workflow(workflow, variables, partial_execution_targets=partial_execution_targets)
+        result = self._run_comfy_workflow(client, workflow, variables, partial_execution_targets, action, project, row)
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
                 project,
@@ -1007,6 +1012,7 @@ class Pipeline:
             self.store.update_line(project_id, row["line_index"], prompt=json.dumps(result.output_files), status="done", error="")
         else:
             self.store.update_line(project_id, row["line_index"], status="failed", error=result.error or "No output files")
+            self._raise_if_comfy_timeout(result.error)
 
     def _run_comfy_for_segment(
         self,
@@ -1037,7 +1043,7 @@ class Pipeline:
         except Exception as exc:
             self.store.update_segment(project_id, row["segment_index"], status="failed", error=str(exc))
             return
-        result = client.run_workflow(workflow, variables, partial_execution_targets=partial_execution_targets)
+        result = self._run_comfy_workflow(client, workflow, variables, partial_execution_targets, action, project, row)
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
                 project,
@@ -1054,6 +1060,38 @@ class Pipeline:
             )
         else:
             self.store.update_segment(project_id, row["segment_index"], status="failed", error=result.error or "No output files")
+            self._raise_if_comfy_timeout(result.error)
+
+    def _run_comfy_workflow(self, client, workflow, variables, partial_execution_targets, action, project, row):
+        kwargs = {}
+        if partial_execution_targets is not None:
+            kwargs["partial_execution_targets"] = partial_execution_targets
+        timeout_sec = self._comfy_timeout_seconds(action, project, row)
+        if timeout_sec is not None:
+            kwargs["timeout_sec"] = timeout_sec
+        return client.run_workflow(workflow, variables, **kwargs)
+
+    def _comfy_timeout_seconds(self, action: str | None, project, row) -> float | None:
+        """Use a learned limit only once there is enough stable history."""
+        if not action:
+            return None
+        profile = str(project["text_model_profile"] or "qwen35") if action in {"prompts", "video-prompts"} else "qwen35"
+        if self.store.completed_job_count(action, profile) < COMFY_TIMEOUT_SAMPLE_SIZE:
+            return None
+        average = self.store.average_job_durations(profile).get(action)
+        if not average:
+            return None
+        expected = float(average)
+        if action == "clips":
+            handle = max(0.0, float(project["transition_handle_seconds"] or 0.0))
+            expected *= max(0.1, float(row["end_sec"] or 0.0) - float(row["start_sec"] or 0.0) + handle)
+        minimum = COMFY_CLIP_TIMEOUT_MIN_SEC if action == "clips" else COMFY_TIMEOUT_MIN_SEC
+        return max(minimum, expected * COMFY_TIMEOUT_MULTIPLIER)
+
+    @staticmethod
+    def _raise_if_comfy_timeout(error: str) -> None:
+        if str(error).startswith("COMFY_TIMEOUT:"):
+            raise RetryableJobError(str(error))
 
     def _run_comfy_for_avatar_line(self, project_id: int, row, workflow_path: Path) -> None:
         project = self.store.get_project(project_id)
