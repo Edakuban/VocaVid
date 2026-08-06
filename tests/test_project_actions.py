@@ -66,7 +66,7 @@ class ProjectActionTests(unittest.TestCase):
             store.record_job_run("images", "segments", 1, 10.0, "done")
             store.record_job_run("images", "segments", 1, 20.0, "done")
             store.record_job_run("images", "segments", 1, 99.0, "failed")
-            store.record_job_run("clips", "segments", 1, 120.0, "done", video_seconds=6.0)
+            store.record_job_run("clips", "segments", 1, 120.0, "done", generation_profile="ltx23-quality", video_seconds=6.0)
 
             self.assertEqual(store.average_job_durations(), {"clips": 20.0, "images": 15.0})
 
@@ -74,10 +74,21 @@ class ProjectActionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
             store = Store(Path(directory) / "test.sqlite3")
 
-            store.record_job_run("clips", "segments", 1, 20.0, "done", video_seconds=2.0)
-            store.record_job_run("clips", "segments", 1, 90.0, "done", video_seconds=6.0)
+            store.record_job_run("clips", "segments", 1, 20.0, "done", generation_profile="ltx23-quality", video_seconds=2.0)
+            store.record_job_run("clips", "segments", 1, 90.0, "done", generation_profile="ltx23-quality", video_seconds=6.0)
 
             self.assertEqual(store.average_job_durations()["clips"], 13.75)
+
+    def test_clip_average_ignores_legacy_rows_without_video_duration(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            store = Store(Path(directory) / "test.sqlite3")
+
+            # Rows recorded before video_seconds existed have the migration
+            # default of zero. They cannot be used for a per-second average.
+            store.record_job_run("clips", "segments", 1, 36_000.0, "done")
+            store.record_job_run("clips", "segments", 1, 60.0, "done", generation_profile="ltx23-quality", video_seconds=4.0)
+
+            self.assertEqual(store.average_job_durations()["clips"], 15.0)
 
     def test_text_job_averages_are_separated_by_model_profile(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
@@ -88,6 +99,23 @@ class ProjectActionTests(unittest.TestCase):
 
             self.assertEqual(store.average_job_durations("qwen35"), {"prompts": 7.0})
             self.assertEqual(store.average_job_durations("gemma4"), {"prompts": 45.0})
+
+    def test_avatar_and_clip_averages_are_separated_by_generation_profile(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:
+            store = Store(Path(directory) / "test.sqlite3")
+
+            store.record_job_run("avatar-image", "segments", 1, 90.0, "done", generation_profile="flux2-klein-9b-base")
+            store.record_job_run("avatar-image", "segments", 1, 8.4, "done", generation_profile="flux2-klein-4b-distilled")
+            store.record_job_run("clips", "segments", 1, 120.0, "done", generation_profile="ltx23-quality", video_seconds=6.0)
+            store.record_job_run("clips", "segments", 1, 60.0, "done", generation_profile="ltx23-fast", video_seconds=6.0)
+
+            fast = store.average_job_durations(avatar_image_profile="flux2-klein-4b-distilled", clip_generation_profile="ltx23-fast")
+            quality = store.average_job_durations(avatar_image_profile="flux2-klein-9b-base", clip_generation_profile="ltx23-quality")
+
+            self.assertEqual(fast["avatar-image"], 8.4)
+            self.assertEqual(fast["clips"], 10.0)
+            self.assertEqual(quality["avatar-image"], 90.0)
+            self.assertEqual(quality["clips"], 20.0)
 
     def test_interrupted_running_items_are_marked_failed(self):
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory:

@@ -18,6 +18,7 @@ except ImportError as exc:  # pragma: no cover
 
 from .lyrics import parse_suno_lyrics
 from .alignment import normalize_whisper_model_size
+from .workflows import normalize_avatar_image_profile, normalize_clip_generation_profile
 from .paths import slug_folder_name, storage_relative_path
 from .pipeline import Pipeline
 from .reels import ReelsPipeline
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
                 job.duration_seconds,
                 job.status,
                 job.text_model_profile,
+                job.generation_profile,
                 job.video_seconds,
             )
         if job_options.autodelete_finished:
@@ -117,6 +119,14 @@ def create_app() -> FastAPI:
 
     def current_text_model_profile() -> str:
         return "qwen35" if str(store.get_global_settings()["text_model_profile"] or "") == "qwen35" else "gemma4"
+
+    def current_duration_profiles() -> tuple[str, str, str]:
+        settings = store.get_global_settings()
+        return (
+            "qwen35" if str(settings["text_model_profile"] or "") == "qwen35" else "gemma4",
+            str(settings["avatar_image_profile"] or "flux2-klein-4b-distilled"),
+            str(settings["clip_generation_profile"] or "ltx23-quality"),
+        )
     app = FastAPI(title="VocaVid")
     app.state.jobs = jobs
     app.state.reels_pipeline = reels_pipeline
@@ -174,6 +184,12 @@ def create_app() -> FastAPI:
             return False
         label, callback = actions[action]
         text_model_profile = current_text_model_profile() if action in _TEXT_ACTIONS else ""
+        settings = store.get_global_settings()
+        generation_profile = (
+            str(settings["avatar_image_profile"] or "") if action == "avatar-image"
+            else str(settings["clip_generation_profile"] or "") if action == "clips"
+            else ""
+        )
         item_kind = _action_item_kind(action, bool(store.list_segments(project_id)))
         if action in _SPLIT_ACTIONS:
             indices = _selected_action_indices(project_id, item_kind, selected, store, action)
@@ -190,6 +206,7 @@ def create_app() -> FastAPI:
                     item_kind=item_kind,
                     selected_indices=[index],
                     text_model_profile=text_model_profile,
+                    generation_profile=generation_profile,
                     video_seconds=video_seconds,
                 )
             return True
@@ -202,6 +219,7 @@ def create_app() -> FastAPI:
             item_kind=item_kind,
             selected_indices=selected,
             text_model_profile=text_model_profile,
+            generation_profile=generation_profile,
             video_seconds=clip_video_seconds(project_id, item_kind, selected) if action == "clips" else 0.0,
         )
         return True
@@ -251,7 +269,7 @@ def create_app() -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def index():
         active_jobs = jobs.active_jobs()
-        average_durations = store.average_job_durations(current_text_model_profile())
+        average_durations = store.average_job_durations(*current_duration_profiles())
         projects = store.list_projects()
         global_settings = store.get_global_settings()
         project_previews = {int(project["id"]): store.list_segments(int(project["id"])) for project in projects}
@@ -272,7 +290,7 @@ def create_app() -> FastAPI:
     @app.get("/jobs/status")
     def jobs_status():
         active_jobs = jobs.active_jobs()
-        average_durations = store.average_job_durations(current_text_model_profile())
+        average_durations = store.average_job_durations(*current_duration_profiles())
         queue_estimate_seconds = _queue_estimate_seconds(active_jobs, average_durations)
         listed_jobs = jobs.list_jobs()
         return {
@@ -316,6 +334,8 @@ def create_app() -> FastAPI:
         transition_handle_seconds: float = Form(0.5),
         whisper_model_size: str = Form("large-v3"),
         text_model_profile: str = Form("qwen35"),
+        avatar_image_profile: str = Form("flux2-klein-4b-distilled"),
+        clip_generation_profile: str = Form("ltx23-quality"),
         autodelete_finished: str | None = Form(None),
         shutdown_after_queue: str | None = Form(None),
     ):
@@ -337,6 +357,8 @@ def create_app() -> FastAPI:
             transition_handle_seconds=max(0.0, float(transition_handle_seconds)),
             whisper_model_size=normalize_whisper_model_size(whisper_model_size),
             text_model_profile="qwen35" if text_model_profile == "qwen35" else "gemma4",
+            avatar_image_profile=normalize_avatar_image_profile(avatar_image_profile),
+            clip_generation_profile=normalize_clip_generation_profile(clip_generation_profile),
             autodelete_finished=int(job_options.autodelete_finished),
             shutdown_after_queue=int(job_options.shutdown_after_queue),
         )
@@ -459,7 +481,7 @@ def create_app() -> FastAPI:
         active_jobs = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
         listed_jobs = jobs.list_jobs()
-        averages = store.average_job_durations(current_text_model_profile())
+        averages = store.average_job_durations(*current_duration_profiles())
         return _page(
             project["name"],
             _project_html(
@@ -490,7 +512,7 @@ def create_app() -> FastAPI:
         used_actions = store.list_used_project_actions(project_id)
         active = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
-        return _project_status_payload(project, lines, segments, active, store.average_job_durations(current_text_model_profile()), used_actions=used_actions, queue_jobs=queue_jobs)
+        return _project_status_payload(project, lines, segments, active, store.average_job_durations(*current_duration_profiles()), used_actions=used_actions, queue_jobs=queue_jobs)
 
     @app.get("/projects/{project_id}/reels/status")
     def reels_status(project_id: int):

@@ -82,6 +82,12 @@ class Pipeline:
     def _avatar_description_workflow_path(self) -> Path | None:
         return self.workflows.optional_avatar_description_for_profile(self._text_model_profile())
 
+    def _avatar_image_profile(self) -> str:
+        return str(self.store.get_global_settings()["avatar_image_profile"] or "")
+
+    def _clip_generation_profile(self) -> str:
+        return str(self.store.get_global_settings()["clip_generation_profile"] or "")
+
     def align_evenly(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
         project = self.store.get_project(project_id)
         lines = [
@@ -535,7 +541,8 @@ class Pipeline:
             self._run_comfy_for_line(project_id, row, workflow, output_field="image_path", action="images")
 
     def generate_avatar_images(self, project_id: int, selected_line_indices: list[int] | None = None) -> None:
-        workflow = self.workflows.require_avatar_image()
+        profile = self._avatar_image_profile()
+        workflow = self.workflows.require_avatar_image(profile)
         selected_segments = self._selected_segments(project_id, selected_line_indices)
         if selected_segments:
             segments = selected_segments if selected_line_indices else _editable_rows(selected_segments)
@@ -621,12 +628,12 @@ class Pipeline:
             if not segments:
                 return
             for row in segments:
-                workflow = self.workflows.require_video()
+                workflow = self.workflows.require_video_for_profile(self._clip_generation_profile())
                 self._run_comfy_for_segment(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
             return
         rows = self._selected_rows(project_id, selected_line_indices) if selected_line_indices else self._editable_selected_rows(project_id, selected_line_indices)
         for row in rows:
-            workflow = self.workflows.require_video()
+            workflow = self.workflows.require_video_for_profile(self._clip_generation_profile())
             self._run_comfy_for_line(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
 
     def assemble(self, project_id: int, selected_line_indices: list[int] | None = None) -> Path:
@@ -1075,10 +1082,13 @@ class Pipeline:
         """Use a learned limit only once there is enough stable history."""
         if not action:
             return None
-        profile = str(project["text_model_profile"] or "qwen35") if action in {"prompts", "video-prompts"} else "qwen35"
-        if self.store.completed_job_count(action, profile) < COMFY_TIMEOUT_SAMPLE_SIZE:
+        settings = self.store.get_global_settings()
+        text_profile = str(project["text_model_profile"] or "qwen35") if action in {"prompts", "video-prompts"} else "qwen35"
+        avatar_profile = str(settings["avatar_image_profile"] or "flux2-klein-4b-distilled")
+        clip_profile = str(settings["clip_generation_profile"] or "ltx23-quality")
+        if self.store.completed_job_count(action, text_profile, avatar_profile, clip_profile) < COMFY_TIMEOUT_SAMPLE_SIZE:
             return None
-        average = self.store.average_job_durations(profile).get(action)
+        average = self.store.average_job_durations(text_profile, avatar_profile, clip_profile).get(action)
         if not average:
             return None
         expected = float(average)
@@ -1109,7 +1119,9 @@ class Pipeline:
         except Exception as exc:
             self.store.update_line(project_id, row["line_index"], status="failed", error=str(exc))
             return
-        result = client.run_workflow(workflow, variables)
+        result = self._run_comfy_workflow(
+            client, workflow, variables, self.workflows.avatar_output_targets(workflow_path), "avatar-image", project, row
+        )
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
                 project,
@@ -1121,7 +1133,9 @@ class Pipeline:
             )
             self.store.update_line(project_id, row["line_index"], **self._success_fields("avatar_image_path", self._project_storage_path(stored_output)))
         else:
-            self.store.update_line(project_id, row["line_index"], status="failed", error=result.error or "No output files")
+            error = result.error or "No output files"
+            self.store.update_line(project_id, row["line_index"], status="failed", error=error)
+            raise RuntimeError(error)
 
     def _run_comfy_for_avatar_segment(self, project_id: int, row, workflow_path: Path) -> None:
         project = self.store.get_project(project_id)
@@ -1139,7 +1153,9 @@ class Pipeline:
         except Exception as exc:
             self.store.update_segment(project_id, row["segment_index"], status="failed", error=str(exc))
             return
-        result = client.run_workflow(workflow, variables)
+        result = self._run_comfy_workflow(
+            client, workflow, variables, self.workflows.avatar_output_targets(workflow_path), "avatar-image", project, row
+        )
         if result.ok and result.output_files:
             stored_output = self._localize_comfy_output(
                 project,
@@ -1151,7 +1167,9 @@ class Pipeline:
             )
             self.store.update_segment(project_id, row["segment_index"], **self._success_fields("avatar_image_path", self._project_storage_path(stored_output)))
         else:
-            self.store.update_segment(project_id, row["segment_index"], status="failed", error=result.error or "No output files")
+            error = result.error or "No output files"
+            self.store.update_segment(project_id, row["segment_index"], status="failed", error=error)
+            raise RuntimeError(error)
 
     def _run_comfy_for_prompt(self, project_id: int, row, workflow_path: Path) -> None:
         project = self.store.get_project(project_id)
@@ -1586,8 +1604,11 @@ def _inject_avatar_load_images(workflow: dict, variables: dict[str, str]) -> dic
         if isinstance(node, dict)
         and str(node.get("class_type", "")).lower() == "loadimage"
         and isinstance(node.get("inputs"), dict)
-        and "image" in node["inputs"]
+        and str(node.get("class_type", "")).lower() == "loadimage"
     ]
+    node_by_id = {str(node_id): node for node_id, node in workflow.items() if node in load_image_nodes}
+    if {"76", "81"}.issubset(node_by_id):
+        load_image_nodes = [node_by_id["76"], node_by_id["81"]]
     avatar_image = variables.get("reference_image_path", "") or variables.get("fullbody_reference_image_path", "")
     replacements = [
         variables.get("input_image_path", ""),
@@ -1595,7 +1616,7 @@ def _inject_avatar_load_images(workflow: dict, variables: dict[str, str]) -> dic
     ]
     for node, replacement in zip(load_image_nodes, replacements):
         if replacement:
-            node["inputs"]["image"] = replacement
+            node.setdefault("inputs", {})["image"] = replacement
     return workflow
 
 
@@ -1631,6 +1652,7 @@ def _inject_avatar_prompt(workflow: dict, variables: dict[str, str]) -> dict:
             "AVATAR_IDENTITY_CONTEXT": variables.get("avatar_identity_context", ""),
         },
     )
+    variables["prompt"] = prompt
     for node in workflow.values():
         if not isinstance(node, dict):
             continue

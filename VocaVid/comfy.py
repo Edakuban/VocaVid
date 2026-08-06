@@ -164,11 +164,20 @@ def load_workflow_from_data(data: dict[str, Any]) -> dict[str, Any]:
 def _ui_workflow_to_api_prompt(data: dict[str, Any]) -> dict[str, Any]:
     link_lookup = _ui_link_lookup(data.get("links", []))
     subgraphs = {item.get("id"): item for item in data.get("definitions", {}).get("subgraphs", [])}
+    top_level_links = _ui_link_lookup(data.get("links", []))
     subgraph_outputs: dict[tuple[int, int], tuple[str, int]] = {}
     prompt: dict[str, Any] = {}
     for node in data.get("nodes", []):
         if node.get("type") in subgraphs:
-            subgraph_outputs.update(_expand_subgraph_instance(prompt, node, subgraphs[node.get("type")]))
+            subgraph_outputs.update(
+                _expand_subgraph_instance(
+                    prompt,
+                    node,
+                    subgraphs[node.get("type")],
+                    subgraphs,
+                    external_inputs=_subgraph_external_inputs(node, subgraphs[node.get("type")], top_level_links),
+                )
+            )
 
     for node in data.get("nodes", []):
         if _is_ui_only_node(node):
@@ -207,15 +216,47 @@ def _expand_subgraph_instance(
     prompt: dict[str, Any],
     instance: dict[str, Any],
     subgraph: dict[str, Any],
+    subgraphs: dict[str, dict[str, Any]],
+    *,
+    parent_prefix: str = "",
+    external_inputs: dict[int, Any] | None = None,
 ) -> dict[tuple[int, int], tuple[str, int]]:
     instance_id = int(instance["id"])
-    prefix = f"{instance_id}_"
-    external_inputs = _subgraph_external_inputs(instance, subgraph)
-    output_map = _subgraph_output_map(instance_id, prefix, subgraph)
+    prefix = f"{parent_prefix}{instance_id}_"
+    external_inputs = external_inputs if external_inputs is not None else _subgraph_external_inputs(instance, subgraph)
     link_lookup = _ui_link_lookup(subgraph.get("links", []))
+    nested_outputs: dict[tuple[int, int], tuple[str, int]] = {}
+
+    # Official ComfyUI templates can compose a subgraph from smaller
+    # subgraphs.  Expand those first so the parent can wire its links to their
+    # concrete nodes instead of submitting the UUID as a nonexistent node type.
+    for node in subgraph.get("nodes", []):
+        nested = subgraphs.get(str(node.get("type", "")))
+        if nested is None:
+            continue
+        nested_inputs = _nested_subgraph_external_inputs(
+            node,
+            nested,
+            external_inputs,
+            link_lookup,
+            prefix,
+            nested_outputs,
+        )
+        nested_outputs.update(
+            _expand_subgraph_instance(
+                prompt,
+                node,
+                nested,
+                subgraphs,
+                parent_prefix=prefix,
+                external_inputs=nested_inputs,
+            )
+        )
 
     for node in subgraph.get("nodes", []):
         if _is_ui_only_node(node):
+            continue
+        if str(node.get("type", "")) in subgraphs:
             continue
         node_id = int(node["id"])
         if node_id < 0:
@@ -234,7 +275,8 @@ def _expand_subgraph_instance(
             elif link is not None and link in link_lookup:
                 source_id, source_slot = link_lookup[link]
                 if source_id >= 0:
-                    inputs[name] = [f"{prefix}{source_id}", source_slot]
+                    source = nested_outputs.get((source_id, source_slot), (f"{prefix}{source_id}", source_slot))
+                    inputs[name] = [source[0], source[1]]
                 elif item.get("widget") is not None:
                     if widget_index < len(widget_values):
                         inputs[name] = widget_values[widget_index]
@@ -251,10 +293,40 @@ def _expand_subgraph_instance(
                 inputs[name] = "{{ prompt }}"
         _apply_widget_defaults(str(node.get("type", "")), widget_values, inputs)
         prompt[api_id] = {"class_type": node.get("type"), "inputs": inputs}
-    return output_map
+    return _subgraph_output_map(instance_id, prefix, subgraph, nested_outputs)
 
 
-def _subgraph_external_inputs(instance: dict[str, Any], subgraph: dict[str, Any]) -> dict[int, Any]:
+def _nested_subgraph_external_inputs(
+    instance: dict[str, Any],
+    subgraph: dict[str, Any],
+    parent_external_inputs: dict[int, Any],
+    parent_link_lookup: dict[int, tuple[int, int]],
+    parent_prefix: str,
+    parent_nested_outputs: dict[tuple[int, int], tuple[str, int]],
+) -> dict[int, Any]:
+    instance_inputs = {item.get("name"): item for item in instance.get("inputs", []) or []}
+    values: dict[int, Any] = {}
+    for item in subgraph.get("inputs", []) or []:
+        input_def = instance_inputs.get(item.get("name"), {})
+        link = input_def.get("link")
+        value: Any = "{{ prompt }}" if input_def.get("type") == "STRING" else None
+        if link in parent_external_inputs:
+            value = parent_external_inputs[link]
+        elif link is not None and link in parent_link_lookup:
+            source_id, source_slot = parent_link_lookup[link]
+            value = parent_nested_outputs.get((source_id, source_slot), (f"{parent_prefix}{source_id}", source_slot))
+            if isinstance(value, tuple):
+                value = [value[0], value[1]]
+        for link_id in item.get("linkIds", []) or []:
+            values[int(link_id)] = value
+    return values
+
+
+def _subgraph_external_inputs(
+    instance: dict[str, Any],
+    subgraph: dict[str, Any],
+    parent_link_lookup: dict[int, tuple[int, int]] | None = None,
+) -> dict[int, Any]:
     instance_inputs = {item.get("name"): item for item in instance.get("inputs", []) or []}
     values: dict[int, Any] = {}
     for item in subgraph.get("inputs", []) or []:
@@ -262,13 +334,22 @@ def _subgraph_external_inputs(instance: dict[str, Any], subgraph: dict[str, Any]
         input_def = instance_inputs.get(name, {})
         if not input_def:
             continue
-        value = "{{ prompt }}" if input_def.get("type") == "STRING" else None
+        value: Any = "{{ prompt }}" if input_def.get("type") == "STRING" else None
+        link = input_def.get("link")
+        if link is not None and parent_link_lookup and link in parent_link_lookup:
+            source_id, source_slot = parent_link_lookup[link]
+            value = [str(source_id), source_slot]
         for link_id in item.get("linkIds", []) or []:
             values[int(link_id)] = value
     return values
 
 
-def _subgraph_output_map(instance_id: int, prefix: str, subgraph: dict[str, Any]) -> dict[tuple[int, int], tuple[str, int]]:
+def _subgraph_output_map(
+    instance_id: int,
+    prefix: str,
+    subgraph: dict[str, Any],
+    nested_outputs: dict[tuple[int, int], tuple[str, int]] | None = None,
+) -> dict[tuple[int, int], tuple[str, int]]:
     output_links: dict[int, int] = {}
     for slot, item in enumerate(subgraph.get("outputs", []) or []):
         for link_id in item.get("linkIds", []) or []:
@@ -279,11 +360,17 @@ def _subgraph_output_map(instance_id: int, prefix: str, subgraph: dict[str, Any]
         if isinstance(link, dict):
             link_id = int(link["id"])
             if link_id in output_links:
-                result[(instance_id, output_links[link_id])] = (f"{prefix}{int(link['origin_id'])}", int(link["origin_slot"]))
+                source_id, source_slot = int(link["origin_id"]), int(link["origin_slot"])
+                result[(instance_id, output_links[link_id])] = (nested_outputs or {}).get(
+                    (source_id, source_slot), (f"{prefix}{source_id}", source_slot)
+                )
         elif isinstance(link, list) and len(link) >= 4:
             link_id = int(link[0])
             if link_id in output_links:
-                result[(instance_id, output_links[link_id])] = (f"{prefix}{int(link[1])}", int(link[2]))
+                source_id, source_slot = int(link[1]), int(link[2])
+                result[(instance_id, output_links[link_id])] = (nested_outputs or {}).get(
+                    (source_id, source_slot), (f"{prefix}{source_id}", source_slot)
+                )
     return result
 
 
@@ -302,6 +389,16 @@ def _apply_widget_defaults(class_type: str, widget_values: list[Any], inputs: di
             "denoise": 6,
         },
         "ModelSamplingAuraFlow": {"shift": 0},
+        "KSamplerSelect": {"sampler_name": 0},
+        "Flux2Scheduler": {"steps": 0},
+        "CFGGuider": {"cfg": 0},
+        "RandomNoise": {"noise_seed": 0},
+        "EmptyFlux2LatentImage": {"batch_size": 2},
+        "ImageScaleToTotalPixels": {
+            "upscale_method": 0,
+            "megapixels": 1,
+            "resolution_steps": 2,
+        },
         "SaveImage": {"filename_prefix": 0},
     }
     for name, index in mappings.get(class_type, {}).items():

@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS global_settings (
     transition_handle_seconds REAL NOT NULL DEFAULT 0.5,
     whisper_model_size TEXT NOT NULL DEFAULT 'large-v3',
     text_model_profile TEXT NOT NULL DEFAULT 'qwen35',
+    avatar_image_profile TEXT NOT NULL DEFAULT 'flux2-klein-4b-distilled',
+    clip_generation_profile TEXT NOT NULL DEFAULT 'ltx23-quality',
     project_browser_sort TEXT NOT NULL DEFAULT 'newest',
     project_browser_filter TEXT NOT NULL DEFAULT 'all',
     autodelete_finished INTEGER NOT NULL DEFAULT 0,
@@ -130,6 +132,7 @@ CREATE TABLE IF NOT EXISTS job_runs (
     duration_seconds REAL NOT NULL,
     status TEXT NOT NULL,
     text_model_profile TEXT NOT NULL DEFAULT '',
+    generation_profile TEXT NOT NULL DEFAULT '',
     video_seconds REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -198,9 +201,15 @@ class Store:
             conn.execute("ALTER TABLE global_settings ADD COLUMN project_browser_filter TEXT NOT NULL DEFAULT 'all'")
         if "text_model_profile" not in global_settings_columns:
             conn.execute("ALTER TABLE global_settings ADD COLUMN text_model_profile TEXT NOT NULL DEFAULT 'qwen35'")
+        if "avatar_image_profile" not in global_settings_columns:
+            conn.execute("ALTER TABLE global_settings ADD COLUMN avatar_image_profile TEXT NOT NULL DEFAULT 'flux2-klein-4b-distilled'")
+        if "clip_generation_profile" not in global_settings_columns:
+            conn.execute("ALTER TABLE global_settings ADD COLUMN clip_generation_profile TEXT NOT NULL DEFAULT 'ltx23-quality'")
         job_run_columns = {row["name"] for row in conn.execute("PRAGMA table_info(job_runs)")}
         if "text_model_profile" not in job_run_columns:
             conn.execute("ALTER TABLE job_runs ADD COLUMN text_model_profile TEXT NOT NULL DEFAULT ''")
+        if "generation_profile" not in job_run_columns:
+            conn.execute("ALTER TABLE job_runs ADD COLUMN generation_profile TEXT NOT NULL DEFAULT ''")
         if "video_seconds" not in job_run_columns:
             conn.execute("ALTER TABLE job_runs ADD COLUMN video_seconds REAL NOT NULL DEFAULT 0")
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(lyric_lines)")}
@@ -336,6 +345,8 @@ class Store:
             "transition_handle_seconds",
             "whisper_model_size",
             "text_model_profile",
+            "avatar_image_profile",
+            "clip_generation_profile",
             "project_browser_sort",
             "project_browser_filter",
             "autodelete_finished",
@@ -556,13 +567,14 @@ class Store:
         duration_seconds: float,
         status: str,
         text_model_profile: str = "",
+        generation_profile: str = "",
         video_seconds: float = 0.0,
     ) -> None:
         with self._connect() as conn:
             conn.execute(
                 """
-                INSERT INTO job_runs (action, item_kind, item_count, duration_seconds, status, text_model_profile, video_seconds)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO job_runs (action, item_kind, item_count, duration_seconds, status, text_model_profile, generation_profile, video_seconds)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     action,
@@ -571,11 +583,17 @@ class Store:
                     max(0.0, float(duration_seconds)),
                     status,
                     text_model_profile,
+                    generation_profile,
                     max(0.0, float(video_seconds)),
                 ),
             )
 
-    def average_job_durations(self, text_model_profile: str = "qwen35") -> dict[str, float]:
+    def average_job_durations(
+        self,
+        text_model_profile: str = "qwen35",
+        avatar_image_profile: str = "flux2-klein-4b-distilled",
+        clip_generation_profile: str = "ltx23-quality",
+    ) -> dict[str, float]:
         with self._connect() as conn:
             return {
                 str(row["action"]): float(row["average_duration"])
@@ -583,7 +601,12 @@ class Store:
                     """
                     SELECT action,
                            CASE
-                             WHEN action = 'clips' THEN SUM(duration_seconds) / NULLIF(SUM(video_seconds), 0)
+                             -- video_seconds was added after job_runs already existed.  Old
+                             -- clip rows therefore have 0 here and must not contribute their
+                             -- full runtime to a per-video-second average.
+                             WHEN action = 'clips' THEN
+                               SUM(CASE WHEN video_seconds > 0 THEN duration_seconds ELSE 0 END)
+                               / NULLIF(SUM(CASE WHEN video_seconds > 0 THEN video_seconds ELSE 0 END), 0)
                              ELSE AVG(duration_seconds / item_count)
                            END AS average_duration
                     FROM job_runs
@@ -592,15 +615,23 @@ class Store:
                         action NOT IN ('global-style-prompt', 'scene-plan', 'prompts', 'video-prompts', 'ai-fill-image', 'ai-fill-video', 'avatar-description')
                         OR text_model_profile = ?
                       )
+                      AND (action != 'avatar-image' OR generation_profile = ?)
+                      AND (action != 'clips' OR generation_profile = ?)
                     GROUP BY action
                     HAVING action != 'clips' OR SUM(video_seconds) > 0
                     ORDER BY action
                     """,
-                    (text_model_profile,),
+                    (text_model_profile, avatar_image_profile, clip_generation_profile),
                 )
             }
 
-    def completed_job_count(self, action: str, text_model_profile: str = "qwen35") -> int:
+    def completed_job_count(
+        self,
+        action: str,
+        text_model_profile: str = "qwen35",
+        avatar_image_profile: str = "flux2-klein-4b-distilled",
+        clip_generation_profile: str = "ltx23-quality",
+    ) -> int:
         """Number of comparable completed jobs available for a timeout policy."""
         with self._connect() as conn:
             row = conn.execute(
@@ -610,8 +641,10 @@ class Store:
                 WHERE status = 'done' AND action = ?
                   AND (action NOT IN ('global-style-prompt', 'scene-plan', 'prompts', 'video-prompts', 'ai-fill-image', 'ai-fill-video', 'avatar-description')
                        OR text_model_profile = ?)
+                  AND (action != 'avatar-image' OR generation_profile = ?)
+                  AND (action != 'clips' OR generation_profile = ?)
                 """,
-                (action, text_model_profile),
+                (action, text_model_profile, avatar_image_profile, clip_generation_profile),
             ).fetchone()
             return int(row["job_count"] if row else 0)
 

@@ -261,8 +261,8 @@ Default workflow lookup is handled by `VocaVid/workflows.py`.
 | Avatar face description | `workflows/avatar_description.json` | none | Yes when no manual face description is supplied |
 | Still image generation | `workflows/image.json` | `workflows/image_z_image_turbo.json` | Yes |
 | Reference-image still generation | `workflows/image_reference.json` | falls back to image workflow | No |
-| Avatar/reference-person image edit | `workflows/avatartoimage_flux.json` | none | Yes for `Gen Avatar Image` |
-| Image/audio-to-video generation | `workflows/video.json` | `workflows/imageaudiotovideo.json` | Yes for `Gen Clips` |
+| Avatar/reference-person image edit | Global **Avatar generation** setting | `workflows/avatartoimage_flux.json` (9B), `workflows/image_flux2_klein_image_edit_4b_base.json` (4B), `workflows/image_flux2_klein_image_edit_4b_distilled.json` (4B fast default) | Yes for `Gen Avatar Image` |
+| Image/audio-to-video generation | Global **Clip generation** setting | `workflows/imageaudiotovideo.json` (LTX 2.3 quality), `workflows/imageaudiotovideo_ltx23_fast.json` (LTX 2.3 fast/synced) | Yes for `Gen Clips` |
 | Chorus-specific workflow | `workflows/chorus.json` | none | Present in code, not part of the main UI path yet |
 
 The repository includes example workflow files for the current local setup:
@@ -271,7 +271,22 @@ The repository includes example workflow files for the current local setup:
 - `workflows/avatar_description.json`
 - `workflows/image_z_image_turbo.json`
 - `workflows/avatartoimage_flux.json`
+- `workflows/image_flux2_klein_image_edit_4b_base.json`
+- `workflows/image_flux2_klein_image_edit_4b_distilled.json`
 - `workflows/imageaudiotovideo.json`
+- `workflows/imageaudiotovideo_ltx23_fast.json`
+
+### Generation profiles
+
+The global settings modal on the start page selects the workflow family used for
+future avatar and clip jobs. **Flux 2 Klein 4B distilled** is the default avatar
+profile and is substantially faster than the legacy 9B base workflow.
+
+Both clip profiles retain the LTX 2.3 image/audio-to-video pipeline and its
+native audio synchronisation. `quality / current` uses the original 11 sampling
+steps; `fast / synced` uses six steps at the same 896x512 output resolution.
+Average queue-time estimates are stored separately for each selected avatar and
+clip profile, so different models are never combined into one estimate.
 
 Archived workflows that are intentionally not loaded by VocaVid use the
 `_unused_` filename prefix. Currently this applies to

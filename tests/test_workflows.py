@@ -3,7 +3,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from VocaVid.workflows import WorkflowPaths
+from VocaVid.comfy import load_workflow
+from VocaVid.workflows import (
+    DEFAULT_AVATAR_IMAGE_PROFILE,
+    DEFAULT_CLIP_GENERATION_PROFILE,
+    WorkflowPaths,
+    normalize_avatar_image_profile,
+    normalize_clip_generation_profile,
+)
 
 
 class WorkflowPathTests(unittest.TestCase):
@@ -19,8 +26,11 @@ class WorkflowPathTests(unittest.TestCase):
             *paths.image_aliases,
             paths.image_reference,
             paths.avatar_image,
+            paths.avatar_image_flux2_klein_4b_base,
+            paths.avatar_image_flux2_klein_4b_distilled,
             paths.video,
             *paths.video_aliases,
+            paths.video_ltx23_fast,
             paths.chorus,
         }
         unclassified = {
@@ -44,9 +54,30 @@ class WorkflowPathTests(unittest.TestCase):
             self.assertEqual(paths.image, root / "workflows" / "image.json")
             self.assertEqual(paths.image_aliases[0], root / "workflows" / "image_z_image_turbo.json")
             self.assertEqual(paths.avatar_image, root / "workflows" / "avatartoimage_flux.json")
+            self.assertEqual(paths.avatar_image_flux2_klein_4b_base, root / "workflows" / "image_flux2_klein_image_edit_4b_base.json")
+            self.assertEqual(paths.avatar_image_flux2_klein_4b_distilled, root / "workflows" / "image_flux2_klein_image_edit_4b_distilled.json")
             self.assertEqual(paths.video, root / "workflows" / "video.json")
             self.assertEqual(paths.video_aliases[0], root / "workflows" / "imageaudiotovideo.json")
+            self.assertEqual(paths.video_ltx23_fast, root / "workflows" / "imageaudiotovideo_ltx23_fast.json")
             self.assertEqual(paths.chorus, root / "workflows" / "chorus.json")
+
+    def test_clip_generation_profile_defaults_to_quality_and_selects_fast_workflow(self):
+        self.assertEqual(normalize_clip_generation_profile(None), DEFAULT_CLIP_GENERATION_PROFILE)
+        self.assertEqual(normalize_clip_generation_profile("ltx23-fast"), "ltx23-fast")
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflows = root / "workflows"
+            workflows.mkdir()
+            quality = workflows / "imageaudiotovideo.json"
+            fast = workflows / "imageaudiotovideo_ltx23_fast.json"
+            quality.write_text("{}", encoding="utf-8")
+            fast.write_text("{}", encoding="utf-8")
+
+            paths = WorkflowPaths.defaults(root)
+
+            self.assertEqual(paths.require_video_for_profile("ltx23-quality"), quality)
+            self.assertEqual(paths.require_video_for_profile("ltx23-fast"), fast)
 
     def test_image_alias_is_used_when_image_json_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -97,7 +128,26 @@ class WorkflowPathTests(unittest.TestCase):
 
             paths = WorkflowPaths.defaults(root)
 
-            self.assertEqual(paths.require_avatar_image(), workflows / "avatartoimage_flux.json")
+            self.assertEqual(paths.require_avatar_image("flux2-klein-9b-base"), workflows / "avatartoimage_flux.json")
+
+    def test_avatar_image_profiles_resolve_new_workflows_and_default_to_distilled(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workflows = root / "workflows"
+            workflows.mkdir()
+            base = workflows / "image_flux2_klein_image_edit_4b_base.json"
+            distilled = workflows / "image_flux2_klein_image_edit_4b_distilled.json"
+            base.write_text("{}", encoding="utf-8")
+            distilled.write_text("{}", encoding="utf-8")
+            paths = WorkflowPaths.defaults(root)
+
+            self.assertEqual(DEFAULT_AVATAR_IMAGE_PROFILE, "flux2-klein-4b-distilled")
+            self.assertEqual(normalize_avatar_image_profile("unknown"), DEFAULT_AVATAR_IMAGE_PROFILE)
+            self.assertEqual(normalize_avatar_image_profile("legacy"), "flux2-klein-9b-base")
+            self.assertEqual(paths.require_avatar_image("flux2-klein-4b-base"), base)
+            self.assertEqual(paths.require_avatar_image(), distilled)
+            self.assertEqual(paths.avatar_output_targets(distilled), ["94"])
+            self.assertIsNone(paths.avatar_output_targets(base))
 
     def test_avatar_image_workflow_prompt_replaces_character_hair_from_reference(self):
         workflow = json.loads((Path("workflows") / "avatartoimage_flux.json").read_text(encoding="utf-8"))
@@ -115,6 +165,19 @@ class WorkflowPathTests(unittest.TestCase):
         self.assertIn("facial hair", positive_prompt)
         self.assertIn("Do not keep the original character's hair", positive_prompt)
         self.assertNotIn("from with Image 2", positive_prompt)
+
+    def test_distilled_avatar_workflow_expands_nested_subgraphs_with_required_widget_inputs(self):
+        workflow = load_workflow(Path("workflows") / "image_flux2_klein_image_edit_4b_distilled.json")
+
+        self.assertEqual(workflow["92_61"]["inputs"]["sampler_name"], "euler")
+        self.assertEqual(workflow["92_62"]["inputs"]["steps"], 4)
+        self.assertEqual(workflow["92_63"]["inputs"]["cfg"], 1)
+        self.assertIn("noise_seed", workflow["92_73"]["inputs"])
+        self.assertEqual(workflow["92_66"]["inputs"]["batch_size"], 1)
+        self.assertEqual(workflow["92_80"]["inputs"]["megapixels"], 1)
+        self.assertEqual(workflow["92_80"]["inputs"]["resolution_steps"], 1)
+        self.assertEqual(workflow["92_80"]["inputs"]["image"], ["76", 0])
+        self.assertEqual(workflow["92_85"]["inputs"]["image"], ["81", 0])
 
     def test_image_audio_to_video_alias_is_used_when_video_json_is_missing(self):
         with tempfile.TemporaryDirectory() as directory:

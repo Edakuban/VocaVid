@@ -194,6 +194,10 @@ def _global_settings_modal_html(settings) -> str:
         <label>Whisper Model</label>{_whisper_model_select_html(str(settings['whisper_model_size']))}
         <label>Text model</label>{_text_model_profile_select_html(str(_row_value(settings, 'text_model_profile', 'qwen35') or 'qwen35'))}
         <small class="settings-default-hint">Qwen 3.5 is the fast local default. Gemma 4 remains available for comparison.</small>
+        <label>Avatar generation</label>{_avatar_image_profile_select_html(str(_row_value(settings, 'avatar_image_profile', 'flux2-klein-4b-distilled') or 'flux2-klein-4b-distilled'))}
+        <small class="settings-default-hint">Flux 2 Klein 4B Distilled is the fast default. The current Flux 2 Klein 9B workflow remains available for comparison.</small>
+        <label>Clip generation</label>{_clip_generation_profile_select_html(str(_row_value(settings, 'clip_generation_profile', 'ltx23-quality') or 'ltx23-quality'))}
+        <small class="settings-default-hint">Both modes use LTX 2.3 with native audio sync. Fast reduces the two sampling stages from 11 to 6 steps.</small>
       </fieldset>
       <fieldset><legend>Queue &amp; System</legend>
         <label class="global-checkbox"><input type="checkbox" name="autodelete_finished"{autodelete_checked}> Autodelete finished</label>
@@ -213,6 +217,32 @@ def _text_model_profile_select_html(selected: str) -> str:
         ("gemma4", "Gemma 4 — slower / legacy"),
     ]
     return '<select name="text_model_profile">' + "".join(
+        f'<option value="{_attr(value)}"{" selected" if value == profile else ""}>{_text(label)}</option>'
+        for value, label in options
+    ) + "</select>"
+
+
+def _avatar_image_profile_select_html(selected: str) -> str:
+    profile = "flux2-klein-9b-base" if selected == "legacy" else selected
+    profile = profile if profile in {"flux2-klein-9b-base", "flux2-klein-4b-base", "flux2-klein-4b-distilled"} else "flux2-klein-4b-distilled"
+    options = [
+        ("flux2-klein-4b-distilled", "Flux 2 Klein 4B - distilled / fast (recommended)"),
+        ("flux2-klein-4b-base", "Flux 2 Klein 4B - base"),
+        ("flux2-klein-9b-base", "Flux 2 Klein 9B - base / current"),
+    ]
+    return '<select name="avatar_image_profile">' + "".join(
+        f'<option value="{_attr(value)}"{" selected" if value == profile else ""}>{_text(label)}</option>'
+        for value, label in options
+    ) + "</select>"
+
+
+def _clip_generation_profile_select_html(selected: str) -> str:
+    profile = selected if selected in {"ltx23-quality", "ltx23-fast"} else "ltx23-quality"
+    options = [
+        ("ltx23-quality", "LTX 2.3 - quality / current"),
+        ("ltx23-fast", "LTX 2.3 - fast / synced"),
+    ]
+    return '<select name="clip_generation_profile">' + "".join(
         f'<option value="{_attr(value)}"{" selected" if value == profile else ""}>{_text(label)}</option>'
         for value, label in options
     ) + "</select>"
