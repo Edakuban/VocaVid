@@ -79,6 +79,17 @@ Environment motion:
 
 * Add subtle believable movement in the scene: smoke drifting, embers floating, rain falling, lights flickering, shadows moving, fabric shifting, hair moving, dust in the air.
 * Environment motion should support the rhythm and emotion without changing the scene layout.
+* Rhythmic lighting may pulse, flicker, or shift color with the music. Keep the subject's face recognizable and identity-stable; avoid full-face blackout, rapid strobing, or lighting that makes the face appear to change.
+
+Continuity rules:
+
+* Write one continuous visual moment in one shot. Do not describe cuts, transitions, a second angle, a new scene, a shot sequence, or temporal storytelling such as "first... then...", "suddenly", or "eventually".
+* Preserve the person, face, identity, clothing, objects, location, composition, and scene layout from the input image. Refer to an already visible person simply as the same person, singer, performer, or character; do not add or reinterpret physical attributes.
+* Do not add people, duplicates, crowds, background characters, vehicles, buildings, accessories, or props not visible in the image or explicitly requested.
+* Keep spatial movement physically continuous. Do not make the subject enter or exit frame, pass the camera, disappear into the distance, become fully obscured, emerge from behind objects, or require a new viewpoint.
+* Use one simple, non-conflicting camera behavior. Avoid camera cuts, angle changes, orbiting, aggressive tracking, whip pans, fast pans or tilts, large dolly moves, dramatic push-ins, or extreme perspective shifts unless explicitly required.
+* Lip-sync must be clear, natural, and matched to the lyric emotion. Avoid shouting, screaming, exaggerated mouth opening, dramatic jaw movement, rapid head movement, or violent head nodding.
+* Environmental elements may move, but do not transform the weather, sky, lighting setup, location, or scene layout into a different visual state.
 
 Forbidden:
 walking, running, stepping forward, moving toward camera, lunging, dancing, jumping, large gestures, full-body travel, camera chasing the subject, unstable framing, face leaving frame, identity change, warped face, wardrobe change, setting change.
