@@ -120,6 +120,7 @@ from .reels import (
     _reels_modal_html,
     _reels_status_html,
 )
+from .spotify_canvas import _spotify_canvas_modal_html, _spotify_canvas_status_html
 from .storyboard import (
     _inspector_action_form_html,
     _inspector_generation_actions_html,
@@ -204,6 +205,8 @@ __all__ = [
     "_reels_analysis_panel_html",
     "_reels_candidates_html",
     "_reels_candidate_card_html",
+    "_spotify_canvas_modal_html",
+    "_spotify_canvas_status_html",
     "_segment_settings_html",
     "_work_items_html",
     "_lyrics_html",

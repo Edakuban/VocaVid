@@ -23,6 +23,7 @@ from .paths import slug_folder_name, storage_relative_path
 from .pipeline import Pipeline
 from .reels import ReelsPipeline
 from .reels.storage import ensure_reels_dirs, project_finished_video_path, project_finished_video_path_candidates
+from .spotify_canvas import SpotifyCanvasPipeline, normalize_canvas_duration
 from .store import Store
 from .worker import JobQueue
 
@@ -86,6 +87,7 @@ def create_app() -> FastAPI:
         logger.warning("marked %s interrupted running project items as failed", interrupted_items)
     pipeline = Pipeline(store, APP_ROOT / "outputs")
     reels_pipeline = ReelsPipeline(store, APP_ROOT)
+    spotify_canvas_pipeline = SpotifyCanvasPipeline(store, pipeline, APP_ROOT)
     desktop_comfy_url = os.environ.get("VOCAVID_COMFY_BASE_URL", "").strip().rstrip("/")
     if desktop_comfy_url:
         store.update_global_settings(comfy_base_url=desktop_comfy_url)
@@ -130,6 +132,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="VocaVid")
     app.state.jobs = jobs
     app.state.reels_pipeline = reels_pipeline
+    app.state.spotify_canvas_pipeline = spotify_canvas_pipeline
     app.state.job_options = job_options
     app.state.shutdown_controller = shutdown_controller
     app.mount("/assets", StaticFiles(directory=str(APP_ROOT)), name="assets")
@@ -478,6 +481,7 @@ def create_app() -> FastAPI:
             int(analysis["id"]): store.list_reel_candidates(int(analysis["id"]))
             for analysis in reel_analyses
         }
+        spotify_canvas = store.get_spotify_canvas(project_id)
         active_jobs = jobs.active_project_jobs(project_id)
         queue_jobs = jobs.active_jobs()
         listed_jobs = jobs.list_jobs()
@@ -500,6 +504,7 @@ def create_app() -> FastAPI:
                 next_project_id=next_project_id,
                 reel_analyses=reel_analyses,
                 reel_candidates_by_analysis=reel_candidates_by_analysis,
+                spotify_canvas=spotify_canvas,
             ),
             queue_count=len(queue_jobs),
         )
@@ -525,6 +530,102 @@ def create_app() -> FastAPI:
         return {
             "reels_html": _reels_status_html(project, analyses, candidates_by_analysis),
         }
+
+    def canvas_reel_candidates(project_id: int):
+        return [
+            candidate
+            for analysis in store.list_reel_analyses(project_id)
+            for candidate in store.list_reel_candidates(int(analysis["id"]))
+            if candidate["export_path"] or candidate["preview_path"]
+        ]
+
+    @app.get("/projects/{project_id}/spotify-canvas/status")
+    def spotify_canvas_status(project_id: int):
+        return {
+            "canvas_html": _spotify_canvas_status_html(
+                store.get_project(project_id),
+                store.get_spotify_canvas(project_id),
+                canvas_reel_candidates(project_id),
+                store.list_segments(project_id),
+            )
+        }
+
+    @app.post("/projects/{project_id}/spotify-canvas/render")
+    def render_spotify_canvas(
+        project_id: int,
+        source_path: str = Form(...),
+        start_sec: float = Form(0),
+        duration_sec: float = Form(6),
+        loop_mode: str = Form("pingpong"),
+    ):
+        duration = normalize_canvas_duration(duration_sec)
+        allowed_sources = {
+            str(candidate["export_path"] or candidate["preview_path"])
+            for candidate in canvas_reel_candidates(project_id)
+        }
+        if source_path not in allowed_sources:
+            raise ValueError("Select an exported or previewed reel from this project")
+        store.update_spotify_canvas(project_id, mode="existing", source_path=source_path, source_start_sec=max(0.0, start_sec), duration_sec=duration, loop_mode=loop_mode, export_path=None, status="queued", error="")
+        project = store.get_project(project_id)
+        jobs.submit(
+            f"render Spotify Canvas: {project['name']}",
+            lambda: spotify_canvas_pipeline.render_existing(project_id, source_path, start_sec, duration, loop_mode),
+            project_id=project_id,
+            action="spotify-canvas-render",
+            item_kind="spotify-canvas",
+            selected_indices=[project_id],
+        )
+        return _project_redirect(project_id)
+
+    @app.post("/projects/{project_id}/spotify-canvas/prompt")
+    def generate_spotify_canvas_prompt(
+        project_id: int,
+        item_kind: str = Form("segments"),
+        item_index: int = Form(...),
+        duration_sec: float = Form(6),
+        prompt: str = Form(""),
+        loop_mode: str = Form("pingpong"),
+    ):
+        duration = normalize_canvas_duration(duration_sec)
+        store.update_spotify_canvas(project_id, mode="generated", item_kind=item_kind, item_index=item_index, duration_sec=duration, loop_mode=loop_mode, prompt=prompt, status="queued", error="")
+        project = store.get_project(project_id)
+        jobs.submit(
+            f"generate Spotify Canvas prompt: {project['name']}",
+            lambda: spotify_canvas_pipeline.generate_prompt(project_id, item_kind, item_index, duration, prompt),
+            project_id=project_id,
+            action="spotify-canvas-prompt",
+            item_kind="spotify-canvas",
+            selected_indices=[item_index],
+            text_model_profile=current_text_model_profile(),
+        )
+        return _project_redirect(project_id)
+
+    @app.post("/projects/{project_id}/spotify-canvas/generate")
+    def generate_spotify_canvas(
+        project_id: int,
+        item_kind: str = Form("segments"),
+        item_index: int = Form(...),
+        duration_sec: float = Form(6),
+        prompt: str = Form(""),
+        loop_mode: str = Form("pingpong"),
+    ):
+        duration = normalize_canvas_duration(duration_sec)
+        if not prompt.strip():
+            raise ValueError("Add or generate a Canvas prompt first")
+        store.update_spotify_canvas(project_id, mode="generated", item_kind=item_kind, item_index=item_index, duration_sec=duration, loop_mode=loop_mode, prompt=prompt.strip(), raw_video_path=None, export_path=None, status="queued", error="")
+        project = store.get_project(project_id)
+        settings = store.get_global_settings()
+        jobs.submit(
+            f"generate Spotify Canvas: {project['name']}",
+            lambda: spotify_canvas_pipeline.generate_video(project_id, item_kind, item_index, duration, prompt, loop_mode),
+            project_id=project_id,
+            action="spotify-canvas-generate",
+            item_kind="spotify-canvas",
+            selected_indices=[item_index],
+            generation_profile=str(settings["clip_generation_profile"] or ""),
+            video_seconds=duration,
+        )
+        return _project_redirect(project_id)
 
     @app.post("/projects/{project_id}/reels/analyze")
     async def analyze_reels(

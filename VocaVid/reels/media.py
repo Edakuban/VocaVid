@@ -14,7 +14,7 @@ from .models import ReelVideoMetadata
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
-def probe_video(path: str | Path, runner: Runner = subprocess.run) -> ReelVideoMetadata:
+def probe_video(path: str | Path, runner: Runner = subprocess.run, require_audio: bool = True) -> ReelVideoMetadata:
     video_path = Path(path)
     if not video_path.exists():
         raise FileNotFoundError(f"Video file does not exist: {video_path}")
@@ -34,17 +34,17 @@ def probe_video(path: str | Path, runner: Runner = subprocess.run) -> ReelVideoM
         raise RuntimeError(f"Required media tool not found: {command[0]}") from exc
     if result.returncode != 0:
         raise ValueError((result.stderr or "ffprobe could not read the video").strip())
-    return metadata_from_ffprobe_json(result.stdout)
+    return metadata_from_ffprobe_json(result.stdout, require_audio=require_audio)
 
 
-def metadata_from_ffprobe_json(payload: str | dict) -> ReelVideoMetadata:
+def metadata_from_ffprobe_json(payload: str | dict, require_audio: bool = True) -> ReelVideoMetadata:
     data = json.loads(payload) if isinstance(payload, str) else payload
     streams = list(data.get("streams") or [])
     video = next((stream for stream in streams if stream.get("codec_type") == "video"), None)
     audio = next((stream for stream in streams if stream.get("codec_type") == "audio"), None)
     if not video:
         raise ValueError("Selected file has no video stream")
-    if not audio:
+    if require_audio and not audio:
         raise ValueError("Selected file has no audio stream")
     duration = _float_value(video.get("duration")) or _float_value(data.get("format", {}).get("duration"))
     if duration <= 0:
@@ -61,8 +61,8 @@ def metadata_from_ffprobe_json(payload: str | dict) -> ReelVideoMetadata:
         width=width,
         height=height,
         fps=round(fps, 6),
-        audio_sample_rate=_optional_int(audio.get("sample_rate")),
-        audio_channels=_optional_int(audio.get("channels")),
+        audio_sample_rate=_optional_int(audio.get("sample_rate")) if audio else None,
+        audio_channels=_optional_int(audio.get("channels")) if audio else None,
         codec=str(video.get("codec_name") or ""),
         rotation=rotation,
     )

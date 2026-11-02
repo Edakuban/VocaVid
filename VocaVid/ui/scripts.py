@@ -786,6 +786,176 @@ SCRIPTS = f"""
         window.setTimeout(() => pollReelsStatus(projectId), 3500);
       }}
     }}
+    function openSpotifyCanvasModal() {{
+      const box = document.getElementById('spotify-canvas-modal');
+      if (!box) return;
+      box.classList.add('open');
+      setupSpotifyCanvasTrimEditor();
+      const projectId = currentProjectId();
+      if (projectId) refreshSpotifyCanvasStatus(projectId);
+    }}
+    function closeSpotifyCanvasModal() {{
+      const box = document.getElementById('spotify-canvas-modal');
+      if (!box) return;
+      box.classList.remove('open');
+      box.querySelectorAll('video').forEach((video) => video.pause());
+    }}
+    function updateSpotifyCanvasStatus(data, force = false) {{
+      const body = document.getElementById('spotify-canvas-status');
+      if (!body || data.canvas_html === undefined || body.innerHTML === data.canvas_html) return;
+      const modal = document.getElementById('spotify-canvas-modal');
+      if (!force && modal && modal.contains(document.activeElement) && document.activeElement !== document.body) return;
+      body.innerHTML = data.canvas_html;
+      setupSpotifyCanvasTrimEditor();
+    }}
+    function spotifyCanvasTrimNumber(value) {{
+      return Math.max(0, Number(value) || 0);
+    }}
+    function syncSpotifyCanvasTrim(editor, changedHandle = '') {{
+      if (!editor) return;
+      const video = editor.querySelector('video');
+      const startRange = editor.querySelector('[data-canvas-trim-start]');
+      const endRange = editor.querySelector('[data-canvas-trim-end]');
+      const form = editor.closest('form');
+      if (!video || !startRange || !endRange || !form) return;
+      const sourceDuration = spotifyCanvasTrimNumber(video.duration || startRange.max || 0);
+      let start = spotifyCanvasTrimNumber(startRange.value);
+      let end = spotifyCanvasTrimNumber(endRange.value);
+      const minimum = 3.01;
+      const maximum = 7.99;
+      if (changedHandle === 'start') {{
+        if (end - start < minimum) end = Math.min(sourceDuration, start + minimum);
+        if (end - start < minimum) start = Math.max(0, end - minimum);
+        if (end - start > maximum) end = start + maximum;
+      }} else {{
+        if (end - start < minimum) start = Math.max(0, end - minimum);
+        if (end - start < minimum) end = Math.min(sourceDuration, start + minimum);
+        if (end - start > maximum) start = end - maximum;
+      }}
+      start = Math.max(0, Math.min(start, Math.max(0, sourceDuration - minimum)));
+      end = Math.min(sourceDuration, Math.max(end, start + minimum));
+      const duration = Math.max(0, end - start);
+      startRange.value = start.toFixed(2);
+      endRange.value = end.toFixed(2);
+      form.querySelector('input[name="start_sec"]').value = start.toFixed(3);
+      form.querySelector('input[name="duration_sec"]').value = duration.toFixed(3);
+      editor.dataset.start = start.toFixed(3);
+      editor.dataset.end = end.toFixed(3);
+      editor.querySelector('[data-canvas-trim-start-label]').textContent = start.toFixed(2) + 's';
+      editor.querySelector('[data-canvas-trim-end-label]').textContent = end.toFixed(2) + 's';
+      editor.querySelector('[data-canvas-trim-duration-label]').textContent = duration.toFixed(2) + 's';
+      const track = editor.querySelector('.spotify-canvas-selection-track');
+      if (track && sourceDuration > 0) {{
+        track.style.setProperty('--trim-left', (start / sourceDuration * 100).toFixed(3) + '%');
+        track.style.setProperty('--trim-width', (duration / sourceDuration * 100).toFixed(3) + '%');
+      }}
+      const submit = form.querySelector('button:not([type]), button[type="submit"]');
+      if (submit) submit.disabled = sourceDuration < minimum || duration < minimum || duration > maximum;
+      if (changedHandle) {{
+        video.currentTime = start;
+        video.play().catch(() => {{}});
+      }}
+    }}
+    function configureSpotifyCanvasTrimEditor(editor, reset = false) {{
+      const video = editor && editor.querySelector('video');
+      if (!video || !Number.isFinite(video.duration)) return;
+      const startRange = editor.querySelector('[data-canvas-trim-start]');
+      const endRange = editor.querySelector('[data-canvas-trim-end]');
+      const sourceDuration = video.duration;
+      startRange.max = sourceDuration.toFixed(3);
+      endRange.max = sourceDuration.toFixed(3);
+      let start = reset ? 0 : spotifyCanvasTrimNumber(editor.dataset.start);
+      let end = reset ? Math.min(sourceDuration, 6) : spotifyCanvasTrimNumber(editor.dataset.end);
+      if (end > sourceDuration || end - start < 3.01) {{
+        start = Math.max(0, Math.min(start, sourceDuration - 3.01));
+        end = Math.min(sourceDuration, start + Math.min(6, sourceDuration));
+      }}
+      startRange.value = start.toFixed(2);
+      endRange.value = end.toFixed(2);
+      syncSpotifyCanvasTrim(editor, 'end');
+      video.currentTime = spotifyCanvasTrimNumber(editor.dataset.start);
+      video.play().catch(() => {{}});
+    }}
+    function setupSpotifyCanvasTrimEditor() {{
+      const editor = document.querySelector('#spotify-canvas-modal .spotify-canvas-trim-editor');
+      if (!editor) return;
+      const video = editor.querySelector('video');
+      const startRange = editor.querySelector('[data-canvas-trim-start]');
+      const endRange = editor.querySelector('[data-canvas-trim-end]');
+      if (!video || !startRange || !endRange) return;
+      if (editor.dataset.bound !== '1') {{
+        editor.dataset.bound = '1';
+        startRange.addEventListener('input', () => syncSpotifyCanvasTrim(editor, 'start'));
+        endRange.addEventListener('input', () => syncSpotifyCanvasTrim(editor, 'end'));
+        video.addEventListener('loadedmetadata', () => {{
+          const reset = editor.dataset.resetOnLoad === '1';
+          editor.dataset.resetOnLoad = '0';
+          configureSpotifyCanvasTrimEditor(editor, reset);
+        }});
+        video.addEventListener('timeupdate', () => {{
+          const start = spotifyCanvasTrimNumber(editor.dataset.start);
+          const end = spotifyCanvasTrimNumber(editor.dataset.end);
+          if (video.currentTime < start - 0.08 || video.currentTime >= end) {{
+            video.currentTime = start;
+            video.play().catch(() => {{}});
+          }}
+        }});
+        video.addEventListener('play', () => {{
+          const start = spotifyCanvasTrimNumber(editor.dataset.start);
+          const end = spotifyCanvasTrimNumber(editor.dataset.end);
+          if (video.currentTime < start || video.currentTime >= end) video.currentTime = start;
+        }});
+      }}
+      if (video.readyState >= 1) configureSpotifyCanvasTrimEditor(editor, false);
+    }}
+    function changeSpotifyCanvasTrimSource(select) {{
+      const editor = select && select.closest('form') ? select.closest('form').querySelector('.spotify-canvas-trim-editor') : null;
+      const video = editor ? editor.querySelector('video') : null;
+      const option = select && select.selectedOptions ? select.selectedOptions[0] : null;
+      if (!video || !option) return;
+      editor.dataset.resetOnLoad = '1';
+      video.src = option.dataset.previewUrl || '';
+      video.load();
+    }}
+    async function refreshSpotifyCanvasStatus(projectId, force = false) {{
+      if (!projectId) return;
+      const response = await fetch('/projects/' + projectId + '/spotify-canvas/status');
+      if (!response.ok) return;
+      updateSpotifyCanvasStatus(await response.json(), force);
+    }}
+    async function submitSpotifyCanvasForm(event) {{
+      const form = event.target.closest('form[data-canvas-form="1"]');
+      if (!form) return;
+      event.preventDefault();
+      const button = event.submitter || form.querySelector('button');
+      const action = button && button.hasAttribute('formaction') ? button.formAction : form.action;
+      if (button) {{
+        button.disabled = true;
+        button.dataset.originalText = button.textContent;
+        button.textContent = 'Queued…';
+      }}
+      try {{
+        const response = await fetch(action, {{ method: 'post', body: new FormData(form) }});
+        if (!response.ok) throw new Error(await response.text());
+        const projectId = currentProjectId();
+        if (projectId) await refreshSpotifyCanvasStatus(projectId, true);
+      }} catch (error) {{
+        window.alert('Spotify Canvas: ' + error.message);
+      }} finally {{
+        if (button && button.dataset.originalText) {{
+          button.disabled = false;
+          button.textContent = button.dataset.originalText;
+        }}
+      }}
+    }}
+    async function pollSpotifyCanvasStatus(projectId) {{
+      try {{
+        const box = document.getElementById('spotify-canvas-modal');
+        if (box && box.classList.contains('open')) await refreshSpotifyCanvasStatus(projectId);
+      }} finally {{
+        window.setTimeout(() => pollSpotifyCanvasStatus(projectId), 3500);
+      }}
+    }}
     function formatManualTimingTimestamp(seconds) {{
       const value = Math.max(0, Number(seconds) || 0);
       return value.toFixed(1);
@@ -939,6 +1109,7 @@ SCRIPTS = f"""
       return true;
     }}
     document.addEventListener('submit', submitReelsForm);
+    document.addEventListener('submit', submitSpotifyCanvasForm);
     document.addEventListener('submit', (event) => {{
       const form = event.target.closest('form[data-queue-form="1"]');
       if (form) submitQueueForm(event, form);

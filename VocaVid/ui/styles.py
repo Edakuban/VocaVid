@@ -541,6 +541,47 @@ STYLES = f"""
     .reels-candidate-actions {{ display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }}
     .reels-candidate-actions form {{ margin: 0; padding: 0; border: 0; background: transparent; }}
     @media (max-width: 760px) {{ .reels-source-form {{ grid-template-columns: 1fr; align-items: stretch; }} .reels-source-form button {{ justify-self: stretch; }} .reels-preview-frame {{ max-width: 260px; }} }}
+    .spotify-canvas-modal {{ z-index: 195; }}
+    .spotify-canvas-modal-content {{ width: min(1320px, 98vw); max-height: 94vh; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; }}
+    .spotify-canvas-modal-content .lightbox-close {{ top: 12px; right: 12px; }}
+    .spotify-canvas-modal-content .studio-panel-head p {{ margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }}
+    .spotify-canvas-body {{ min-height: 0; overflow: auto; padding: 16px; }}
+    .spotify-canvas-routes {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }}
+    .spotify-canvas-panel, .spotify-canvas-result {{ border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-panel); padding: 16px; }}
+    .spotify-canvas-panel h3, .spotify-canvas-result h3 {{ margin: 4px 0 7px; }}
+    .spotify-canvas-panel > p, .spotify-canvas-result p {{ margin: 0 0 14px; color: var(--text-muted); font-size: 13px; line-height: 1.45; }}
+    .spotify-canvas-kicker {{ color: var(--action); font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase; }}
+    .spotify-canvas-panel form {{ display: grid; gap: 12px; margin: 0; padding: 0; border: 0; background: transparent; }}
+    .spotify-canvas-panel label {{ display: grid; gap: 6px; margin: 0; color: var(--text-secondary); font-size: 12px; font-weight: 800; }}
+    .spotify-canvas-panel select, .spotify-canvas-panel input, .spotify-canvas-panel textarea {{ width: 100%; }}
+    .spotify-canvas-panel textarea {{ min-height: 148px; resize: vertical; }}
+    .spotify-canvas-fields {{ display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }}
+    .spotify-canvas-trim-editor {{ display: grid; grid-template-columns: minmax(150px, 190px) minmax(0, 1fr); gap: 10px 14px; align-items: center; padding: 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-card); }}
+    .spotify-canvas-source-preview {{ position: relative; grid-row: 1 / span 6; align-self: start; width: 100%; aspect-ratio: 9 / 16; overflow: hidden; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: #000; }}
+    .spotify-canvas-source-preview video {{ display: block; width: 100%; height: 100%; max-height: none; object-fit: cover; border-radius: 0; }}
+    .spotify-canvas-source-preview span {{ position: absolute; left: 7px; bottom: 7px; padding: 3px 6px; border-radius: 999px; background: rgba(0,0,0,.72); color: #fff; font-size: 10px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; pointer-events: none; }}
+    .spotify-canvas-trim-summary {{ display: flex; flex-wrap: wrap; gap: 7px; }}
+    .spotify-canvas-trim-summary span {{ padding: 5px 7px; border: 1px solid var(--border-subtle); border-radius: 999px; background: rgba(255,255,255,.035); color: var(--text-muted); font-size: 11px; }}
+    .spotify-canvas-trim-summary strong {{ color: var(--text-primary); font-variant-numeric: tabular-nums; }}
+    .spotify-canvas-selection-track {{ position: relative; height: 8px; overflow: hidden; border-radius: 999px; background: #11181c; }}
+    .spotify-canvas-selection-track i {{ position: absolute; top: 0; bottom: 0; left: var(--trim-left, 0%); width: var(--trim-width, 10%); border-radius: inherit; background: linear-gradient(90deg, var(--action), var(--accent)); box-shadow: 0 0 14px rgba(41,211,176,.28); }}
+    .spotify-canvas-trim-editor input[type="range"] {{ padding: 0; accent-color: var(--action); cursor: ew-resize; }}
+    .spotify-canvas-trim-help {{ margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.4; }}
+    .spotify-canvas-actions {{ display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }}
+    .spotify-canvas-result {{ display: grid; grid-template-columns: minmax(180px, 1fr) 180px auto; gap: 16px; align-items: center; margin-bottom: 14px; border-color: rgba(69,201,141,.45); background: rgba(69,201,141,.08); }}
+    .spotify-canvas-preview {{ width: 120px; aspect-ratio: 9 / 16; justify-self: center; overflow: hidden; border-radius: var(--radius-sm); background: #000; }}
+    .spotify-canvas-preview video {{ width: 100%; height: 100%; object-fit: cover; border-radius: 0; }}
+    .spotify-canvas-error {{ padding: 10px 12px; border: 1px solid rgba(255,102,120,.45); border-radius: var(--radius-sm); background: rgba(255,102,120,.1); color: #ffd4da; overflow-wrap: anywhere; }}
+    .spotify-canvas-working {{ padding: 10px 12px; border: 1px solid rgba(41,211,176,.42); border-radius: var(--radius-sm); background: rgba(41,211,176,.1); color: #cdfbf1; font-weight: 800; }}
+    @media (max-width: 820px) {{
+      .spotify-canvas-routes {{ grid-template-columns: 1fr; }}
+      .spotify-canvas-result {{ grid-template-columns: 1fr; text-align: center; }}
+      .spotify-canvas-fields {{ grid-template-columns: 1fr; }}
+      .spotify-canvas-trim-editor {{ grid-template-columns: 1fr; }}
+      .spotify-canvas-source-preview {{ grid-row: auto; width: min(220px, 100%); justify-self: center; }}
+      .spotify-canvas-actions {{ justify-content: stretch; }}
+      .spotify-canvas-actions button {{ flex: 1 1 180px; }}
+    }}
     .lightbox.finalize-modal {{ z-index: 210; }}
     .finalize-modal-content {{ position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 12px; width: min(1120px, 96vw); max-height: 96vh; padding: 18px; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--bg-panel); box-shadow: 0 28px 90px rgba(0,0,0,.52); }}
     .finalize-modal .finalize-close {{ top: 10px; right: 10px; z-index: 20; }}

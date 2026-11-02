@@ -37,6 +37,7 @@ from .queue import (
     _queue_modal_html,
 )
 from .reels import _reels_modal_html
+from .spotify_canvas import _spotify_canvas_modal_html
 from .storyboard import _storyboard_html
 
 
@@ -406,7 +407,13 @@ def _project_actions_html(project, work_items, used_actions=None) -> str:
         reels_button = '<button type="button" onclick="openReelsModal()">9. Make reels</button>'
     else:
         reels_button = '<button type="button" disabled title="Render the final MP4 first">9. Make reels</button>'
-    return actions + reels_button
+    canvas_enabled = bool(rendered_mp4_url) or any(bool(_row_value(row, "clip_path", "")) for row in work_items)
+    canvas_button = (
+        '<button type="button" onclick="openSpotifyCanvasModal()">10. Spotify Canvas</button>'
+        if canvas_enabled
+        else '<button type="button" disabled title="Generate a clip first">10. Spotify Canvas</button>'
+    )
+    return actions + reels_button + canvas_button
 
 
 _PROJECT_BROWSER_FILTERS = {"all", "in-progress", "done"}
@@ -493,6 +500,7 @@ def _project_html(
     next_project_id: int | None = None,
     reel_analyses=None,
     reel_candidates_by_analysis=None,
+    spotify_canvas=None,
     manual_timing_interludes=None,
 ) -> str:
     segments = segments or []
@@ -551,11 +559,12 @@ def _project_html(
 {_project_settings_modal_html(project)}
 {_manual_timing_modal_html(project, lines, manual_timing_interludes or [])}
 {_reels_modal_html(project, reel_analyses or [], reel_candidates_by_analysis or {})}
+{_spotify_canvas_modal_html(project, spotify_canvas, [candidate for candidates in (reel_candidates_by_analysis or {}).values() for candidate in candidates], work_items)}
 {finalize_modal}
 </div>
 {_clip_lightbox_html()}
 {_image_lightbox_html()}
-<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus(); pollReelsStatus({project["id"]});</script>
+<script>rememberProjectRows(); setupQueueEstimateCountdown(); pollProjectStatus({project["id"]}); pollJobsStatus(); pollReelsStatus({project["id"]}); pollSpotifyCanvasStatus({project["id"]});</script>
 """
 
 

@@ -170,6 +170,24 @@ CREATE TABLE IF NOT EXISTS reel_candidates (
     status TEXT NOT NULL DEFAULT 'pending',
     error TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS spotify_canvases (
+    project_id INTEGER PRIMARY KEY,
+    mode TEXT NOT NULL DEFAULT 'existing',
+    source_path TEXT NOT NULL DEFAULT '',
+    source_start_sec REAL NOT NULL DEFAULT 0,
+    duration_sec REAL NOT NULL DEFAULT 6,
+    loop_mode TEXT NOT NULL DEFAULT 'pingpong',
+    item_kind TEXT NOT NULL DEFAULT '',
+    item_index INTEGER,
+    prompt TEXT NOT NULL DEFAULT '',
+    raw_video_path TEXT,
+    export_path TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    error TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -655,6 +673,7 @@ class Store:
                 placeholders = ",".join("?" for _ in analysis_ids)
                 conn.execute(f"DELETE FROM reel_candidates WHERE analysis_id IN ({placeholders})", analysis_ids)
             conn.execute("DELETE FROM reel_analyses WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM spotify_canvases WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM render_segments WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM lyric_lines WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM project_actions WHERE project_id = ?", (project_id,))
@@ -662,6 +681,7 @@ class Store:
 
     def clear_project_generated_state(self, project_id: int, preserve_line_timings: bool = False) -> None:
         with self._connect() as conn:
+            conn.execute("DELETE FROM spotify_canvases WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM render_segments WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM project_actions WHERE project_id = ?", (project_id,))
             timing_reset = "" if preserve_line_timings else "start_sec = NULL, end_sec = NULL, confidence = NULL,"
@@ -818,6 +838,54 @@ class Store:
     def delete_reel_candidate(self, candidate_id: int) -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM reel_candidates WHERE id = ?", (candidate_id,))
+
+    def get_spotify_canvas(self, project_id: int) -> sqlite3.Row | None:
+        with self._connect() as conn:
+            return conn.execute("SELECT * FROM spotify_canvases WHERE project_id = ?", (project_id,)).fetchone()
+
+    def update_spotify_canvas(self, project_id: int, **fields: Any) -> None:
+        allowed = {
+            "mode", "source_path", "source_start_sec", "duration_sec", "loop_mode",
+            "item_kind", "item_index", "prompt", "raw_video_path", "export_path",
+            "status", "error",
+        }
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"Unknown Spotify Canvas field(s): {', '.join(sorted(unknown))}")
+        values = {
+            "mode": "existing", "source_path": "", "source_start_sec": 0.0,
+            "duration_sec": 6.0, "loop_mode": "pingpong", "item_kind": "",
+            "item_index": None, "prompt": "", "raw_video_path": None,
+            "export_path": None, "status": "pending", "error": "",
+        }
+        current = self.get_spotify_canvas(project_id)
+        if current is not None:
+            values.update(dict(current))
+        values.update(fields)
+        values["updated_at"] = _current_timestamp()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO spotify_canvases (
+                    project_id, mode, source_path, source_start_sec, duration_sec, loop_mode,
+                    item_kind, item_index, prompt, raw_video_path, export_path, status, error,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(project_id) DO UPDATE SET
+                    mode=excluded.mode, source_path=excluded.source_path,
+                    source_start_sec=excluded.source_start_sec, duration_sec=excluded.duration_sec,
+                    loop_mode=excluded.loop_mode, item_kind=excluded.item_kind,
+                    item_index=excluded.item_index, prompt=excluded.prompt,
+                    raw_video_path=excluded.raw_video_path, export_path=excluded.export_path,
+                    status=excluded.status, error=excluded.error, updated_at=excluded.updated_at
+                """,
+                (
+                    project_id, values["mode"], values["source_path"], values["source_start_sec"],
+                    values["duration_sec"], values["loop_mode"], values["item_kind"],
+                    values["item_index"], values["prompt"], values["raw_video_path"],
+                    values["export_path"], values["status"], values["error"], values["updated_at"],
+                ),
+            )
 
 
 def _current_timestamp() -> str:

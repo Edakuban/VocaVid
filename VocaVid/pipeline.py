@@ -20,6 +20,7 @@ from .models import LineTiming, LyricLine, RenderSegment
 from .paths import project_output_file_stem, resolve_storage_path, slug_folder_name, storage_relative_path
 from .promptgen import clean_generated_text, inject_promptgen_context, inject_raw_text_prompt, inject_scenefill_context, inject_videoprompt_context, make_global_style_prompt, make_videoprompt_prompt
 from .prompt_templates import load_named_prompt_template, render_prompt_template
+from .reels.media import ffmpeg_binary
 from .sceneplan import fallback_scene_plans, make_sceneplan_concept_prompt, make_sceneplan_prompt, parse_scene_plan_text
 from .segments import build_render_segments
 from .store import Store
@@ -635,6 +636,102 @@ class Pipeline:
         for row in rows:
             workflow = self.workflows.require_video_for_profile(self._clip_generation_profile())
             self._run_comfy_for_line(project_id, row, workflow, output_field="clip_path", prefer_avatar=True, action="clips")
+
+    def generate_spotify_canvas_prompt(
+        self,
+        project_id: int,
+        item_kind: str,
+        item_index: int,
+        duration_sec: float,
+        draft: str = "",
+    ) -> str:
+        project = self.store.get_project(project_id)
+        row = self._canvas_source_row(project_id, item_kind, item_index)
+        workflow_path = self._promptgen_workflow_path()
+        if not workflow_path:
+            raise FileNotFoundError("promptgen workflow is missing")
+        request = f"""Create one concise image-to-video motion prompt for a Spotify Canvas.
+Return only the prompt, without labels, markdown, quotes, or explanation.
+
+The result is a silent {duration_sec:.2f}-second vertical 9:16 visual loop. Preserve the input image's identity, face, wardrobe, setting, lighting, objects, framing, and composition. Use one continuous shot. Motion must be readable on a phone screen. Design the final moment to connect naturally back to the first moment; prefer cyclical environmental or camera motion and avoid cuts, scene changes, new people, new props, text, logos, and large body movement.
+
+Genre: {project['genre'] or ''}
+Global style: {project['global_style_prompt'] or ''}
+Section: {row['section'] or ''}
+Scene plan: {row['scene_plan'] or ''}
+Lyrics/context: {row['clean_text'] or ''}
+Image prompt: {row['prompt'] or ''}
+User direction: {draft.strip() or 'Choose the strongest loopable motion for this image.'}
+"""
+        workflow = load_workflow(workflow_path)
+        result = ComfyClient(project["comfy_base_url"]).run_workflow(inject_raw_text_prompt(workflow, request), {})
+        if not result.ok or not result.text_outputs:
+            raise RuntimeError(result.error or "Prompt generation returned no text")
+        return clean_generated_text(result.text_outputs[0])
+
+    def generate_spotify_canvas_video(
+        self,
+        project_id: int,
+        item_kind: str,
+        item_index: int,
+        duration_sec: float,
+        video_prompt: str,
+    ) -> Path:
+        project = self.store.get_project(project_id)
+        row = dict(self._canvas_source_row(project_id, item_kind, item_index))
+        if not (row.get("avatar_image_path") or row.get("image_path")):
+            raise ValueError("The selected storyboard scene needs a generated image first")
+        if not row.get("audio_path"):
+            raise ValueError("The selected storyboard scene needs its split audio before video generation")
+        row["video_prompt"] = video_prompt
+        row["end_sec"] = float(row.get("start_sec") or 0.0) + float(duration_sec)
+        source_audio = self._project_input_path(row["audio_path"])
+        conditioning_dir = self._project_dir(project, project_id) / "spotify-canvas"
+        conditioning_dir.mkdir(parents=True, exist_ok=True)
+        conditioning_audio = conditioning_dir / "conditioning.wav"
+        audio_result = subprocess.run(
+            [
+                ffmpeg_binary(), "-y", "-stream_loop", "-1", "-i", str(source_audio),
+                "-t", f"{float(duration_sec):.3f}", "-ac", "1", "-ar", "44100", str(conditioning_audio),
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if audio_result.returncode != 0:
+            raise RuntimeError((audio_result.stderr or "Could not prepare Canvas conditioning audio").strip())
+        row["audio_path"] = str(conditioning_audio)
+        workflow_path = self.workflows.require_video_for_profile(self._clip_generation_profile())
+        workflow = load_workflow(workflow_path)
+        client = ComfyClient(project["comfy_base_url"])
+        variables = self._variables(project, row, prefer_avatar=True)
+        variables["duration"] = f"{float(duration_sec):.3f}"
+        variables = _upload_clip_workflow_inputs(client, variables, self._project_folder_name(project))
+        workflow = _inject_image_audio_video_inputs(workflow, variables)
+        workflow = _randomize_workflow_seeds(workflow)
+        prefix = f"VocaVid/{self._project_folder_name(project)}/spotify-canvas-{int(time.time() * 1000)}"
+        workflow = with_output_prefix(workflow, prefix)
+        targets = _output_node_ids(workflow, {"savevideo", "savewebm"})
+        result = client.run_workflow(workflow, variables, partial_execution_targets=targets)
+        if not result.ok or not result.output_files:
+            self._raise_if_comfy_timeout(result.error)
+            raise RuntimeError(result.error or "Canvas video generation returned no file")
+        return self._localize_comfy_output(
+            project,
+            project_id=project_id,
+            item_kind="spotify-canvas",
+            item_index=0,
+            output_field="clip_path",
+            output_path=result.output_files[0],
+        )
+
+    def _canvas_source_row(self, project_id: int, item_kind: str, item_index: int):
+        if item_kind != "segments":
+            raise ValueError("Spotify Canvas generation currently requires a storyboard segment")
+        row = next((item for item in self.store.list_segments(project_id) if int(item["segment_index"]) == int(item_index)), None)
+        if row is None:
+            raise KeyError(f"Storyboard segment {item_index} not found")
+        return row
 
     def assemble(self, project_id: int, selected_line_indices: list[int] | None = None) -> Path:
         if not self.all_videos_approved(project_id):
